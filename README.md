@@ -8,10 +8,9 @@
 
 ## Target Alignment
 
-**Role:** Principal Software Engineer — Calibre PERC AI/ML  
-**Company:** Siemens Digital Industries Software
+**Role:** Principal Software Engineer — EDA Verification & AI/ML Integration
 
-This project is architected as a production-caliber EDA verification platform. It demonstrates system design maturity, performance engineering at scale, classical EDA workflows, and modern AI/ML integration — the exact intersection Siemens Calibre teams operate in.
+This project is architected as a production-caliber EDA verification platform. It demonstrates system design maturity, performance engineering at scale, classical EDA workflows, and modern AI/ML integration — the intersection of physical design verification and intelligent systems engineering.
 
 ---
 
@@ -82,7 +81,7 @@ violations = session.run_analysis(targets=["floating_net", "em_risk"])
 
 # Explain and export
 session.explain(violations[0])
-session.export_report("executive_report.html", format="html", template="siemens_style")
+session.export_report("executive_report.html", format="html", template="corporate_style")
 ```
 
 ---
@@ -280,7 +279,7 @@ docker-compose up --build
 
 MIT License — Portfolio demonstration project.
 
-*This is an independent educational and portfolio project. Not affiliated with Siemens Digital Industries Software or the Calibre product line.*
+*This is an independent educational and portfolio project.*
 
 ---
 

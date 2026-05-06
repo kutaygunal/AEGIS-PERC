@@ -1,0 +1,108 @@
+# AEGIS-PERC Orchestration System
+
+This directory contains the AI-assisted development workflow for AEGIS-PERC. It treats engineering tasks as packets with dependencies, acceptance criteria, build/test gates, and review prompts.
+
+## Directory Layout
+
+```
+orchestration/
+  roadmap.yaml          — High-level phases and exit criteria
+  tasks.yaml            — Executable task registry with dependencies and status
+  prompts/
+    planner.md          — Prompt template for implementation planning
+    worker.md           — Prompt template for task implementation
+    reviewer.md         — Prompt template for code review
+    architect.md        — Prompt template for architecture review
+  runs/
+    .gitkeep            — Run logs and artifacts go here (gitignored by default)
+  README.md             — This file
+```
+
+## Task Lifecycle
+
+```
+ todo → ready → in_progress → review → done
+  ↑          ↓       ↓           ↓
+blocked ←─── (dependencies not done)
+```
+
+- **todo** — Backlog; not yet actionable.
+- **ready** — All dependencies are `done`; may be started.
+- **in_progress** — Active work is happening.
+- **review** — Implementation complete; under code/architecture review.
+- **done** — Accepted; merged; dependencies may unblock.
+- **blocked** — External or dependency blocker.
+
+### Dependency Rule
+A task can be marked `ready` **only if all tasks in `depends_on` are `done`**.
+
+## Workflow
+
+### 1. Select the next ready task
+Identify the highest-priority task with status `ready`. If none are ready, work on unblocking dependencies.
+
+### 2. Plan
+Use the **Planner** prompt to produce an implementation plan:
+- Identify files, modules, interfaces, data flow.
+- Identify risks, tests, and estimates.
+- Do not write code during planning.
+
+### 3. Implement
+Use the **Worker** prompt to implement exactly one task:
+- Modify only necessary files.
+- Follow AGENTS.md rules.
+- Add or update tests.
+- Run the task's `test_commands` and report results.
+- Stop after the task; do not proceed to the next task.
+
+### 4. Review
+Use the **Reviewer** prompt to evaluate the diff:
+- Check acceptance criteria coverage.
+- Check architecture violations (UI/core, parser/rule, rule/ML).
+- Check tests, safety, performance, and maintainability.
+- Return `APPROVE` or `REQUEST_CHANGES`.
+
+### 5. Architecture Review (for foundational or high-risk tasks)
+Use the **Architect** prompt to validate long-term compatibility:
+- Plugin support, graph analysis, ML inference, Python scripting, distributed execution.
+- Identify overengineering or underengineering.
+- Do not write code unless explicitly requested.
+
+### 6. Update status
+After approval, update the task status in `tasks.yaml` to `done`. Unblock downstream tasks by marking them `ready` if all their dependencies are now `done`.
+
+## How to Add a New Task
+
+1. Assign an id with phase prefix (`P1-011`, `P2-012`, etc.).
+2. Fill all fields: `id`, `phase`, `title`, `priority`, `area`, `risk`, `depends_on`, `acceptance`, `implementation_rules`, `test_commands`.
+3. Set status to `todo` unless all dependencies are already `done`.
+4. Insert the task in dependency order.
+
+## Current Execution Lane
+
+**Phase 1 — Commercial Foundation** is the active execution lane. Only one task is ready to begin:
+
+- **P1-001: Project architecture skeleton** (`ready`)
+
+All other tasks are `todo` and will become `ready` as dependencies complete.
+
+## Risk and Priority Legend
+
+| Priority | Meaning |
+|----------|---------|
+| critical | Blocks significant downstream work; do first. |
+| high | Important for current sprint success. |
+| medium | Valuable but not blocking. |
+| low | Nice to have; defer if time-constrained. |
+
+| Risk | Meaning |
+|------|---------|
+| high | Foundational decision; mistake is expensive to undo. |
+| medium | Moderate uncertainty or integration surface. |
+| low | Well-understood or isolated change. |
+
+## Notes
+
+- Do not mark tasks `done` until acceptance criteria are verified and tests pass.
+- Do not skip review for high-risk tasks.
+- If a task needs to be split mid-flight, create new child tasks, update dependencies, and mark the original as blocked or superseded.

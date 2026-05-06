@@ -1,0 +1,542 @@
+# AEGIS-PERC Task Registry
+# Status values: todo | ready | in_progress | blocked | review | done
+# A task can be marked 'ready' only if all dependencies are 'done'.
+
+tasks:
+  # ─────────────────────────────────────────────────────────
+  # Sprint 1 — Commercial Foundation (P1)
+  # ─────────────────────────────────────────────────────────
+
+  - id: P1-001
+    phase: P1
+    title: "Project architecture skeleton"
+    priority: critical
+    area: architecture
+    risk: high
+    depends_on: []
+    acceptance:
+      - Repository has a clear commercial-grade module structure.
+      - Core, UI, parser, graph, rule engine, ML, reporting, storage, and scripting boundaries are represented.
+      - No product features are implemented yet beyond minimal stubs.
+      - Qt UI layer is separated from core engine classes.
+      - Core libraries can be tested without launching the Qt UI.
+      - CMake targets are organized by module.
+      - A minimal application starts successfully.
+      - A minimal unit test target exists.
+      - Architecture decisions are documented.
+    implementation_rules:
+      - Do not build the full product yet.
+      - Do not implement parser, graph, ML, or visualization features yet.
+      - Create only the minimum scaffolding needed for future tasks.
+      - Prefer clear interfaces over premature implementations.
+      - Keep everything Qt6/C++20 compatible.
+      - Avoid global singletons unless wrapped behind an explicit service registry.
+      - Keep testable core classes independent from widgets.
+    test_commands:
+      - "cmake -S . -B build"
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure"
+    status: ready
+
+  - id: P1-002
+    phase: P1
+    title: "Core service registry"
+    priority: critical
+    area: core
+    risk: high
+    depends_on: [P1-001]
+    acceptance:
+      - A service registry allows modules to register and resolve interfaces by type/name.
+      - No Qt Widgets dependency in the registry implementation.
+      - Lifetimes are explicit; no hidden global singletons.
+      - Circular dependency detection is present or documented.
+      - Unit tests verify registration, resolution, and cleanup.
+    implementation_rules:
+      - Use pure C++20 interfaces; no Qt in core registry headers if possible.
+      - Support optional and named resolution.
+      - Keep thread-safety considerations documented.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R ServiceRegistry"
+    status: todo
+
+  - id: P1-003
+    phase: P1
+    title: "Structured rotating logs"
+    priority: high
+    area: core
+    risk: medium
+    depends_on: [P1-001]
+    acceptance:
+      - Logging writes to rotating files with configurable max size and count.
+      - Output format includes timestamp, severity, module tag, thread id, and message.
+      - Console and file sinks are independently configurable.
+      - No Qt Widgets dependency; QtCore is acceptable for file paths if needed.
+      - Unit tests verify log rotation and severity filtering.
+    implementation_rules:
+      - Prefer a lightweight library (e.g., spdlog) or a thin custom wrapper.
+      - Keep formatting overhead low for future high-volume graph operations.
+      - Allow runtime log level changes via configuration.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R Logging"
+    status: todo
+
+  - id: P1-004
+    phase: P1
+    title: "Configuration system"
+    priority: high
+    area: core
+    risk: medium
+    depends_on: [P1-001]
+    acceptance:
+      - Hierarchical configuration (file, environment, CLI override) is supported.
+      - Schema validation rejects invalid keys or types at load time.
+      - Defaults are documented and versioned.
+      - Config is observable; components can react to changes.
+      - Unit tests cover parsing, validation, and override behaviors.
+    implementation_rules:
+      - Store config as JSON or YAML on disk; cache in memory as typed structures.
+      - Keep config keys namespaced by module.
+      - Do not require Qt Widgets to read configuration.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R Config"
+    status: todo
+
+  - id: P1-005
+    phase: P1
+    title: "Diagnostic bundle export"
+    priority: high
+    area: core
+    risk: medium
+    depends_on: [P1-003]
+    acceptance:
+      - One API call exports a timestamped zip containing logs, config snapshot, build info, and OS info.
+      - Bundle excludes sensitive data (keys, passwords) by default.
+      - Export is non-blocking; progress is reported.
+      - Unit tests verify archive contents and redaction.
+    implementation_rules:
+      - Reuse the structured logging directory.
+      - Use a cross-platform archive library or Qt's compression classes.
+      - Keep the implementation in core, not UI.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R DiagnosticBundle"
+    status: todo
+
+  - id: P1-006
+    phase: P1
+    title: "CMake/CI/test hardening"
+    priority: high
+    area: build
+    risk: medium
+    depends_on: [P1-001]
+    acceptance:
+      - CMake presets exist for Windows Release, Windows Debug, and Linux/macOS.
+      - Compiler warnings are elevated; warnings-as-errors policy is documented.
+      - Static analysis (clang-tidy) rules are configured.
+      - AddressSanitizer/UBSan presets exist for debug builds.
+      - CI pipelines build, test, and package the desktop application.
+      - Test coverage baseline is captured.
+    implementation_rules:
+      - Preserve cross-platform compatibility.
+      - Keep CI fast enough to not block iteration (parallel jobs).
+      - Do not add product logic in CMake scripts beyond feature detection.
+    test_commands:
+      - "cmake --workflow --preset ci-windows-release"
+      - "ctest --preset ci-test"
+    status: todo
+
+  - id: P1-007
+    phase: P1
+    title: "Application shell with dockable workspace"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P1-001]
+    acceptance:
+      - Main window opens with a dockable workspace using Qt6 Docks.
+      - Central placeholder widget is present for future canvas.
+      - Menu bar includes File, View, Tools, Help placeholders.
+      - Window state (geometry, dock positions) persists across restarts.
+      - No analysis logic is implemented yet.
+      - UI is responsive on startup (no blocking loads).
+    implementation_rules:
+      - Use Qt6; no Qt5 compatibility code.
+      - Keep the shell minimal; do not add visualization logic in the MainWindow.
+      - Persist state via QSettings or the configuration system.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R AppShell"
+      - Manual: launch binary and verify dockable panels.
+    status: todo
+
+  - id: P1-008
+    phase: P1
+    title: "Synthetic sample data format"
+    priority: medium
+    area: data
+    risk: low
+    depends_on: [P1-001]
+    acceptance:
+      - A documented JSON schema describes synthetic layout/netlet data for testing.
+      - Sample files include a small inverter, a 2-input NAND, and a simple ring oscillator.
+      - Geometries use abstract rectangle/polygon primitives.
+      - Netlists include devices, nets, pins, and properties.
+      - Samples validate against the schema.
+    implementation_rules:
+      - This is test data, not a production parser.
+      - Keep the format versioned.
+      - Include a README describing how to extend the samples.
+    test_commands:
+      - "python scripts/validate_samples.py"
+      - "ctest --test-dir build --output-on-failure --R SampleData"
+    status: todo
+
+  - id: P1-009
+    phase: P1
+    title: "Configuration migration system"
+    priority: medium
+    area: core
+    risk: low
+    depends_on: [P1-004]
+    acceptance:
+      - Migrators transform old config versions to the current schema.
+      - Version increments are monotonic and documented.
+      - Migration failures degrade gracefully with diagnostic messages.
+      - Tests cover forward migrations and unsupported version rejection.
+    implementation_rules:
+      - Keep migration code isolated from runtime config access.
+      - Chain migrations; do not skip versions.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R ConfigMigration"
+    status: todo
+
+  - id: P1-010
+    phase: P1
+    title: "Test framework setup integration"
+    priority: high
+    area: build
+    risk: low
+    depends_on: [P1-001]
+    acceptance:
+      - Catch2 or GTest is integrated via CMake FetchContent or a submodule.
+      - Test discovery runs automatically.
+      - A sample test exists for each module boundary.
+      - CI runs the full suite and reports per-module pass/fail.
+    implementation_rules:
+      - Prefer Catch2 v3 for C++20 support and modern CMake.
+      - Tag tests by module and speed (fast/slow) for selective execution.
+    test_commands:
+      - "ctest --test-dir build --output-on-failure"
+    status: todo
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 2 — Verification Core (P2)
+  # ─────────────────────────────────────────────────────────
+
+  - id: P2-001
+    phase: P2
+    title: "Layout/netlist import abstraction"
+    priority: critical
+    area: parsing
+    risk: high
+    depends_on: [P1-001, P1-008]
+    acceptance:
+      - An abstract parser interface accepts file paths and emits events/objects.
+      - No concrete format logic leaks into consumers.
+      - Progress callbacks and cancellation tokens are supported.
+      - Unit tests verify the interface contract with a mock parser.
+    implementation_rules:
+      - Keep the abstraction in the parsing module.
+      - Do not depend on Qt Widgets.
+      - Use std::filesystem paths.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R ParserInterface"
+    status: todo
+
+  - id: P2-002
+    phase: P2
+    title: "JSON intermediate layout representation"
+    priority: high
+    area: parsing
+    risk: medium
+    depends_on: [P2-001]
+    acceptance:
+      - A serializable IR captures layers, geometries, nets, and annotations.
+      - Round-trip (parse -> IR -> JSON -> IR) is lossless for supported types.
+      - IR is versioned and schema-validated.
+      - Unit tests cover serialization, deserialization, and versioning.
+    implementation_rules:
+      - Prefer nlohmann/json or simdjson for performance.
+      - Keep IR structs plain C++ (no Qt).
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R LayoutIR"
+    status: todo
+
+  - id: P2-003
+    phase: P2
+    title: "Basic DEF-like parser prototype"
+    priority: high
+    area: parsing
+    risk: medium
+    depends_on: [P2-001, P2-002]
+    acceptance:
+      - Parser reads a simplified DEF subset (components, nets, pins, tracks).
+      - Output populates the JSON IR.
+      - Syntax errors produce line/column diagnostics.
+      - Performance benchmark shows acceptable throughput on 10K-line files.
+    implementation_rules:
+      - Do not implement a full DEF spec; cover enough for the synthetic dataset.
+      - Keep streaming behavior; do not load entire file as a single string.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R DefParser"
+    status: todo
+
+  - id: P2-004
+    phase: P2
+    title: "Connectivity graph model"
+    priority: critical
+    area: graph
+    risk: high
+    depends_on: [P1-001, P2-002]
+    acceptance:
+      - Graph stores devices, nets, pins, and edges with typed adjacency.
+      - Traversal APIs support DFS/BFS with visitor patterns.
+      - Memory footprint is predictable for graphs up to 100K nodes.
+      - No Qt or ML dependencies in the graph headers.
+      - Unit tests verify construction, traversal, and basic queries.
+    implementation_rules:
+      - Use adjacency lists; avoid dense matrix representations.
+      - Keep node/edge IDs stable.
+      - Support incremental updates for future interactive editing.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R GraphModel"
+    status: todo
+
+  - id: P2-005
+    phase: P2
+    title: "Net/device/pin data model"
+    priority: high
+    area: graph
+    risk: medium
+    depends_on: [P2-004]
+    acceptance:
+      - Strongly typed models exist for Net, Device, Pin, and Port.
+      - Properties bag supports typed attributes without losing type safety.
+      - Models are immutable by default; updates create new revisions or use copy-on-write.
+      - Unit tests cover equality, hashing, and property access.
+    implementation_rules:
+      - Keep the model flat; avoid deep inheritance hierarchies.
+      - Use std::variant or a small custom type system for properties.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R DataModel"
+    status: todo
+
+  - id: P2-006
+    phase: P2
+    title: "Rule engine abstraction"
+    priority: critical
+    area: rules
+    risk: high
+    depends_on: [P1-001, P2-004]
+    acceptance:
+      - An abstract rule interface accepts a context (graph + parameters) and produces violations.
+      - Rules are registerable by name/category.
+      - Execution order respects declarative dependency definitions.
+      - No ML or UI dependencies in the rule interface.
+      - Unit tests verify rule registration, dispatch, and error paths.
+    implementation_rules:
+      - Design for future rule plugins; keep the interface stable.
+      - Pass immutable context; rules should not mutate global state.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R RuleEngine"
+    status: todo
+
+  - id: P2-007
+    phase: P2
+    title: "Basic electrical rule checks"
+    priority: high
+    area: rules
+    risk: medium
+    depends_on: [P2-006, P2-005]
+    acceptance:
+      - Open-circuit, short-circuit, and floating-net rules are implemented.
+      - Rules run deterministically against the connectivity graph.
+      - Output is a violation list with severity, location, and message.
+      - No UI thread blocking during rule execution.
+      - Unit tests run each rule against known-good and known-bad fixtures.
+    implementation_rules:
+      - Keep rules pure functions of the graph and parameters.
+      - Do not add visualization or ML logic here.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R ElectricalRules"
+    status: todo
+
+  - id: P2-008
+    phase: P2
+    title: "Violation result model"
+    priority: high
+    area: rules
+    risk: medium
+    depends_on: [P2-006]
+    acceptance:
+      - Violation captures rule ID, severity, location (layer/geometry), message, and metadata.
+      - Results are serializable to JSON for reporting and UI consumption.
+      - Collections support filtering, grouping, and pagination.
+      - Unit tests verify serialization and collection operations.
+    implementation_rules:
+      - Keep the model independent of rendering and ML.
+      - Support stable IDs for future violation linking and clustering.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R ViolationModel"
+    status: todo
+
+  - id: P2-009
+    phase: P2
+    title: "Power/signal domain tagging"
+    priority: medium
+    area: graph
+    risk: medium
+    depends_on: [P2-005]
+    acceptance:
+      - Nets and devices can be tagged with power domains and signal types.
+      - Tag propagation follows simple graph traversal rules.
+      - Conflicts are reported as rule violations.
+      - Unit tests verify propagation and conflict detection.
+    implementation_rules:
+      - Keep tagging as an optional graph analysis pass.
+      - Do not hardcode domain names in the engine.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R DomainTagging"
+    status: todo
+
+  - id: P2-010
+    phase: P2
+    title: "SPICE-like netlist parser prototype"
+    priority: medium
+    area: parsing
+    risk: medium
+    depends_on: [P2-001, P2-002]
+    acceptance:
+      - Parser reads a reduced SPICE subset (R, C, M, V, I, subckt, .ends).
+      - Output populates the JSON IR and graph model.
+      - Line-level error reporting is present.
+      - Performance benchmark shows acceptable throughput.
+    implementation_rules:
+      - Do not implement full SPICE; support only what's needed for test fixtures.
+      - Keep tokenization separate from IR construction.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R SpiceParser"
+    status: todo
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 3 — Visualization Core (P3) — early tasks
+  # ─────────────────────────────────────────────────────────
+
+  - id: P3-001
+    phase: P3
+    title: "2D layout canvas"
+    priority: critical
+    area: ui
+    risk: high
+    depends_on: [P1-007, P2-002]
+    acceptance:
+      - A QWidget-based canvas renders rectangles and polygons from the IR.
+      - Background grid is toggleable.
+      - Widget owns only rendering; business logic lives in core.
+      - Renders at 60fps on the synthetic inverter sample.
+    implementation_rules:
+      - Use QPainter; prepare for future OpenGL/Vulkan scene graph.
+      - Keep the canvas reusable; do not couple it to a specific file format.
+    test_commands:
+      - "cmake --build build --config Release"
+      - Manual: open sample and verify canvas renders.
+    status: todo
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 4 — AI/ML Core (P4) — early tasks
+  # ─────────────────────────────────────────────────────────
+
+  - id: P4-001
+    phase: P4
+    title: "Feature extraction from violations"
+    priority: high
+    area: ml
+    risk: high
+    depends_on: [P2-008]
+    acceptance:
+      - A pipeline extracts numerical and categorical features from violation contexts.
+      - Features are graph-local (adjacent devices, net properties, geometry counts).
+      - Output is a normalized feature vector.
+      - No inference logic yet; only extraction.
+      - Unit tests verify deterministic output on fixed inputs.
+    implementation_rules:
+      - Keep extraction read-only; do not modify violations or graph.
+      - Support incremental extraction for future interactive updates.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure --R FeatureExtraction"
+    status: todo
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 5 — Automation & Extensibility (P5) — early tasks
+  # ─────────────────────────────────────────────────────────
+
+  - id: P5-001
+    phase: P5
+    title: "Batch analysis CLI"
+    priority: high
+    area: scripting
+    risk: medium
+    depends_on: [P1-001, P2-007]
+    acceptance:
+      - A headless CLI executable loads a layout and runs rule checks.
+      - Output is a JSON report to stdout or file.
+      - Exit codes distinguish success, violations found, and fatal errors.
+      - No Qt Widgets dependency; QtCore is acceptable for event loop if needed.
+      - Unit tests verify CLI behavior with synthetic samples.
+    implementation_rules:
+      - Reuse core services; do not duplicate rule logic.
+      - Keep the CLI thin; it is a host for the core workflow.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "aegis-perc-cli --input samples/inverter.json --report out.json"
+      - "ctest --test-dir build --output-on-failure --R BatchCLI"
+    status: todo
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 6 — Enterprise Readiness (P6) — design task
+  # ─────────────────────────────────────────────────────────
+
+  - id: P6-001
+    phase: P6
+    title: "Distributed job execution design doc"
+    priority: medium
+    area: architecture
+    risk: medium
+    depends_on: [P1-001]
+    acceptance:
+      - Documented architecture covers host, worker, job queue, and IPC.
+      - Scenarios include localhost multi-process and future multi-node.
+      - Failure modes, retries, and cancellation are addressed.
+      - No implementation code; design only.
+    implementation_rules:
+      - Produce a markdown design document under docs/design/distributed.md.
+      - Reference existing module boundaries.
+      - Identify dependencies on external libraries (gRPC, ZeroMQ, etc.).
+    test_commands:
+      - "docs/design/distributed.md exists and passes spell check"
+    status: todo
