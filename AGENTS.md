@@ -84,6 +84,35 @@
 | `reporting` | HTML/PDF/Diagnostic export | Qt Widgets (HTML generation may use QTextDocument; prefer headless) |
 | `storage` | Local DB, project/session persistence, enterprise upload | Qt Widgets |
 
+## 10. Context and Memory Rules
+
+The agent must assume every session starts with no memory of previous chats.
+
+The repository is the source of truth.
+
+Before starting work, the agent must read:
+1. AGENTS.md
+2. /orchestration/PROJECT_MEMORY.md
+3. /orchestration/DECISIONS.md
+4. /orchestration/HANDOFF.md
+5. /orchestration/roadmap.yaml
+6. /orchestration/tasks.yaml
+7. Relevant run logs from /orchestration/runs/
+
+The agent must update HANDOFF.md before stopping.
+
+The agent must write a run log for every task attempted.
+
+The agent must not rely on chat history for project facts.
+
+Stable project facts go in PROJECT_MEMORY.md.
+
+Architecture decisions go in DECISIONS.md.
+
+Temporary task status goes in HANDOFF.md and tasks.yaml.
+
+Successful autonomous tasks must be marked `review`, not `done`.
+
 ---
 *Version: 1.0*
 *Effective: Sprint 1*

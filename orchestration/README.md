@@ -6,16 +6,26 @@ This directory contains the AI-assisted development workflow for AEGIS-PERC. It 
 
 ```
 orchestration/
-  roadmap.yaml          — High-level phases and exit criteria
-  tasks.yaml            — Executable task registry with dependencies and status
+  roadmap.yaml           — High-level phases and exit criteria
+  tasks.yaml             — Executable task registry with dependencies and status
+  PROJECT_MEMORY.md      — Long-term stable project facts and architecture rules
+  DECISIONS.md           — Immutable architecture decisions and reasoning
+  HANDOFF.md             — Latest session state and next recommended action
+  session_bootstrap.md   — Prompt every new session must run first
   prompts/
-    planner.md          — Prompt template for implementation planning
-    worker.md           — Prompt template for task implementation
-    reviewer.md         — Prompt template for code review
-    architect.md        — Prompt template for architecture review
+    planner.md           — Prompt template for implementation planning
+    worker.md            — Prompt template for task implementation
+    reviewer.md          — Prompt template for code review
+    architect.md         — Prompt template for architecture review
+    overnight_executor.md— Prompt template for autonomous overnight mode
+    task_refiner.md      — Prompt template for task refinement
   runs/
-    .gitkeep            — Run logs and artifacts go here (gitignored by default)
-  README.md             — This file
+    .gitkeep             — Run logs and artifacts go here (kept in git)
+  tools/
+    project_status.py    — Quick CLI summary of current task state
+    validate_tasks.py    — Task schema validator
+    score_tasks.py       — Task scoring helper
+  README.md              — This file
 ```
 
 ## Task Lifecycle
