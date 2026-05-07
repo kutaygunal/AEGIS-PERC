@@ -3,6 +3,8 @@ add_library(aegis_graph STATIC
     src/graph_model.cpp
     include/aegis/graph/connectivity_graph.hpp
     src/connectivity_graph.cpp
+    include/aegis/graph/data_model.hpp
+    src/data_model.cpp
 )
 
 target_include_directories(aegis_graph

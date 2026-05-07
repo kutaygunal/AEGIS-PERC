@@ -21,6 +21,7 @@ add_executable(aegis_unit_tests
     unit/data/test_sample_data.cpp
     unit/graph/test_graph_minimal.cpp
     unit/graph/test_connectivity_graph.cpp
+    unit/graph/test_data_model.cpp
     unit/ml/test_ml_minimal.cpp
     unit/parsing/test_parsing_minimal.cpp
     unit/parsing/test_layout_ir.cpp
