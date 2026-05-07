@@ -66,7 +66,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R DefParser"
-    status: todo
+    status: done
 
   - id: P2-004
     phase: P2

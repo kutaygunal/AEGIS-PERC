@@ -3,6 +3,8 @@ add_library(aegis_parsing STATIC
     src/parser_interface.cpp
     include/aegis/parsing/layout_ir.hpp
     src/layout_ir.cpp
+    include/aegis/parsing/def_parser.hpp
+    src/def_parser.cpp
 )
 
 target_include_directories(aegis_parsing
