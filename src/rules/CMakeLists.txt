@@ -4,6 +4,7 @@ add_library(aegis_rules STATIC
     include/aegis/rules/electrical_rules.hpp
     src/rule_engine.cpp
     src/electrical_rules.cpp
+    src/violation.cpp
 )
 
 target_include_directories(aegis_rules

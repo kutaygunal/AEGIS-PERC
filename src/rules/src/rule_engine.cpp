@@ -77,7 +77,7 @@ std::vector<std::size_t> topological_sort(
 
 Violation make_fatal_violation(const std::string& rule_id,
                                 const std::string& message) {
-    return Violation{rule_id, "fatal", message, std::nullopt};
+    return Violation{rule_id, Severity::Fatal, message};
 }
 
 } // anonymous namespace

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <cstddef>
 #include <functional>
 #include <map>
@@ -224,6 +226,35 @@ struct PortModel {
 [[nodiscard]] std::size_t hash_value(const NetModel& net);
 [[nodiscard]] std::size_t hash_value(const DeviceModel& dev);
 [[nodiscard]] std::size_t hash_value(const PortModel& port);
+
+// ---------------------------------------------------------------------------
+// JSON serialization helpers (ADL style for nlohmann/json)
+// ---------------------------------------------------------------------------
+
+inline void to_json(nlohmann::json& j, const PropertyMap& pm) {
+    j = nlohmann::json::object();
+    for (const auto& [k, v] : pm) {
+        std::visit([&j, &k](const auto& val) { j[k] = val; }, v);
+    }
+}
+
+inline void from_json(const nlohmann::json& j, PropertyMap& pm) {
+    PropertyMap result;
+    for (const auto& [key, val] : j.items()) {
+        if (val.is_string()) {
+            result = result.with(key, val.get<std::string>());
+        } else if (val.is_boolean()) {
+            result = result.with(key, val.get<bool>());
+        } else if (val.is_number_integer()) {
+            result = result.with(key, val.get<int>());
+        } else if (val.is_number_float()) {
+            result = result.with(key, val.get<double>());
+        } else {
+            result = result.with(key, val.dump());
+        }
+    }
+    pm = std::move(result);
+}
 
 } // namespace aegis::graph
 

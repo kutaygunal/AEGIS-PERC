@@ -67,10 +67,10 @@ TEST_CASE("FloatingNetRule reports isolated net",
     auto violations = rule.execute(make_ctx(graph));
     REQUIRE(violations.size() == 1);
     CHECK(violations[0].rule_id == "ELEC-001");
-    CHECK(violations[0].severity == "error");
+    CHECK(violations[0].severity == Severity::Error);
     CHECK(violations[0].message.find("floating_net") != std::string::npos);
-    REQUIRE(violations[0].location.has_value());
-    CHECK(violations[0].location.value() == "floating_net");
+    REQUIRE(violations[0].location.net_name.has_value());
+    CHECK(violations[0].location.net_name.value() == "floating_net");
 }
 
 TEST_CASE("FloatingNetRule reports multiple isolated nets",
@@ -147,10 +147,10 @@ TEST_CASE("OpenCircuitRule reports pin with device but no net",
     auto violations = rule.execute(make_ctx(graph));
     REQUIRE(violations.size() == 1);
     CHECK(violations[0].rule_id == "ELEC-002");
-    CHECK(violations[0].severity == "error");
+    CHECK(violations[0].severity == Severity::Error);
     CHECK(violations[0].message.find("open circuit") != std::string::npos);
-    REQUIRE(violations[0].location.has_value());
-    CHECK(violations[0].location.value() == "D1.p1");
+    REQUIRE(violations[0].location.net_name.has_value());
+    CHECK(violations[0].location.net_name.value() == "D1.p1");
 }
 
 TEST_CASE("OpenCircuitRule reports multiple open pins",
@@ -202,7 +202,7 @@ TEST_CASE("OpenCircuitRule reports missing required NMOS terminals",
     REQUIRE(violations.size() == 2); // missing gate and drain
     for (const auto& v : violations) {
         CHECK(v.rule_id == "ELEC-002");
-        CHECK(v.severity == "error");
+        CHECK(v.severity == Severity::Error);
     }
 }
 
@@ -323,10 +323,10 @@ TEST_CASE("ShortCircuitRule reports two OUTPUT drivers on same net",
     auto violations = rule.execute(make_ctx(graph));
     REQUIRE(violations.size() == 1);
     CHECK(violations[0].rule_id == "ELEC-003");
-    CHECK(violations[0].severity == "error");
+    CHECK(violations[0].severity == Severity::Error);
     CHECK(violations[0].message.find("driver contention") != std::string::npos);
-    REQUIRE(violations[0].location.has_value());
-    CHECK(violations[0].location.value() == "n1");
+    REQUIRE(violations[0].location.net_name.has_value());
+    CHECK(violations[0].location.net_name.value() == "n1");
 }
 
 TEST_CASE("ShortCircuitRule reports OUTPUT plus INOUT drivers",
@@ -419,8 +419,8 @@ TEST_CASE("ShortCircuitRule multiple independent nets",
     ShortCircuitRule rule;
     auto violations = rule.execute(make_ctx(graph));
     REQUIRE(violations.size() == 1);
-    REQUIRE(violations[0].location.has_value());
-    CHECK(violations[0].location.value() == "out1");
+    REQUIRE(violations[0].location.net_name.has_value());
+    CHECK(violations[0].location.net_name.value() == "out1");
 }
 
 // ---------------------------------------------------------------------------

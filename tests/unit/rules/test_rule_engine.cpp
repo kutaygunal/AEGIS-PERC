@@ -27,7 +27,7 @@ public:
     std::string name() const override { return "Always Fail"; }
     std::string category() const override { return "mock"; }
     std::vector<Violation> execute(const RuleContext&) const override {
-        return {Violation{this->id(), "error", "expected failure", std::nullopt}};
+        return {Violation{this->id(), Severity::Error, "expected failure"}};
     }
 };
 
@@ -38,10 +38,10 @@ public:
     std::string category() const override { return "electrical"; }
     std::vector<Violation> execute(const RuleContext& ctx) const override {
         if (ctx.graph.empty()) {
-            return {Violation{this->id(), "error", "graph is empty", std::nullopt}};
+            return {Violation{this->id(), Severity::Error, "graph is empty"}};
         }
         if (ctx.graph.node_count() < 5) {
-            return {Violation{this->id(), "warning", "too few nodes", std::nullopt}};
+            return {Violation{this->id(), Severity::Warning, "too few nodes"}};
         }
         return {};
     }
@@ -80,7 +80,7 @@ public:
     std::vector<Violation> execute(const RuleContext& ctx) const override {
         auto threshold = ctx.parameters.get<double>("threshold");
         if (!threshold.has_value() || threshold.value() > 1.0) {
-            return {Violation{this->id(), "warning", "threshold too high", std::nullopt}};
+            return {Violation{this->id(), Severity::Warning, "threshold too high"}};
         }
         return {};
     }
@@ -221,7 +221,7 @@ TEST_CASE("RuleEngine run_all executes pass and fail rules",
 
     REQUIRE(violations.size() == 1);
     REQUIRE(violations[0].rule_id == "FAIL-01");
-    REQUIRE(violations[0].severity == "error");
+    REQUIRE(violations[0].severity == Severity::Error);
     REQUIRE(violations[0].message == "expected failure");
 }
 
@@ -242,7 +242,7 @@ TEST_CASE("RuleEngine run_all passes graph context",
     graph.add_net(NetNode{"nA"});
     auto v_warn = engine.run_all(make_context(graph));
     REQUIRE(v_warn.size() == 1);
-    REQUIRE(v_warn[0].severity == "warning");
+    REQUIRE(v_warn[0].severity == Severity::Warning);
     REQUIRE(v_warn[0].message == "too few nodes");
 
     ConnectivityGraph big;
@@ -344,7 +344,7 @@ TEST_CASE("RuleEngine catches rule exceptions as fatal violations",
 
     REQUIRE(v.size() == 1);
     REQUIRE(v[0].rule_id == "THROW-01");
-    REQUIRE(v[0].severity == "fatal");
+    REQUIRE(v[0].severity == Severity::Fatal);
     REQUIRE(v[0].message == "boom");
 }
 
@@ -436,7 +436,7 @@ TEST_CASE("RuleEngine run_one catches exception as fatal",
 
     auto v = engine.run_one("THROW-01", make_context(graph));
     REQUIRE(v.size() == 1);
-    REQUIRE(v[0].severity == "fatal");
+    REQUIRE(v[0].severity == Severity::Fatal);
     REQUIRE(v[0].rule_id == "THROW-01");
 }
 

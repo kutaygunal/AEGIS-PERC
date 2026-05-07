@@ -107,7 +107,7 @@ std::vector<Violation> FloatingNetRule::execute(
             const auto& net_data = std::get<NetNode>(graph.node_data(net_id));
             violations.push_back(Violation{
                 id(),
-                "error",
+                Severity::Error,
                 "Net '" + net_data.name + "' has no connected pins; "
                 "it is electrically floating.",
                 net_data.name});
@@ -141,7 +141,7 @@ std::vector<Violation> OpenCircuitRule::execute(
             const auto& pin_data = std::get<PinNode>(graph.node_data(pin_id));
             violations.push_back(Violation{
                 id(),
-                "error",
+                Severity::Error,
                 "Pin '" + pin_data.name + "' is attached to a device "
                 "but has no net connection (open circuit).",
                 pin_data.name});
@@ -169,7 +169,7 @@ std::vector<Violation> OpenCircuitRule::execute(
             if (present.count(term) == 0) {
                 violations.push_back(Violation{
                     id(),
-                    "error",
+                    Severity::Error,
                     "Device '" + dev_data.name + "' (" +
                     dev_data.device_type +
                     ") is missing required terminal '" +
@@ -207,7 +207,7 @@ std::vector<Violation> ShortCircuitRule::execute(
                 std::get<NetNode>(graph.node_data(net_id));
             violations.push_back(Violation{
                 id(),
-                "error",
+                Severity::Error,
                 "Net '" + net_data.name + "' is driven by " +
                 std::to_string(drivers) +
                 " output pins (short-circuit / driver contention).",

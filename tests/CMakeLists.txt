@@ -30,6 +30,7 @@ add_executable(aegis_unit_tests
     unit/rules/test_rules_minimal.cpp
     unit/rules/test_rule_engine.cpp
     unit/rules/test_electrical_rules.cpp
+    unit/rules/test_violation_model.cpp
     unit/scripting/test_scripting_minimal.cpp
     unit/storage/test_storage_minimal.cpp
 )
