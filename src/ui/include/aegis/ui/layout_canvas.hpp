@@ -2,6 +2,10 @@
 
 #include "aegis/ui/scene_adapter.hpp"
 
+class QPoint;
+
+namespace aegis::ui { class SelectionModel; }
+
 #include <QColor>
 #include <QPoint>
 #include <QPointF>
@@ -27,6 +31,10 @@ public:
 
     void set_background_color(const QColor& color);
     [[nodiscard]] QColor background_color() const noexcept;
+
+    void set_selection_model(SelectionModel* selection_model);
+    [[nodiscard]] SelectionModel* selection_model() const noexcept;
+    [[nodiscard]] const SceneItem* hit_test_widget_position(const QPointF& widget_point) const;
 
     void set_layer_visibility(const std::string& layer_name, bool visible);
     [[nodiscard]] bool layer_visibility(const std::string& layer_name) const;
@@ -76,6 +84,9 @@ private:
 
     [[nodiscard]] QRectF scene_rect() const noexcept;
     void ensure_view_initialized();
+    SelectionModel* m_selection_model = nullptr;
+
+    [[nodiscard]] double hit_test_distance_scene(const SceneItem& item, const QPointF& scene_point) const;
     void paint_grid(QPainter& painter);
     void paint_scene(QPainter& painter);
     void notify_viewport_changed();

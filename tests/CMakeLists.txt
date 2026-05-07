@@ -24,6 +24,7 @@ add_executable(aegis_unit_tests
     unit/ui/test_layout_canvas.cpp
     unit/ui/test_canvas_viewport.cpp
     unit/ui/test_layer_panel.cpp
+    unit/ui/test_canvas_selection.cpp
     unit/data/test_sample_data.cpp
     unit/graph/test_graph_minimal.cpp
     unit/graph/test_connectivity_graph.cpp

@@ -1,6 +1,8 @@
 #include "aegis/ui/main_window.hpp"
 #include "aegis/ui/layer_panel.hpp"
 #include "aegis/ui/layout_canvas.hpp"
+#include "aegis/ui/properties_panel.hpp"
+#include "aegis/ui/selection_model.hpp"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -19,6 +21,8 @@ namespace aegis::ui {
 struct MainWindow::Impl {
     LayoutCanvas* canvas = nullptr;
     LayerPanel* layer_panel = nullptr;
+    PropertiesPanel* properties_panel = nullptr;
+    SelectionModel* selection_model = nullptr;
     QList<QDockWidget*> docks;
     QMenuBar* menu_bar = nullptr;
 };
@@ -46,7 +50,9 @@ void MainWindow::setup_ui()
 
     // Central reusable layout canvas. It owns rendering state only; scene data
     // is supplied through the UI scene adapter.
+    m_impl->selection_model = new SelectionModel(this);
     m_impl->canvas = new LayoutCanvas(this);
+    m_impl->canvas->set_selection_model(m_impl->selection_model);
     connect(m_impl->canvas, &LayoutCanvas::cursor_position_changed, this,
             [this](const QPointF& scene_pos, double zoom) {
                 statusBar()->showMessage(QString("X: %1  Y: %2  Zoom: %3%")
@@ -134,9 +140,12 @@ void MainWindow::setup_dock_panels()
             });
     make_dock("Layers", Qt::LeftDockWidgetArea, m_impl->layer_panel);
 
-    auto* properties = new QLabel("Properties\n\nContent placeholder.", this);
-    properties->setAlignment(Qt::AlignCenter);
-    make_dock("Properties", Qt::RightDockWidgetArea, properties);
+    m_impl->properties_panel = new PropertiesPanel(this);
+    if (m_impl->selection_model != nullptr) {
+        connect(m_impl->selection_model, &SelectionModel::selection_changed,
+                m_impl->properties_panel, &PropertiesPanel::set_selected_ids);
+    }
+    make_dock("Properties", Qt::RightDockWidgetArea, m_impl->properties_panel);
 
     auto* log = new QLabel("Log\n\nContent placeholder.", this);
     log->setAlignment(Qt::AlignCenter);
@@ -175,6 +184,12 @@ void MainWindow::set_scene(UiScene scene)
     if (m_impl->layer_panel != nullptr) {
         m_impl->layer_panel->set_layers(scene.layers);
     }
+    if (m_impl->properties_panel != nullptr) {
+        m_impl->properties_panel->set_scene(scene);
+    }
+    if (m_impl->selection_model != nullptr) {
+        m_impl->selection_model->clear();
+    }
     if (m_impl->canvas != nullptr) {
         m_impl->canvas->set_scene(std::move(scene));
     }
@@ -208,6 +223,13 @@ int MainWindow::layer_panel_count() const
     return m_impl->layer_panel != nullptr ? m_impl->layer_panel->layer_count() : 0;
 }
 
+int MainWindow::selected_item_count() const
+{
+    return m_impl->selection_model != nullptr
+        ? static_cast<int>(m_impl->selection_model->selected_ids().size())
+        : 0;
+}
+
 QStringList MainWindow::dock_widget_titles() const
 {
     QStringList titles;
@@ -225,6 +247,11 @@ QStringList MainWindow::layer_panel_names() const
 bool MainWindow::is_layer_visible(const QString& layer_name) const
 {
     return m_impl->layer_panel != nullptr && m_impl->layer_panel->layer_visible(layer_name);
+}
+
+QString MainWindow::properties_summary_text() const
+{
+    return m_impl->properties_panel != nullptr ? m_impl->properties_panel->summary_text() : QString{};
 }
 
 } // namespace aegis::ui

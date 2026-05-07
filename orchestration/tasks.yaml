@@ -104,8 +104,8 @@ tasks:
       - Keep the selection model reusable by violation and graph views.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R CanvasSelection"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -L P3-005"
+    status: done
 
   - id: P3-006
     phase: P3

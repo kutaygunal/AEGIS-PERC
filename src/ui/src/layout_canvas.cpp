@@ -1,4 +1,5 @@
 #include "aegis/ui/layout_canvas.hpp"
+#include "aegis/ui/selection_model.hpp"
 
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -9,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace aegis::ui {
 namespace {
@@ -47,6 +49,11 @@ constexpr double kBaseGridStep = 10.0;
     if (normalized <= 2.0) return 2.0 * base;
     if (normalized <= 5.0) return 5.0 * base;
     return 10.0 * base;
+}
+
+[[nodiscard]] QRectF point_pick_rect(const QPointF& center, double radius)
+{
+    return QRectF(center.x() - radius, center.y() - radius, radius * 2.0, radius * 2.0);
 }
 
 } // namespace
@@ -97,6 +104,41 @@ void LayoutCanvas::set_background_color(const QColor& color)
 QColor LayoutCanvas::background_color() const noexcept
 {
     return m_background_color;
+}
+
+void LayoutCanvas::set_selection_model(SelectionModel* selection_model)
+{
+    m_selection_model = selection_model;
+    update();
+}
+
+SelectionModel* LayoutCanvas::selection_model() const noexcept
+{
+    return m_selection_model;
+}
+
+const SceneItem* LayoutCanvas::hit_test_widget_position(const QPointF& widget_point) const
+{
+    if (!has_scene()) {
+        return nullptr;
+    }
+
+    const QPointF scene_point = widget_to_scene(widget_point);
+    const SceneItem* best = nullptr;
+    double best_distance = std::numeric_limits<double>::max();
+
+    for (const auto& item : m_scene.items) {
+        if (!item.layer_name.empty() && !layer_visibility(item.layer_name)) {
+            continue;
+        }
+        const double distance = hit_test_distance_scene(item, scene_point);
+        if (distance < best_distance) {
+            best_distance = distance;
+            best = &item;
+        }
+    }
+
+    return best;
 }
 
 void LayoutCanvas::set_layer_visibility(const std::string& layer_name, bool visible)
@@ -275,6 +317,22 @@ void LayoutCanvas::mousePressEvent(QMouseEvent* event)
         event->accept();
         return;
     }
+
+    if (event->button() == Qt::LeftButton && m_selection_model != nullptr) {
+        const SceneItem* hit = hit_test_widget_position(event->position());
+        const std::string hit_id = hit != nullptr ? hit->id : std::string{};
+        if (event->modifiers().testFlag(Qt::ControlModifier)) {
+            if (!hit_id.empty()) {
+                m_selection_model->toggle_selected(hit_id);
+            }
+        } else {
+            m_selection_model->select_only(hit_id);
+        }
+        update();
+        event->accept();
+        return;
+    }
+
     QWidget::mousePressEvent(event);
 }
 
@@ -411,8 +469,14 @@ void LayoutCanvas::paint_scene(QPainter& painter)
         fill.setAlpha(96);
         QColor stroke = color.lighter(135);
         stroke.setAlpha(220);
+        const bool selected = m_selection_model != nullptr && m_selection_model->contains(item.id);
+        if (selected) {
+            stroke = QColor("#FFD54F");
+            fill = stroke;
+            fill.setAlpha(120);
+        }
 
-        painter.setPen(QPen(stroke, 0.0));
+        painter.setPen(QPen(stroke, selected ? 0.0 : 0.0));
         painter.setBrush(fill);
 
         if (item.shape_kind == SceneShapeKind::Rectangle) {
@@ -423,6 +487,9 @@ void LayoutCanvas::paint_scene(QPainter& painter)
                 polygon << QPointF(point.x, point.y);
             }
             painter.drawPolygon(polygon);
+        } else if (item.shape_kind == SceneShapeKind::Point && !item.points.empty()) {
+            const QPointF point(item.points.front().x, item.points.front().y);
+            painter.drawEllipse(point, 3.0, 3.0);
         }
     }
 
@@ -432,6 +499,46 @@ void LayoutCanvas::paint_scene(QPainter& painter)
     painter.drawText(12, 20, QString("%1 items | %2%")
                                 .arg(m_scene.items.size())
                                 .arg(QString::number(m_zoom_level * 100.0, 'f', 1)));
+}
+
+double LayoutCanvas::hit_test_distance_scene(const SceneItem& item, const QPointF& scene_point) const
+{
+    constexpr double kPointTolerancePx = 8.0;
+    const double point_tolerance_scene = kPointTolerancePx / std::max(m_zoom_level, kMinZoom);
+
+    if (item.shape_kind == SceneShapeKind::Rectangle) {
+        const QRectF rect = bounds_to_rect(item.bounds);
+        if (rect.adjusted(-point_tolerance_scene, -point_tolerance_scene,
+                          point_tolerance_scene, point_tolerance_scene).contains(scene_point)) {
+            return point_tolerance_scene * 0.5;
+        }
+        return std::numeric_limits<double>::max();
+    }
+
+    if (item.shape_kind == SceneShapeKind::Polygon) {
+        QPolygonF polygon;
+        for (const auto& point : item.points) {
+            polygon << QPointF(point.x, point.y);
+        }
+        if (polygon.containsPoint(scene_point, Qt::OddEvenFill)) {
+            return point_tolerance_scene * 0.5;
+        }
+        if (polygon.boundingRect().adjusted(-point_tolerance_scene, -point_tolerance_scene,
+                                            point_tolerance_scene, point_tolerance_scene).contains(scene_point)) {
+            return point_tolerance_scene;
+        }
+        return std::numeric_limits<double>::max();
+    }
+
+    if (!item.points.empty()) {
+        const QPointF point(item.points.front().x, item.points.front().y);
+        const double dx = scene_point.x() - point.x();
+        const double dy = scene_point.y() - point.y();
+        const double distance = std::sqrt(dx * dx + dy * dy);
+        return distance <= point_tolerance_scene ? distance : std::numeric_limits<double>::max();
+    }
+
+    return std::numeric_limits<double>::max();
 }
 
 void LayoutCanvas::notify_viewport_changed()

@@ -33,9 +33,11 @@ public:
     bool has_menu_bar() const;
     int  dock_widget_count() const;
     int  layer_panel_count() const;
+    int  selected_item_count() const;
     QStringList dock_widget_titles() const;
     QStringList layer_panel_names() const;
     bool is_layer_visible(const QString& layer_name) const;
+    QString properties_summary_text() const;
 
     // Persistence hooks (public for testability)
     void restore_window_state();

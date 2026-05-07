@@ -9,8 +9,12 @@ add_library(aegis_ui STATIC
     src/layer_panel.cpp
     include/aegis/ui/layout_canvas.hpp
     src/layout_canvas.cpp
+    include/aegis/ui/properties_panel.hpp
+    src/properties_panel.cpp
     include/aegis/ui/scene_adapter.hpp
     src/scene_adapter.cpp
+    include/aegis/ui/selection_model.hpp
+    src/selection_model.cpp
 )
 
 target_include_directories(aegis_ui
