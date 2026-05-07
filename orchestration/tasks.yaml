@@ -46,7 +46,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R LayoutIR"
-    status: todo
+    status: done
 
   - id: P2-003
     phase: P2
