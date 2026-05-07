@@ -58,7 +58,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R ServiceRegistry"
-    status: ready
+    status: done
 
   - id: P1-003
     phase: P1
@@ -80,7 +80,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R Logging"
-    status: ready
+    status: done
 
   - id: P1-004
     phase: P1
@@ -102,7 +102,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R Config"
-    status: ready
+    status: done
 
   - id: P1-005
     phase: P1
@@ -123,7 +123,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R DiagnosticBundle"
-    status: todo
+    status: done
 
   - id: P1-006
     phase: P1
@@ -146,7 +146,7 @@ tasks:
     test_commands:
       - "cmake --workflow --preset ci-windows-release"
       - "ctest --preset ci-test"
-    status: ready
+    status: done
 
   - id: P1-007
     phase: P1
@@ -170,7 +170,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R AppShell"
       - Manual: launch binary and verify dockable panels.
-    status: ready
+    status: done
 
   - id: P1-008
     phase: P1
@@ -192,7 +192,7 @@ tasks:
     test_commands:
       - "python scripts/validate_samples.py"
       - "ctest --test-dir build --output-on-failure --R SampleData"
-    status: ready
+    status: done
 
   - id: P1-009
     phase: P1
@@ -212,7 +212,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R ConfigMigration"
-    status: todo
+    status: done
 
   - id: P1-010
     phase: P1
@@ -231,7 +231,7 @@ tasks:
       - Tag tests by module and speed (fast/slow) for selective execution.
     test_commands:
       - "ctest --test-dir build --output-on-failure"
-    status: ready
+    status: done
 
   # ─────────────────────────────────────────────────────────
   # Sprint 2 — Verification Core (P2)

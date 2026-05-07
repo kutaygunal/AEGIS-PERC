@@ -29,3 +29,8 @@ Hidden global singletons make testing and distributed execution difficult. Prefe
 Status: accepted
 Reason:
 Coding-agent sessions are forgetful. The repository is the single source of truth for architecture, decisions, task state, and run history.
+
+## DEC-007: Logging backend is spdlog
+Status: accepted
+Reason:
+The task explicitly recommends a lightweight library. spdlog is header-optional, fast (millions of msgs/sec), provides rotating file sinks, color console sinks, and severity filtering out of the box. A thin `aegis::core::Logger` facade wraps it to enforce module tagging and output format without leaking spdlog into consumer headers.

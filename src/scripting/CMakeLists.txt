@@ -9,4 +9,4 @@ target_include_directories(aegis_scripting
         $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(aegis_scripting PUBLIC aegis_core)
+target_link_libraries(aegis_scripting PUBLIC aegis_core PRIVATE aegis_warnings)

@@ -1,0 +1,165 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AEGIS-PERC Synthetic Design",
+  "description": "Schema for synthetic layout/netlet sample data used in testing.",
+  "type": "object",
+  "required": ["format_version", "design", "layout", "netlist"],
+  "properties": {
+    "format_version": {
+      "type": "string",
+      "description": "Semantic version of the file format.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "design": {
+      "type": "object",
+      "required": ["name", "technology"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "technology": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "required": ["layers", "shapes"],
+      "properties": {
+        "layers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "shapes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["layer", "primitive"],
+            "properties": {
+              "layer": {
+                "type": "string",
+                "minLength": 1
+              },
+              "primitive": {
+                "enum": ["rectangle", "polygon"]
+              },
+              "bbox": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "points": {
+                "type": "array",
+                "minItems": 3,
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "netlist": {
+      "type": "object",
+      "required": ["devices", "nets", "ports"],
+      "properties": {
+        "devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pins": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "properties": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "nets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string"
+              },
+              "connections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["device", "pin"],
+                  "properties": {
+                    "device": {
+                      "type": "string"
+                    },
+                    "pin": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "direction"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "direction": {
+                "enum": ["input", "output", "inout"]
+              },
+              "type": {
+                "type": "string"
+              },
+              "net": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

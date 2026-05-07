@@ -1,0 +1,171 @@
+{
+  "format_version": "1.0.0",
+  "design": {
+    "name": "nand2",
+    "technology": "abstract_cmos_45nm",
+    "description": "2-input NAND gate: parallel PMOS pull-up network, series NMOS pull-down network."
+  },
+  "layout": {
+    "layers": ["diffusion", "poly_silicon", "metal_1", "contact"],
+    "shapes": [
+      {
+        "layer": "diffusion",
+        "primitive": "rectangle",
+        "bbox": [0, 100, 240, 200]
+      },
+      {
+        "layer": "diffusion",
+        "primitive": "rectangle",
+        "bbox": [0, 0, 240, 100]
+      },
+      {
+        "layer": "poly_silicon",
+        "primitive": "rectangle",
+        "bbox": [40, 0, 80, 300]
+      },
+      {
+        "layer": "poly_silicon",
+        "primitive": "rectangle",
+        "bbox": [160, 0, 200, 300]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [0, 140, 240, 160]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [80, 40, 160, 60]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [260, 140, 280, 160]
+      },
+      {
+        "layer": "contact",
+        "primitive": "rectangle",
+        "bbox": [110, 145, 130, 155]
+      },
+      {
+        "layer": "contact",
+        "primitive": "rectangle",
+        "bbox": [270, 145, 290, 155]
+      }
+    ]
+  },
+  "netlist": {
+    "devices": [
+      {
+        "name": "M1",
+        "type": "pmos",
+        "pins": {
+          "gate": "a",
+          "source": "vdd",
+          "drain": "out"
+        },
+        "properties": {
+          "w": 240e-9,
+          "l": 45e-9
+        }
+      },
+      {
+        "name": "M2",
+        "type": "pmos",
+        "pins": {
+          "gate": "b",
+          "source": "vdd",
+          "drain": "out"
+        },
+        "properties": {
+          "w": 240e-9,
+          "l": 45e-9
+        }
+      },
+      {
+        "name": "M3",
+        "type": "nmos",
+        "pins": {
+          "gate": "a",
+          "source": "n1",
+          "drain": "out"
+        },
+        "properties": {
+          "w": 120e-9,
+          "l": 45e-9
+        }
+      },
+      {
+        "name": "M4",
+        "type": "nmos",
+        "pins": {
+          "gate": "b",
+          "source": "vss",
+          "drain": "n1"
+        },
+        "properties": {
+          "w": 120e-9,
+          "l": 45e-9
+        }
+      }
+    ],
+    "nets": [
+      {
+        "name": "a",
+        "type": "signal",
+        "connections": [
+          { "device": "M1", "pin": "gate" },
+          { "device": "M3", "pin": "gate" }
+        ]
+      },
+      {
+        "name": "b",
+        "type": "signal",
+        "connections": [
+          { "device": "M2", "pin": "gate" },
+          { "device": "M4", "pin": "gate" }
+        ]
+      },
+      {
+        "name": "out",
+        "type": "signal",
+        "connections": [
+          { "device": "M1", "pin": "drain" },
+          { "device": "M2", "pin": "drain" },
+          { "device": "M3", "pin": "drain" }
+        ]
+      },
+      {
+        "name": "n1",
+        "type": "internal",
+        "connections": [
+          { "device": "M3", "pin": "source" },
+          { "device": "M4", "pin": "drain" }
+        ]
+      },
+      {
+        "name": "vdd",
+        "type": "power",
+        "connections": [
+          { "device": "M1", "pin": "source" },
+          { "device": "M2", "pin": "source" }
+        ]
+      },
+      {
+        "name": "vss",
+        "type": "ground",
+        "connections": [
+          { "device": "M4", "pin": "source" }
+        ]
+      }
+    ],
+    "ports": [
+      { "name": "a", "direction": "input", "type": "digital", "net": "a" },
+      { "name": "b", "direction": "input", "type": "digital", "net": "b" },
+      { "name": "out", "direction": "output", "type": "digital", "net": "out" },
+      { "name": "vdd", "direction": "inout", "type": "power", "net": "vdd" },
+      { "name": "vss", "direction": "inout", "type": "ground", "net": "vss" }
+    ]
+  }
+}

@@ -1,0 +1,179 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "common",
+            "hidden": true,
+            "cacheVariables": {
+                "AEGIS_BUILD_TESTS": "ON"
+            }
+        },
+        {
+            "name": "windows-release",
+            "displayName": "Windows Release",
+            "description": "Release build on Windows with MSVC (x64)",
+            "inherits": "common",
+            "generator": "Visual Studio 17 2022",
+            "architecture": { "value": "x64", "strategy": "set" },
+            "binaryDir": "${sourceDir}/build/windows-release",
+            "cacheVariables": {
+                "AEGIS_WARNINGS_AS_ERRORS": "ON"
+            },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "windows-debug",
+            "displayName": "Windows Debug",
+            "description": "Debug build on Windows with MSVC (x64)",
+            "inherits": "common",
+            "generator": "Visual Studio 17 2022",
+            "architecture": { "value": "x64", "strategy": "set" },
+            "binaryDir": "${sourceDir}/build/windows-debug",
+            "cacheVariables": {
+                "AEGIS_WARNINGS_AS_ERRORS": "ON"
+            },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "windows-asan-debug",
+            "displayName": "Windows ASan Debug",
+            "description": "Debug build with AddressSanitizer (MSVC)",
+            "inherits": "windows-debug",
+            "binaryDir": "${sourceDir}/build/windows-asan-debug",
+            "cacheVariables": {
+                "AEGIS_ENABLE_SANITIZERS": "ON"
+            }
+        },
+        {
+            "name": "linux-release",
+            "displayName": "Linux/macOS Release",
+            "description": "Release build on Linux or macOS with Ninja",
+            "inherits": "common",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/linux-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "AEGIS_WARNINGS_AS_ERRORS": "ON"
+            },
+            "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "linux-debug",
+            "displayName": "Linux/macOS Debug",
+            "description": "Debug build on Linux or macOS with Ninja",
+            "inherits": "common",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/linux-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "AEGIS_WARNINGS_AS_ERRORS": "ON"
+            },
+            "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "linux-asan-debug",
+            "displayName": "Linux/macOS ASan+UBSan Debug",
+            "description": "Debug build with AddressSanitizer and UndefinedBehaviorSanitizer",
+            "inherits": "linux-debug",
+            "binaryDir": "${sourceDir}/build/linux-asan-debug",
+            "cacheVariables": {
+                "AEGIS_ENABLE_SANITIZERS": "ON"
+            }
+        },
+        {
+            "name": "linux-coverage",
+            "displayName": "Linux/macOS Coverage",
+            "description": "Debug build with gcov/lcov coverage instrumentation",
+            "inherits": "linux-debug",
+            "binaryDir": "${sourceDir}/build/linux-coverage",
+            "cacheVariables": {
+                "AEGIS_ENABLE_COVERAGE": "ON",
+                "AEGIS_WARNINGS_AS_ERRORS": "OFF"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "windows-release",
+            "configurePreset": "windows-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "windows-debug",
+            "configurePreset": "windows-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "windows-asan-debug",
+            "configurePreset": "windows-asan-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "linux-release",
+            "configurePreset": "linux-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "linux-debug",
+            "configurePreset": "linux-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "linux-asan-debug",
+            "configurePreset": "linux-asan-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "linux-coverage",
+            "configurePreset": "linux-coverage",
+            "configuration": "Debug"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "ci-test",
+            "configurePreset": "windows-release",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": false,
+                "jobs": 0
+            }
+        },
+        {
+            "name": "windows-test",
+            "configurePreset": "windows-release",
+            "configuration": "Release",
+            "output": { "outputOnFailure": true },
+            "execution": { "noTestsAction": "error", "stopOnFailure": false }
+        },
+        {
+            "name": "linux-test",
+            "configurePreset": "linux-release",
+            "output": { "outputOnFailure": true },
+            "execution": { "noTestsAction": "error", "stopOnFailure": false }
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "ci-windows-release",
+            "steps": [
+                { "type": "configure", "name": "windows-release" },
+                { "type": "build", "name": "windows-release" },
+                { "type": "test", "name": "ci-test" }
+            ]
+        },
+        {
+            "name": "ci-linux-release",
+            "steps": [
+                { "type": "configure", "name": "linux-release" },
+                { "type": "build", "name": "linux-release" },
+                { "type": "test", "name": "linux-test" }
+            ]
+        }
+    ]
+}

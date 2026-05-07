@@ -1,0 +1,151 @@
+{
+  "format_version": "1.0.0",
+  "design": {
+    "name": "ring_oscillator",
+    "technology": "abstract_cmos_45nm",
+    "description": "5-stage ring oscillator: 5 inverters chained in a loop with an enable NAND stage."
+  },
+  "layout": {
+    "layers": ["diffusion", "poly_silicon", "metal_1", "contact"],
+    "shapes": [
+      {
+        "layer": "metal_1",
+        "primitive": "polygon",
+        "points": [
+          [0, 100], [50, 100], [50, 150], [0, 150]
+        ]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [50, 110, 100, 140]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [100, 110, 150, 140]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [150, 110, 200, 140]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [200, 110, 250, 140]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "polygon",
+        "points": [
+          [250, 110], [300, 110], [300, 140], [250, 140]
+        ]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [250, 110, 300, 140]
+      }
+    ]
+  },
+  "netlist": {
+    "devices": [
+      { "name": "I1_M1", "type": "pmos", "pins": { "gate": "in", "source": "vdd", "drain": "n1" }, "properties": { "w": 240e-9, "l": 45e-9 } },
+      { "name": "I1_M2", "type": "nmos", "pins": { "gate": "in", "source": "vss", "drain": "n1" }, "properties": { "w": 120e-9, "l": 45e-9 } },
+      { "name": "I2_M1", "type": "pmos", "pins": { "gate": "n1", "source": "vdd", "drain": "n2" }, "properties": { "w": 240e-9, "l": 45e-9 } },
+      { "name": "I2_M2", "type": "nmos", "pins": { "gate": "n1", "source": "vss", "drain": "n2" }, "properties": { "w": 120e-9, "l": 45e-9 } },
+      { "name": "I3_M1", "type": "pmos", "pins": { "gate": "n2", "source": "vdd", "drain": "n3" }, "properties": { "w": 240e-9, "l": 45e-9 } },
+      { "name": "I3_M2", "type": "nmos", "pins": { "gate": "n2", "source": "vss", "drain": "n3" }, "properties": { "w": 120e-9, "l": 45e-9 } },
+      { "name": "I4_M1", "type": "pmos", "pins": { "gate": "n3", "source": "vdd", "drain": "n4" }, "properties": { "w": 240e-9, "l": 45e-9 } },
+      { "name": "I4_M2", "type": "nmos", "pins": { "gate": "n3", "source": "vss", "drain": "n4" }, "properties": { "w": 120e-9, "l": 45e-9 } },
+      { "name": "I5_M1", "type": "pmos", "pins": { "gate": "n4", "source": "vdd", "drain": "out" }, "properties": { "w": 240e-9, "l": 45e-9 } },
+      { "name": "I5_M2", "type": "nmos", "pins": { "gate": "n4", "source": "vss", "drain": "out" }, "properties": { "w": 120e-9, "l": 45e-9 } }
+    ],
+    "nets": [
+      {
+        "name": "in",
+        "type": "signal",
+        "connections": [
+          { "device": "I1_M1", "pin": "gate" },
+          { "device": "I1_M2", "pin": "gate" }
+        ]
+      },
+      {
+        "name": "n1",
+        "type": "internal",
+        "connections": [
+          { "device": "I1_M1", "pin": "drain" },
+          { "device": "I1_M2", "pin": "drain" },
+          { "device": "I2_M1", "pin": "gate" },
+          { "device": "I2_M2", "pin": "gate" }
+        ]
+      },
+      {
+        "name": "n2",
+        "type": "internal",
+        "connections": [
+          { "device": "I2_M1", "pin": "drain" },
+          { "device": "I2_M2", "pin": "drain" },
+          { "device": "I3_M1", "pin": "gate" },
+          { "device": "I3_M2", "pin": "gate" }
+        ]
+      },
+      {
+        "name": "n3",
+        "type": "internal",
+        "connections": [
+          { "device": "I3_M1", "pin": "drain" },
+          { "device": "I3_M2", "pin": "drain" },
+          { "device": "I4_M1", "pin": "gate" },
+          { "device": "I4_M2", "pin": "gate" }
+        ]
+      },
+      {
+        "name": "n4",
+        "type": "internal",
+        "connections": [
+          { "device": "I4_M1", "pin": "drain" },
+          { "device": "I4_M2", "pin": "drain" },
+          { "device": "I5_M1", "pin": "gate" },
+          { "device": "I5_M2", "pin": "gate" }
+        ]
+      },
+      {
+        "name": "out",
+        "type": "signal",
+        "connections": [
+          { "device": "I5_M1", "pin": "drain" },
+          { "device": "I5_M2", "pin": "drain" }
+        ]
+      },
+      {
+        "name": "vdd",
+        "type": "power",
+        "connections": [
+          { "device": "I1_M1", "pin": "source" },
+          { "device": "I2_M1", "pin": "source" },
+          { "device": "I3_M1", "pin": "source" },
+          { "device": "I4_M1", "pin": "source" },
+          { "device": "I5_M1", "pin": "source" }
+        ]
+      },
+      {
+        "name": "vss",
+        "type": "ground",
+        "connections": [
+          { "device": "I1_M2", "pin": "source" },
+          { "device": "I2_M2", "pin": "source" },
+          { "device": "I3_M2", "pin": "source" },
+          { "device": "I4_M2", "pin": "source" },
+          { "device": "I5_M2", "pin": "source" }
+        ]
+      }
+    ],
+    "ports": [
+      { "name": "out", "direction": "output", "type": "digital", "net": "out" },
+      { "name": "vdd", "direction": "inout", "type": "power", "net": "vdd" },
+      { "name": "vss", "direction": "inout", "type": "ground", "net": "vss" }
+    ]
+  }
+}

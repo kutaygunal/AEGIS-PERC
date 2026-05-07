@@ -9,4 +9,4 @@ target_include_directories(aegis_rules
         $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(aegis_rules PUBLIC aegis_core aegis_graph)
+target_link_libraries(aegis_rules PUBLIC aegis_core aegis_graph PRIVATE aegis_warnings)

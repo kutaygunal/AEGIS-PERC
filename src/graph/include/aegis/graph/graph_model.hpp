@@ -26,7 +26,7 @@ public:
     std::size_t edge_count() const;
 
 private:
-    class Impl;
+    struct Impl;
     std::unique_ptr<Impl> m_impl;
 };
 

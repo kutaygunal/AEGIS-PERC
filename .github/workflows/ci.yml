@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Windows — Release
+  # -------------------------------------------------------------------------
+  windows-release:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          modules: 'qtbase qtdeclarative'
+
+      - name: Configure
+        run: cmake --preset windows-release
+
+      - name: Build
+        run: cmake --build --preset windows-release --config Release --parallel
+
+      - name: Test
+        run: ctest --preset ci-test -C Release
+
+      - name: Package
+        run: cpack -C Release --preset windows-release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-perc-windows-release
+          path: build/windows-release/bin/Release/*.exe
+
+  # -------------------------------------------------------------------------
+  # Linux — Release + Coverage
+  # -------------------------------------------------------------------------
+  linux-release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ lcov gcovr
+          sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev
+
+      - name: Configure
+        run: cmake --preset linux-release
+
+      - name: Build
+        run: cmake --build --preset linux-release --parallel
+
+      - name: Test
+        run: ctest --preset linux-test
+
+      - name: Package
+        run: cpack -C Release --preset linux-release
+
+  linux-coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ lcov gcovr
+          sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev
+
+      - name: Configure (Coverage)
+        run: cmake --preset linux-coverage
+
+      - name: Build
+        run: cmake --build --preset linux-coverage --parallel
+
+      - name: Test
+        run: ctest --preset linux-test
+
+      - name: Capture coverage baseline
+        run: |
+          mkdir -p coverage
+          lcov --capture --directory build/linux-coverage --output-file coverage/lcov.info
+          lcov --remove coverage/lcov.info '/usr/*' '*/_deps/*' '*/catch2/*' --output-file coverage/lcov.info
+          gcovr --root . --xml-pretty --output coverage/coverage.xml build/linux-coverage
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # -------------------------------------------------------------------------
+  # Linux — Debug with Sanitizers
+  # -------------------------------------------------------------------------
+  linux-sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ clang
+          sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev
+
+      - name: Configure (ASan+UBSan)
+        run: cmake --preset linux-asan-debug
+
+      - name: Build
+        run: cmake --build --preset linux-asan-debug --parallel
+
+      - name: Test
+        run: ctest --preset linux-test
+        env:
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          ASAN_OPTIONS: detect_leaks=1

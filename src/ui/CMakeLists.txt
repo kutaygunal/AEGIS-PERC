@@ -19,4 +19,5 @@ target_link_libraries(aegis_ui
         Qt6::Widgets
     PRIVATE
         aegis_core
+        aegis_warnings
 )

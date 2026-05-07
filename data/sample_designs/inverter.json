@@ -1,0 +1,121 @@
+{
+  "format_version": "1.0.0",
+  "design": {
+    "name": "inverter",
+    "technology": "abstract_cmos_45nm",
+    "description": "Single-stage CMOS inverter with pull-up PMOS and pull-down NMOS."
+  },
+  "layout": {
+    "layers": ["diffusion", "poly_silicon", "metal_1", "contact"],
+    "shapes": [
+      {
+        "layer": "diffusion",
+        "primitive": "rectangle",
+        "bbox": [0, 50, 120, 150]
+      },
+      {
+        "layer": "diffusion",
+        "primitive": "rectangle",
+        "bbox": [0, 0, 120, 100]
+      },
+      {
+        "layer": "poly_silicon",
+        "primitive": "rectangle",
+        "bbox": [40, 0, 80, 200]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [20, 90, 100, 110]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [20, 190, 100, 210]
+      },
+      {
+        "layer": "metal_1",
+        "primitive": "rectangle",
+        "bbox": [140, 90, 160, 110]
+      },
+      {
+        "layer": "contact",
+        "primitive": "rectangle",
+        "bbox": [30, 95, 50, 105]
+      },
+      {
+        "layer": "contact",
+        "primitive": "rectangle",
+        "bbox": [150, 95, 170, 105]
+      }
+    ]
+  },
+  "netlist": {
+    "devices": [
+      {
+        "name": "M1",
+        "type": "pmos",
+        "pins": {
+          "gate": "in",
+          "source": "vdd",
+          "drain": "out"
+        },
+        "properties": {
+          "w": 240e-9,
+          "l": 45e-9
+        }
+      },
+      {
+        "name": "M2",
+        "type": "nmos",
+        "pins": {
+          "gate": "in",
+          "source": "vss",
+          "drain": "out"
+        },
+        "properties": {
+          "w": 120e-9,
+          "l": 45e-9
+        }
+      }
+    ],
+    "nets": [
+      {
+        "name": "in",
+        "type": "signal",
+        "connections": [
+          { "device": "M1", "pin": "gate" },
+          { "device": "M2", "pin": "gate" }
+        ]
+      },
+      {
+        "name": "out",
+        "type": "signal",
+        "connections": [
+          { "device": "M1", "pin": "drain" },
+          { "device": "M2", "pin": "drain" }
+        ]
+      },
+      {
+        "name": "vdd",
+        "type": "power",
+        "connections": [
+          { "device": "M1", "pin": "source" }
+        ]
+      },
+      {
+        "name": "vss",
+        "type": "ground",
+        "connections": [
+          { "device": "M2", "pin": "source" }
+        ]
+      }
+    ],
+    "ports": [
+      { "name": "in", "direction": "input", "type": "digital", "net": "in" },
+      { "name": "out", "direction": "output", "type": "digital", "net": "out" },
+      { "name": "vdd", "direction": "inout", "type": "power", "net": "vdd" },
+      { "name": "vss", "direction": "inout", "type": "ground", "net": "vss" }
+    ]
+  }
+}
