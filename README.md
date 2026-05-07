@@ -152,30 +152,37 @@ session.export_report("executive_report.html", format="html", template="corporat
 
 ```
 AEGIS-PERC/
+├── CMakeLists.txt          # Root build + aegis_warnings + CPack
+├── CMakePresets.json       # Windows/Linux presets + CI workflows
+├── .clang-tidy             # Static analysis rules
+├── .github/workflows/ci.yml  # GitHub Actions CI
 ├── README.md
 ├── LICENSE
-├── CMakeLists.txt
 ├── docs/
 │   ├── architecture/
-│   ├── api/
-│   └── user_guide/
+│   └── BUILD.md            # Build + warnings-as-errors policy
 ├── src/
-│   ├── core/              # Parser, Graph, Rule, Inference engines
-│   ├── ui/                # Qt desktop shell, OpenGL renderers
-│   ├── python_api/        # pybind11 bindings
-│   ├── distributed/       # gRPC services, job scheduler
-│   └── ai/                # XAI, Copilot, RAG, training pipelines
+│   ├── core/               # ServiceRegistry, Logger, Config, DiagnosticBundle
+│   ├── graph/              # GraphModel stub
+│   ├── ml/                 # FeatureExtractor stub
+│   ├── parsing/            # ParserInterface stub
+│   ├── reporting/          # ReportGenerator stub
+│   ├── rules/              # RuleEngine + IRule stub
+│   ├── scripting/          # PythonApi stub
+│   ├── storage/            # StorageEngine stub
+│   └── ui/                 # MainWindow (dockable workspace)
 ├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── benchmarks/
+│   ├── unit/               # Catch2 v3 tests per module
+│   └── CMakeLists.txt      # catch_discover_tests auto-registration
 ├── scripts/
-│   ├── build.py
-│   └── setup_env.sh
+│   └── validate_samples.py # Synthetic data schema validator
 ├── data/
-│   └── sample_designs/    # Small open-source layouts for testing
-└── models/
-    └── pretrained/        # ONNX models, FAISS indices
+│   └── sample_designs/     # inverter, nand2, ring_oscillator
+├── models/
+│   └── pretrained/
+└── orchestration/
+    ├── tasks.yaml          # Sprint task registry
+    └── runs/               # Sprint run logs
 ```
 
 ---
@@ -185,35 +192,32 @@ AEGIS-PERC/
 ### Prerequisites
 - C++20 compiler (MSVC 2022 / GCC 12 / Clang 15+)
 - CMake 3.25+
-- Qt 6.5+ (Core, Widgets, OpenGL)
+- Qt 6.5+ (Core, Widgets)
 - Python 3.10+
-- vcpkg or Conan for dependency management
-- Docker (for distributed services)
-- Ollama (for local copilot LLM)
 
-### Quick Build (Local Desktop Mode)
+### Quick Build
+
+The project provides CMake presets for common configurations:
+
 ```bash
-# Clone
 cd C:/Users/kutay/Desktop/Projects/AEGIS-PERC
 
-# Configure (example with vcpkg)
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=[vcpkg-root]/scripts/buildsystems/vcpkg.cmake
+# Configure and build
+cmake --preset windows-release
+cmake --build build/windows-release --config Release
 
-# Build
-cmake --build build --config Release -j
+# Run tests (auto-discovers Catch2 tests per module boundary)
+ctest --preset ci-test
 
-# Run tests
-ctest --test-dir build --output-on-failure
-
-# Launch
-./build/bin/aegis-perc --mode=desktop --design=data/sample_designs/simple_block.def
+# Or use the CI workflow preset for full configure + build + test
+cmake --workflow --preset ci-windows-release
 ```
 
-### Distributed Mode (Docker Compose)
+### Linux / macOS
 ```bash
-cd backend/
-docker-compose up --build
-# Launches: Redis, Job Scheduler, Embedding Service, Inference Service, Vector Search
+cmake --preset linux-release
+cmake --build build/linux-release --config Release
+ctest --preset ci-test
 ```
 
 ---
@@ -243,35 +247,53 @@ docker-compose up --build
 
 ## Roadmap
 
-### Phase 1 — Foundation (Weeks 1-4)
-- [ ] DEF/LEF streaming parser with incremental indexing
-- [ ] CSR Graph Engine with adjacency traversal APIs
-- [ ] Qt 6 shell + OpenGL layout viewer skeleton
-- [ ] CMake build system + CI pipeline
+### Phase 1 — Commercial Foundation (Sprint 1) ✅ **COMPLETE**
+- ✅ Project architecture skeleton (10 modules, CMake targets, CI-ready)
+- ✅ Core service registry (type-safe DI, circular-dependency detection)
+- ✅ Structured rotating logs (spdlog, file rotation, module tags)
+- ✅ Configuration system (JSON, schema validation, env overrides, callbacks)
+- ✅ Diagnostic bundle export (zip with redaction, progress callbacks)
+- ✅ CMake/CI/test hardening (presets, warnings-as-errors, clang-tidy, GitHub Actions)
+- ✅ Application shell (Qt6 dockable workspace, QSettings persistence)
+- ✅ Synthetic sample data (inverter, NAND2, ring oscillator with JSON schema)
+- ✅ Config migration system (versioned chain migrations v0→v1→v2)
+- ✅ Catch2 v3 integration with per-module test discovery (52 CTest tests)
 
-### Phase 2 — Rules & ML (Weeks 5-8)
-- [ ] Rule engine framework (floating net, EM risk, power domain)
-- [ ] Feature extraction pipeline for violation ML
-- [ ] XGBoost training pipeline + ONNX export
-- [ ] ONNX Runtime desktop inference integration
+### Phase 2 — Verification Core (Sprint 2)
+- [ ] Layout/netlist import abstraction
+- [ ] JSON intermediate layout representation
+- [ ] Basic DEF-like parser prototype
+- [ ] Connectivity graph model
+- [ ] Net/device/pin data model
+- [ ] Rule engine abstraction
+- [ ] Basic electrical rule checks
+- [ ] Violation result model
+- [ ] Power/signal domain tagging
+- [ ] SPICE-like netlist parser prototype
 
-### Phase 3 — Explainability & Copilot (Weeks 9-12)
-- [ ] SHAP explainability integration
-- [ ] RAG pipeline over violation database
-- [ ] Ollama-based verification copilot (local LLM)
-- [ ] Natural language tool-use agents
+### Phase 3 — Visualization Core (Sprint 3)
+- [ ] 2D layout canvas (QPainter-based)
+- [ ] Multi-layer rendering
+- [ ] Violation highlighting
+- [ ] Interactive zoom/pan
 
-### Phase 4 — Scale (Weeks 13-16)
-- [ ] gRPC distributed job scheduler
-- [ ] Worker node pool with Redis queue
+### Phase 4 — AI/ML Core (Sprint 4)
+- [ ] Feature extraction from violations
+- [ ] XGBoost / LightGBM training pipeline
+- [ ] ONNX Runtime inference integration
+- [ ] SHAP explainability engine
+
+### Phase 5 — Automation & Extensibility (Sprint 5)
+- [ ] Batch analysis CLI (headless)
+- [ ] Embedded Python automation API
+- [ ] Plugin SDK for third-party rules
+- [ ] Report generation (HTML/JSON)
+
+### Phase 6 — Enterprise Scale (Sprint 6)
+- [ ] Distributed job execution design
+- [ ] gRPC services + Redis job queue
+- [ ] Worker node pool
 - [ ] Enterprise PostgreSQL backend
-- [ ] Python API polish + documentation
-
-### Phase 5 — Polish (Weeks 17-20)
-- [ ] Advanced OpenGL/Vulkan renderer (layers, heatmaps, animation)
-- [ ] Plugin SDK for third-party rule developers
-- [ ] Comprehensive test coverage + benchmarks
-- [ ] Commercial-grade documentation and demo video
 
 ---
 
