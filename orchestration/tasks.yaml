@@ -124,8 +124,8 @@ tasks:
       - Keep severity styling centralized for reuse by details and report preview UI.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R ViolationOverlay"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -L P3-006"
+    status: done
 
   - id: P3-007
     phase: P3
@@ -144,8 +144,8 @@ tasks:
       - Do not execute rules from the details panel; it only displays provided results.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R ViolationExplorer"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -L P3-007"
+    status: done
 
   - id: P3-008
     phase: P3
@@ -164,8 +164,8 @@ tasks:
       - Keep filter state serializable for future session persistence.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R ViolationFilter"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -L P3-008"
+    status: done
 
   - id: P3-009
     phase: P3
@@ -184,8 +184,8 @@ tasks:
       - Keep tracing asynchronous-ready; avoid blocking the UI event loop on large graphs.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R ConnectivityTrace"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -L P3-009"
+    status: done
 
   - id: P3-010
     phase: P3
@@ -204,8 +204,8 @@ tasks:
       - The graph dock must not own or mutate core graph data.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R GraphExplorer"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -L P3-010"
+    status: done
 
   - id: P3-011
     phase: P3
@@ -224,8 +224,8 @@ tasks:
       - Keep color ramp and opacity settings centralized for future preferences UI.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R ViolationHeatmap"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -L P3-011"
+    status: done
 
   - id: P3-012
     phase: P3
@@ -244,8 +244,8 @@ tasks:
       - Avoid duplicating report-generation business logic in widgets.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R ReportPreview"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -L P3-012"
+    status: done
 
   - id: P3-013
     phase: P3
@@ -264,8 +264,8 @@ tasks:
       - Run-checks remains a UI command hook and must not add rule-engine logic in widgets.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R WorkspaceActions"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure -R WorkspaceActions"
+    status: done
 
   - id: P3-014
     phase: P3
@@ -284,8 +284,8 @@ tasks:
       - Cache transformed or indexed geometry only in UI-owned structures.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R CanvasPerformance"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure --R CanvasPerformance"
+    status: done
 
   - id: P3-015
     phase: P3
@@ -304,8 +304,8 @@ tasks:
       - Do not rely on local user QSettings state; tests must clean up persisted settings.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R Ui"
-    status: todo
+      - "ctest --test-dir build -C Release --output-on-failure --R Ui"
+    status: done
 
   # ─────────────────────────────────────────────────────────
   # Sprint 4 — AI/ML Core (P4) — early tasks

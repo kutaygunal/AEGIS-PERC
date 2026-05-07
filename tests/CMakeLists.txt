@@ -25,6 +25,16 @@ add_executable(aegis_unit_tests
     unit/ui/test_canvas_viewport.cpp
     unit/ui/test_layer_panel.cpp
     unit/ui/test_canvas_selection.cpp
+    unit/ui/test_violation_overlay.cpp
+    unit/ui/test_violation_explorer.cpp
+    unit/ui/test_violation_filter.cpp
+    unit/ui/test_connectivity_trace.cpp
+    unit/ui/test_graph_explorer.cpp
+    unit/ui/test_violation_heatmap.cpp
+    unit/ui/test_report_preview.cpp
+    unit/ui/test_workspace_actions.cpp
+    unit/ui/test_canvas_performance.cpp
+    unit/ui/test_ui_workflow.cpp
     unit/data/test_sample_data.cpp
     unit/graph/test_graph_minimal.cpp
     unit/graph/test_connectivity_graph.cpp

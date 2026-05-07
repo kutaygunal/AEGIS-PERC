@@ -29,21 +29,35 @@ struct QtAppGuard {
     }
 };
 
+struct SettingsCleanupGuard {
+    SettingsCleanupGuard() {
+        QSettings settings("AEGIS-PERC", "AEGIS-PERC");
+        settings.remove("mainWindow");
+    }
+
+    ~SettingsCleanupGuard() {
+        QSettings settings("AEGIS-PERC", "AEGIS-PERC");
+        settings.remove("mainWindow");
+    }
+};
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-TEST_CASE("MainWindow constructs with central placeholder", "[ui][p1-007][AppShell]")
+TEST_CASE("UiAppShell MainWindow constructs with central placeholder", "[ui][p1-007][AppShell]")
 {
     QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
     aegis::ui::MainWindow window;
 
     REQUIRE(window.has_central_widget());
     REQUIRE(window.has_menu_bar());
 }
 
-TEST_CASE("MainWindow has dockable panels", "[ui][p1-007][AppShell]")
+TEST_CASE("UiAppShell MainWindow has dockable panels", "[ui][p1-007][AppShell]")
 {
     QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
     aegis::ui::MainWindow window;
 
     REQUIRE(window.dock_widget_count() >= 1);
@@ -62,9 +76,10 @@ TEST_CASE("MainWindow has dockable panels", "[ui][p1-007][AppShell]")
     REQUIRE(has_log);
 }
 
-TEST_CASE("MainWindow saves and restores geometry", "[ui][p1-007][AppShell]")
+TEST_CASE("UiAppShell MainWindow saves and restores geometry", "[ui][p1-007][AppShell]")
 {
     QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
 
     QByteArray saved_geo;
     QByteArray saved_state;
@@ -96,14 +111,12 @@ TEST_CASE("MainWindow saves and restores geometry", "[ui][p1-007][AppShell]")
         REQUIRE(w.isVisible() == false);
     }
 
-    // Clean up test settings
-    QSettings settings("AEGIS-PERC", "AEGIS-PERC");
-    settings.remove("mainWindow");
 }
 
-TEST_CASE("MainWindow menu bar has expected menus", "[ui][p1-007][AppShell]")
+TEST_CASE("UiAppShell MainWindow menu bar has expected menus", "[ui][p1-007][AppShell]")
 {
     QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
     aegis::ui::MainWindow window;
 
     auto* mb = window.menuBar();
