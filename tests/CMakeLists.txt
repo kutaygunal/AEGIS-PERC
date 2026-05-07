@@ -1,6 +1,8 @@
 include(FetchContent)
 include(CTest)
 
+find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
+
 FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -18,6 +20,10 @@ add_executable(aegis_unit_tests
     unit/core/test_diagnostic_bundle.cpp
     unit/core/test_config_migration.cpp
     unit/ui/test_app_shell.cpp
+    unit/ui/test_scene_adapter.cpp
+    unit/ui/test_layout_canvas.cpp
+    unit/ui/test_canvas_viewport.cpp
+    unit/ui/test_layer_panel.cpp
     unit/data/test_sample_data.cpp
     unit/graph/test_graph_minimal.cpp
     unit/graph/test_connectivity_graph.cpp
@@ -51,6 +57,7 @@ target_link_libraries(aegis_unit_tests
         aegis_scripting
         aegis_storage
         Catch2::Catch2WithMain
+        Qt6::Test
         zip
         aegis_warnings
 )

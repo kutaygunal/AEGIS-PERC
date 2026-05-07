@@ -1,15 +1,14 @@
 #include "aegis/ui/main_window.hpp"
+#include "aegis/ui/layer_panel.hpp"
+#include "aegis/ui/layout_canvas.hpp"
 
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDockWidget>
-#include <QFileDialog>
 #include <QLabel>
 #include <QMenuBar>
 #include <QSettings>
 #include <QStatusBar>
-#include <QToolBar>
-#include <QVBoxLayout>
 #include <QWidget>
 
 namespace aegis::ui {
@@ -18,7 +17,8 @@ namespace aegis::ui {
 // Impl
 // ---------------------------------------------------------------------------
 struct MainWindow::Impl {
-    QWidget* central_placeholder = nullptr;
+    LayoutCanvas* canvas = nullptr;
+    LayerPanel* layer_panel = nullptr;
     QList<QDockWidget*> docks;
     QMenuBar* menu_bar = nullptr;
 };
@@ -44,16 +44,21 @@ void MainWindow::setup_ui()
     setWindowTitle("AEGIS-PERC");
     resize(1280, 720);
 
-    // Central placeholder for future canvas
-    m_impl->central_placeholder = new QWidget(this);
-    auto* layout = new QVBoxLayout(m_impl->central_placeholder);
-    layout->setContentsMargins(0, 0, 0, 0);
-
-    auto* label = new QLabel("Canvas Placeholder\n\nFuture 2D layout rendering will appear here.", this);
-    label->setAlignment(Qt::AlignCenter);
-    layout->addWidget(label);
-
-    setCentralWidget(m_impl->central_placeholder);
+    // Central reusable layout canvas. It owns rendering state only; scene data
+    // is supplied through the UI scene adapter.
+    m_impl->canvas = new LayoutCanvas(this);
+    connect(m_impl->canvas, &LayoutCanvas::cursor_position_changed, this,
+            [this](const QPointF& scene_pos, double zoom) {
+                statusBar()->showMessage(QString("X: %1  Y: %2  Zoom: %3%")
+                                             .arg(scene_pos.x(), 0, 'f', 2)
+                                             .arg(scene_pos.y(), 0, 'f', 2)
+                                             .arg(zoom * 100.0, 0, 'f', 1));
+            });
+    connect(m_impl->canvas, &LayoutCanvas::viewport_changed, this,
+            [this](double zoom, const QPointF&) {
+                statusBar()->showMessage(QString("Zoom: %1%").arg(zoom * 100.0, 0, 'f', 1));
+            });
+    setCentralWidget(m_impl->canvas);
 
     // Status bar
     statusBar()->showMessage("Ready");
@@ -110,21 +115,32 @@ void MainWindow::setup_menus()
 
 void MainWindow::setup_dock_panels()
 {
-    auto make_dock = [this](const QString& title, Qt::DockWidgetArea area) -> QDockWidget* {
+    auto make_dock = [this](const QString& title, Qt::DockWidgetArea area, QWidget* widget) -> QDockWidget* {
         auto* dock = new QDockWidget(title, this);
         dock->setObjectName(title + "Dock");
         dock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
-        auto* placeholder = new QLabel(title + "\n\nContent placeholder.", this);
-        placeholder->setAlignment(Qt::AlignCenter);
-        dock->setWidget(placeholder);
+        dock->setWidget(widget);
         addDockWidget(area, dock);
         m_impl->docks.append(dock);
         return dock;
     };
 
-    make_dock("Layers", Qt::LeftDockWidgetArea);
-    make_dock("Properties", Qt::RightDockWidgetArea);
-    make_dock("Log", Qt::BottomDockWidgetArea);
+    m_impl->layer_panel = new LayerPanel(this);
+    connect(m_impl->layer_panel, &LayerPanel::layer_visibility_changed, this,
+            [this](const QString& layer_name, bool visible) {
+                if (m_impl->canvas != nullptr) {
+                    m_impl->canvas->set_layer_visibility(layer_name.toStdString(), visible);
+                }
+            });
+    make_dock("Layers", Qt::LeftDockWidgetArea, m_impl->layer_panel);
+
+    auto* properties = new QLabel("Properties\n\nContent placeholder.", this);
+    properties->setAlignment(Qt::AlignCenter);
+    make_dock("Properties", Qt::RightDockWidgetArea, properties);
+
+    auto* log = new QLabel("Log\n\nContent placeholder.", this);
+    log->setAlignment(Qt::AlignCenter);
+    make_dock("Log", Qt::BottomDockWidgetArea, log);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,12 +170,27 @@ void MainWindow::closeEvent(QCloseEvent* event)
     QMainWindow::closeEvent(event);
 }
 
+void MainWindow::set_scene(UiScene scene)
+{
+    if (m_impl->layer_panel != nullptr) {
+        m_impl->layer_panel->set_layers(scene.layers);
+    }
+    if (m_impl->canvas != nullptr) {
+        m_impl->canvas->set_scene(std::move(scene));
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Test accessors
 // ---------------------------------------------------------------------------
 bool MainWindow::has_central_widget() const
 {
     return centralWidget() != nullptr;
+}
+
+bool MainWindow::has_layout_canvas() const
+{
+    return m_impl->canvas != nullptr && centralWidget() == m_impl->canvas;
 }
 
 bool MainWindow::has_menu_bar() const
@@ -172,6 +203,11 @@ int MainWindow::dock_widget_count() const
     return static_cast<int>(m_impl->docks.size());
 }
 
+int MainWindow::layer_panel_count() const
+{
+    return m_impl->layer_panel != nullptr ? m_impl->layer_panel->layer_count() : 0;
+}
+
 QStringList MainWindow::dock_widget_titles() const
 {
     QStringList titles;
@@ -179,6 +215,16 @@ QStringList MainWindow::dock_widget_titles() const
         if (dock) titles.append(dock->windowTitle());
     }
     return titles;
+}
+
+QStringList MainWindow::layer_panel_names() const
+{
+    return m_impl->layer_panel != nullptr ? m_impl->layer_panel->layer_names() : QStringList{};
+}
+
+bool MainWindow::is_layer_visible(const QString& layer_name) const
+{
+    return m_impl->layer_panel != nullptr && m_impl->layer_panel->layer_visible(layer_name);
 }
 
 } // namespace aegis::ui

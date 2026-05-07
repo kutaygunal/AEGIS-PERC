@@ -1,5 +1,7 @@
 #pragma once
 
+#include "aegis/ui/scene_adapter.hpp"
+
 #include <QMainWindow>
 #include <memory>
 
@@ -24,10 +26,16 @@ public:
     MainWindow& operator=(const MainWindow&) = delete;
 
     // Test accessors --------------------------------------------------------
+    void set_scene(UiScene scene);
+
     bool has_central_widget() const;
+    bool has_layout_canvas() const;
     bool has_menu_bar() const;
     int  dock_widget_count() const;
+    int  layer_panel_count() const;
     QStringList dock_widget_titles() const;
+    QStringList layer_panel_names() const;
+    bool is_layer_visible(const QString& layer_name) const;
 
     // Persistence hooks (public for testability)
     void restore_window_state();
