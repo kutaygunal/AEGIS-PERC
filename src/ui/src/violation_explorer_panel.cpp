@@ -1,5 +1,6 @@
 #include "aegis/ui/violation_explorer_panel.hpp"
 
+#include "aegis/ui/ui_state_text.hpp"
 #include "aegis/ui/violation_filter_proxy_model.hpp"
 #include "aegis/ui/violation_table_model.hpp"
 
@@ -16,6 +17,9 @@
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QVBoxLayout>
+
+#include <algorithm>
+#include <cmath>
 
 namespace aegis::ui {
 namespace {
@@ -273,6 +277,21 @@ int ViolationExplorerPanel::metadata_row_count() const
     return m_metadata->rowCount();
 }
 
+void ViolationExplorerPanel::set_heatmap_visible(bool visible)
+{
+    if (m_heatmap_visible != nullptr) {
+        m_heatmap_visible->setChecked(visible);
+    }
+}
+
+void ViolationExplorerPanel::set_heatmap_opacity(double opacity)
+{
+    if (m_heatmap_opacity != nullptr) {
+        const int slider_value = std::clamp(static_cast<int>(std::lround(opacity * 100.0)), 0, 100);
+        m_heatmap_opacity->setValue(slider_value);
+    }
+}
+
 bool ViolationExplorerPanel::heatmap_visible() const
 {
     return m_heatmap_visible != nullptr && m_heatmap_visible->isChecked();
@@ -325,7 +344,13 @@ void ViolationExplorerPanel::update_details()
 
     if (violation == nullptr) {
         m_violation_id->clear();
-        m_summary->setPlainText("No violation selected");
+        if (total_violation_count() == 0) {
+            m_summary->setPlainText(state_text::violations_empty());
+        } else if (violation_count() == 0) {
+            m_summary->setPlainText(state_text::violations_filtered_empty());
+        } else {
+            m_summary->setPlainText(state_text::violations_no_selection());
+        }
         return;
     }
 

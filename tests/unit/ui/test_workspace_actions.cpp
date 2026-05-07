@@ -81,6 +81,10 @@ TEST_CASE("WorkspaceActions shared actions are discoverable and stateful", "[ui]
     REQUIRE(ids.contains("toggle_grid"));
     REQUIRE(ids.contains("toggle_overlays"));
     REQUIRE(ids.contains("run_checks"));
+    REQUIRE(ids.contains("trace_from_selection"));
+    REQUIRE(ids.contains("trace_from_violation"));
+    REQUIRE(ids.contains("focus_trace"));
+    REQUIRE(ids.contains("clear_trace_action"));
     REQUIRE(ids.contains("clear_selection"));
 
     REQUIRE(window.workspace_action_enabled("open_sample"));
@@ -89,11 +93,16 @@ TEST_CASE("WorkspaceActions shared actions are discoverable and stateful", "[ui]
     REQUIRE(!window.workspace_action_enabled("toggle_grid"));
     REQUIRE(!window.workspace_action_enabled("toggle_overlays"));
     REQUIRE(!window.workspace_action_enabled("run_checks"));
+    REQUIRE(!window.workspace_action_enabled("trace_from_selection"));
+    REQUIRE(!window.workspace_action_enabled("trace_from_violation"));
+    REQUIRE(!window.workspace_action_enabled("focus_trace"));
+    REQUIRE(!window.workspace_action_enabled("clear_trace_action"));
     REQUIRE(!window.workspace_action_enabled("clear_selection"));
 
     REQUIRE(window.workspace_action_shortcut_text("fit_view") == "F");
     REQUIRE(window.workspace_action_shortcut_text("toggle_grid") == "G");
     REQUIRE(window.workspace_action_shortcut_text("run_checks").contains("F5"));
+    REQUIRE(window.workspace_action_shortcut_text("trace_from_selection") == "Ctrl+T");
     REQUIRE(!window.workspace_action_tooltip("open_sample").isEmpty());
 }
 
@@ -108,6 +117,10 @@ TEST_CASE("WorkspaceActions load sample scene and control grid overlays and sele
     REQUIRE(window.workspace_action_enabled("reset_view"));
     REQUIRE(window.workspace_action_enabled("toggle_grid"));
     REQUIRE(window.workspace_action_enabled("run_checks"));
+    REQUIRE(!window.workspace_action_enabled("trace_from_selection"));
+    REQUIRE(!window.workspace_action_enabled("trace_from_violation"));
+    REQUIRE(!window.workspace_action_enabled("focus_trace"));
+    REQUIRE(!window.workspace_action_enabled("clear_trace_action"));
 
     REQUIRE(window.grid_visible());
     REQUIRE(window.workspace_action_checked("toggle_grid"));

@@ -77,3 +77,248 @@ tasks:
     test_commands:
       - "docs/design/distributed.md exists and passes spell check"
     status: todo
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 7 — UI Functional Hardening (P7)
+  # ─────────────────────────────────────────────────────────
+
+  - id: P7-001
+    phase: P7
+    title: "Functional Help, About, and documentation actions"
+    priority: medium
+    area: ui
+    risk: low
+    depends_on: []
+    acceptance:
+      - Help menu actions open a real About dialog and a documentation entry point instead of inert placeholders.
+      - Documentation action degrades gracefully when local docs are unavailable.
+      - Status bar or log panel reports action success and failure.
+      - Automated UI tests verify the actions are wired and non-crashing in headless mode.
+    implementation_rules:
+      - Keep help actions UI-owned; do not add business logic.
+      - Avoid blocking the UI thread on external process launches or file existence checks.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R HelpActions"
+    status: done
+
+  - id: P7-002
+    phase: P7
+    title: "Replace placeholder Log dock with real session activity panel"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: []
+    acceptance:
+      - The Log dock no longer shows static placeholder text.
+      - UI events such as sample load, trace requests, filter changes, and run-check requests append timestamped entries.
+      - Entries support severity styling and bounded history size.
+      - Tests verify the panel updates from UI events without owning logger backend logic.
+    implementation_rules:
+      - Keep the panel as a presentation surface over UI-generated events or lightweight adapters.
+      - Do not couple widgets directly to core logging internals.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R ActivityLog"
+    status: done
+
+  - id: P7-003
+    phase: P7
+    title: "Bundled sample browser and load workflow polish"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: []
+    acceptance:
+      - Users can choose from bundled sample designs instead of only loading inverter.json.
+      - File menu and toolbar clearly indicate which sample or load action is being used.
+      - Sample loading surfaces success, parse failure, and missing-file feedback in the UI without modal parser internals.
+      - UI tests cover inverter, nand2, and ring oscillator load paths.
+    implementation_rules:
+      - Reuse existing sample-data adaptation paths; keep parsing/business logic outside widgets.
+      - Keep all load workflows deterministic and headless-testable.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R SampleWorkflow"
+    status: done
+
+  - id: P7-004
+    phase: P7
+    title: "Real Run Checks workspace command"
+    priority: critical
+    area: ui
+    risk: high
+    depends_on: [P7-002, P7-003]
+    acceptance:
+      - The Run Checks action no longer reports a placeholder-only message.
+      - A UI command path triggers available rule execution services and updates violations/overlays on completion.
+      - Busy, success, empty-result, and failure states are visible in status and log surfaces.
+      - Widgets remain orchestration clients only; rule-engine logic stays outside the UI layer.
+    implementation_rules:
+      - Invoke rule execution through existing public module boundaries or thin application services.
+      - Keep the workflow asynchronous-ready and avoid blocking the event loop during checks.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R RunChecks"
+    status: done
+
+  - id: P7-005
+    phase: P7
+    title: "Workspace action enablement and focus-state consistency"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P7-003, P7-004]
+    acceptance:
+      - Menu, toolbar, shortcut, and dock interactions keep shared QAction state synchronized.
+      - Actions such as clear selection, focus trace, overlay toggles, and graph actions enable or disable based on real UI state.
+      - Keyboard-first workflows remain usable after dock focus changes.
+      - Regression tests cover empty-state, loaded-scene, violation-loaded, and active-trace scenarios.
+    implementation_rules:
+      - Keep shared QAction instances as the single state source.
+      - Avoid duplicating enablement logic across individual widgets.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R WorkspaceState"
+    status: done
+
+  - id: P7-006
+    phase: P7
+    title: "Persist user-facing workspace UI state"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P7-005]
+    acceptance:
+      - Workspace persistence includes dock visibility/state plus grid, overlay, heatmap, metrics, and violation filter settings.
+      - Restoring a session does not rely on stale local machine state in tests.
+      - Version-tolerant defaults handle missing or partial saved values.
+      - Tests cover save/restore for both empty and populated workspaces.
+    implementation_rules:
+      - Persist UI-owned state only; do not serialize core graph or violation engine internals in widgets.
+      - Keep settings keys scoped and cleanly resettable for automated tests.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R WorkspacePersistence"
+    status: done
+
+  - id: P7-007
+    phase: P7
+    title: "Trace panel and trace-from-context usability hardening"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P7-004, P7-005]
+    acceptance:
+      - Trace controls expose clear request validation, actionable unresolved feedback, and correct enable/disable states.
+      - Tracing from selection, graph node selection, and current violation behaves consistently.
+      - Focus trace and clear trace produce visible UI feedback and no stale state.
+      - Tests cover empty selection, unknown names, valid net traces, and repeated trace replacement.
+    implementation_rules:
+      - Continue using read-only graph presentation adapters.
+      - Keep trace messaging centralized so the panel, status bar, and activity log stay consistent.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R TraceWorkflow"
+    status: done
+
+  - id: P7-008
+    phase: P7
+    title: "Graph explorer navigation and empty-state polish"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P7-005, P7-007]
+    acceptance:
+      - Graph explorer distinguishes empty graph, filtered/not-found, and truncated-LOD states with clear messages.
+      - Search, selection sync, and current-node reporting stay stable as graphs reload or LOD changes.
+      - Explorer presentation better communicates node kind and visible-range limits without mutating core graph data.
+      - Tests cover no-graph, limited-LOD, exact match, substring match, and selection-sync cases.
+    implementation_rules:
+      - Prefer lightweight model/view improvements over external graph UI dependencies.
+      - Keep graph data access read-only.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R GraphExplorerUi"
+    status: done
+
+  - id: P7-009
+    phase: P7
+    title: "Report preview functionalization and snapshot controls"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P7-004, P7-005]
+    acceptance:
+      - Report preview no longer depends on static placeholder text when a scene is available.
+      - Snapshot state refreshes predictably on scene, filter, selection, and violation changes.
+      - Preview offers functional UI actions such as refresh or copy summary/snapshot while keeping export out of scope until P5.
+      - Tests verify placeholder-to-live transitions and non-export preview interactions.
+    implementation_rules:
+      - Keep this panel preview-only; do not implement final report export in Sprint 7.
+      - Reuse existing UI-owned preview data rather than duplicating reporting business logic.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R ReportPreviewUi"
+    status: done
+
+  - id: P7-010
+    phase: P7
+    title: "Unified empty, loading, and error states across UI panels"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P7-002, P7-003, P7-004]
+    acceptance:
+      - Canvas, properties, violations, trace, graph explorer, and report preview use consistent empty and error-state language.
+      - User-facing messages explain what action is possible next instead of showing generic placeholder wording.
+      - State transitions remain deterministic under repeated load/clear/filter/trace operations.
+      - Automated tests verify representative empty/error text in each major panel.
+    implementation_rules:
+      - Centralize reusable status strings or presentation helpers where practical.
+      - Avoid leaking parser or rule-engine internal exception text directly into widgets.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R UiStates"
+    status: done
+
+  - id: P7-011
+    phase: P7
+    title: "UI notification and status-message routing"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P7-002, P7-010]
+    acceptance:
+      - Status bar, activity log, and relevant panels receive coordinated success/warning/error notifications.
+      - Short-lived and persistent messages are routed intentionally instead of ad hoc `showMessage()` calls.
+      - Duplicate or conflicting UI messages are reduced for load, trace, filter, and check-run workflows.
+      - Tests verify routed notifications for at least sample loading, trace failure, and completed checks.
+    implementation_rules:
+      - Keep notification routing lightweight and UI-owned.
+      - Do not introduce a dependency from core modules back into widgets.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R UiNotifications"
+    status: done
+
+  - id: P7-012
+    phase: P7
+    title: "Comprehensive headless UI regression suite"
+    priority: critical
+    area: ui
+    risk: medium
+    depends_on: [P7-001, P7-004, P7-006, P7-007, P7-008, P7-009, P7-010, P7-011]
+    acceptance:
+      - Headless-compatible UI tests cover menus, toolbar actions, docks, sample loading, checks, trace, graph explorer, report preview, and persistence.
+      - Test fixtures avoid leakage from local QSettings state and clean up deterministic artifacts.
+      - The suite can be targeted by Sprint 7 labels or regex filters in CTest.
+      - Existing prior-sprint UI tests continue to pass.
+    implementation_rules:
+      - Prefer deterministic model/view assertions over brittle pixel-perfect checks.
+      - Keep manual validation limited to a concise supplemental checklist after automated coverage is in place.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -L P7"
+      - "ctest --test-dir build -C Release --output-on-failure -R Ui"
+    status: done

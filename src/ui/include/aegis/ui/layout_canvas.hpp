@@ -41,6 +41,7 @@ public:
     [[nodiscard]] const UiScene& scene() const noexcept;
     [[nodiscard]] std::size_t scene_item_count() const noexcept;
     [[nodiscard]] bool has_scene() const noexcept;
+    [[nodiscard]] QString empty_state_text() const;
 
     void set_background_color(const QColor& color);
     [[nodiscard]] QColor background_color() const noexcept;

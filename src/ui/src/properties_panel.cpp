@@ -1,4 +1,5 @@
 #include "aegis/ui/properties_panel.hpp"
+#include "aegis/ui/ui_state_text.hpp"
 
 #include <QLabel>
 #include <QVBoxLayout>
@@ -11,7 +12,7 @@ PropertiesPanel::PropertiesPanel(QWidget* parent)
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 8, 8, 8);
 
-    m_summary = new QLabel("No selection", this);
+    m_summary = new QLabel(state_text::properties_no_scene(), this);
     m_summary->setWordWrap(true);
     m_summary->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     layout->addWidget(m_summary);
@@ -20,6 +21,7 @@ PropertiesPanel::PropertiesPanel(QWidget* parent)
 void PropertiesPanel::set_scene(const UiScene& scene)
 {
     m_scene = scene;
+    update_summary({});
 }
 
 void PropertiesPanel::set_selected_ids(const QStringList& ids)
@@ -35,7 +37,8 @@ QString PropertiesPanel::summary_text() const
 void PropertiesPanel::update_summary(const QStringList& ids)
 {
     if (ids.isEmpty()) {
-        m_summary->setText("No selection");
+        m_summary->setText(m_scene.items.empty() ? state_text::properties_no_scene()
+                                                 : state_text::properties_no_selection());
         return;
     }
 

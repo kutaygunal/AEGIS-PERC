@@ -1,4 +1,5 @@
 #include "aegis/ui/graph_explorer_panel.hpp"
+#include "aegis/ui/ui_state_text.hpp"
 
 #include <QHeaderView>
 #include <QHBoxLayout>
@@ -72,7 +73,7 @@ GraphExplorerPanel::GraphExplorerPanel(QWidget* parent)
     lod_row->addWidget(m_lod, 1);
     root->addLayout(lod_row);
 
-    m_status = new QLabel("0 visible graph items", this);
+    m_status = new QLabel(state_text::graph_no_graph(), this);
     root->addWidget(m_status);
 
     m_tree = new QTreeWidget(this);
@@ -94,6 +95,7 @@ GraphExplorerPanel::GraphExplorerPanel(QWidget* parent)
     connect(m_lod, &QSlider::valueChanged, this, [this](int) { rebuild_tree(); });
     connect(m_tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem* current, QTreeWidgetItem*) {
+                m_selected_stable_name = current != nullptr ? current->data(0, Qt::UserRole).toString() : QString{};
                 if (current == nullptr) {
                     return;
                 }
@@ -102,6 +104,8 @@ GraphExplorerPanel::GraphExplorerPanel(QWidget* parent)
                     emit graph_node_selected(stable_name);
                 }
             });
+
+    update_status();
 }
 
 void GraphExplorerPanel::set_graph(const aegis::graph::ConnectivityGraph* graph)
@@ -135,6 +139,15 @@ bool GraphExplorerPanel::search_and_select(const QString& text)
 {
     const QString trimmed = text.trimmed();
     if (trimmed.isEmpty()) {
+        m_status->setText(state_text::graph_enter_search());
+        return false;
+    }
+    if (m_graph == nullptr) {
+        m_status->setText(state_text::graph_no_graph());
+        return false;
+    }
+    if (m_graph->node_count() == 0) {
+        m_status->setText(state_text::graph_empty());
         return false;
     }
 
@@ -142,6 +155,7 @@ bool GraphExplorerPanel::search_and_select(const QString& text)
         auto* item = m_tree->topLevelItem(i);
         if (item->text(0).compare(trimmed, Qt::CaseInsensitive) == 0) {
             m_tree->setCurrentItem(item);
+            update_status();
             return true;
         }
     }
@@ -149,11 +163,21 @@ bool GraphExplorerPanel::search_and_select(const QString& text)
         auto* item = m_tree->topLevelItem(i);
         if (item->text(0).contains(trimmed, Qt::CaseInsensitive)) {
             m_tree->setCurrentItem(item);
+            update_status();
             return true;
         }
     }
-    update_status();
-    m_status->setText(QString("No graph node found for '%1'").arg(trimmed));
+
+    const int total = static_cast<int>(m_graph->node_count());
+    const int visible = m_tree->topLevelItemCount();
+    if (visible < total) {
+        m_status->setText(QString("No visible graph node found for '%1' within the current LOD range (%2 / %3 shown)")
+                              .arg(trimmed)
+                              .arg(visible)
+                              .arg(total));
+    } else {
+        m_status->setText(QString("No graph node found for '%1'").arg(trimmed));
+    }
     return false;
 }
 
@@ -169,7 +193,10 @@ int GraphExplorerPanel::lod_limit() const noexcept
 
 void GraphExplorerPanel::rebuild_tree()
 {
+    const QString desired_selection = m_selected_stable_name;
     m_tree->clear();
+    m_selected_stable_name.clear();
+
     if (m_graph == nullptr) {
         update_status();
         return;
@@ -182,7 +209,15 @@ void GraphExplorerPanel::rebuild_tree()
     for (int i = 0; i < count; ++i) {
         const auto node_id = static_cast<aegis::graph::NodeId>(i);
         const QString stable_name = stable_name_for_node(*m_graph, node_id);
-        add_node_item(nullptr, stable_name, stable_name, node_kind(*m_graph, node_id));
+        const QString kind = node_kind(*m_graph, node_id);
+        add_node_item(nullptr, stable_name, stable_name, kind);
+    }
+
+    if (!desired_selection.isEmpty()) {
+        if (auto* item = find_item_by_stable_name(desired_selection)) {
+            m_tree->setCurrentItem(item);
+            m_selected_stable_name = desired_selection;
+        }
     }
 
     update_status();
@@ -190,8 +225,37 @@ void GraphExplorerPanel::rebuild_tree()
 
 void GraphExplorerPanel::update_status()
 {
-    const int total = m_graph != nullptr ? static_cast<int>(m_graph->node_count()) : 0;
-    m_status->setText(QString("%1 / %2 graph nodes visible").arg(m_tree->topLevelItemCount()).arg(total));
+    if (m_graph == nullptr) {
+        m_status->setText(state_text::graph_no_graph());
+        return;
+    }
+
+    const int total = static_cast<int>(m_graph->node_count());
+    const int visible = m_tree->topLevelItemCount();
+    if (total == 0) {
+        m_status->setText(state_text::graph_empty());
+        return;
+    }
+
+    QString status = QString("%1 / %2 graph nodes visible").arg(visible).arg(total);
+    if (visible < total) {
+        status.append(QString(" (LOD limit %1)").arg(m_lod->value()));
+    }
+    if (!m_selected_stable_name.isEmpty()) {
+        status.append(QString(" — selected: %1").arg(m_selected_stable_name));
+    }
+    m_status->setText(status);
+}
+
+QTreeWidgetItem* GraphExplorerPanel::find_item_by_stable_name(const QString& stable_name) const
+{
+    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+        auto* item = m_tree->topLevelItem(i);
+        if (item != nullptr && item->data(0, Qt::UserRole).toString() == stable_name) {
+            return item;
+        }
+    }
+    return nullptr;
 }
 
 void GraphExplorerPanel::add_node_item(QTreeWidgetItem* parent,

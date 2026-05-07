@@ -35,9 +35,11 @@ private:
     QSlider* m_lod = nullptr;
     QLabel* m_status = nullptr;
     QTreeWidget* m_tree = nullptr;
+    QString m_selected_stable_name;
 
     void rebuild_tree();
     void update_status();
+    [[nodiscard]] QTreeWidgetItem* find_item_by_stable_name(const QString& stable_name) const;
     void add_node_item(QTreeWidgetItem* parent,
                        const QString& label,
                        const QString& stable_name,

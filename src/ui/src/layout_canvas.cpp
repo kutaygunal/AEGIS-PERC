@@ -1,5 +1,6 @@
 #include "aegis/ui/layout_canvas.hpp"
 #include "aegis/ui/selection_model.hpp"
+#include "aegis/ui/ui_state_text.hpp"
 #include "aegis/ui/violation_heatmap.hpp"
 #include "aegis/ui/violation_overlay.hpp"
 
@@ -132,6 +133,11 @@ bool LayoutCanvas::has_scene() const noexcept
     return !m_scene.items.empty();
 }
 
+QString LayoutCanvas::empty_state_text() const
+{
+    return has_scene() ? QString{} : state_text::canvas_empty();
+}
+
 void LayoutCanvas::set_background_color(const QColor& color)
 {
     m_background_color = color.isValid() ? color : QColor("#101318");
@@ -227,7 +233,7 @@ std::size_t LayoutCanvas::heatmap_bucket_count() const noexcept
 
 QString LayoutCanvas::heatmap_empty_state_text() const
 {
-    return m_heatmap_buckets.empty() ? QString("No violation heatmap data") : QString{};
+    return m_heatmap_buckets.empty() ? state_text::heatmap_empty() : QString{};
 }
 
 void LayoutCanvas::set_trace_result(ConnectivityTraceResult trace_result)
@@ -514,7 +520,7 @@ void LayoutCanvas::paintEvent(QPaintEvent* event)
 
     if (!has_scene() || !m_scene.bounds.valid) {
         painter.setPen(QColor("#AAB2BF"));
-        painter.drawText(rect(), Qt::AlignCenter, "No layout scene loaded");
+        painter.drawText(rect(), Qt::AlignCenter, empty_state_text());
         m_performance_metrics.frame_time_ms = static_cast<double>(timer.nsecsElapsed()) / 1'000'000.0;
         emit performance_metrics_changed();
         return;

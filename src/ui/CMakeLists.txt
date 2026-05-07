@@ -5,6 +5,8 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
 add_library(aegis_ui STATIC
     include/aegis/ui/main_window.hpp
     src/main_window.cpp
+    include/aegis/ui/activity_log_panel.hpp
+    src/activity_log_panel.cpp
     include/aegis/ui/layer_panel.hpp
     src/layer_panel.cpp
     include/aegis/ui/layout_canvas.hpp

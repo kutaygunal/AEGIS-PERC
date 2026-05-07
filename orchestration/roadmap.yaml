@@ -130,9 +130,33 @@ roadmap:
         - "Benchmarks demonstrate acceptable throughput on 10M+ shape designs"
         - "Installer creates a signed, update-capable Windows deployment"
 
+    - id: P7
+      name: "Phase 7 — UI Functional Hardening"
+      goal: "Ensure every shipped desktop UI surface is functional, testable, and free of placeholder-only interactions."
+      deliverables:
+        - Functional Help/About/documentation actions
+        - Real session activity log panel
+        - Bundled sample browser and load workflow polish
+        - Real Run Checks command path
+        - QAction enablement and keyboard/focus consistency
+        - Workspace UI-state persistence
+        - Trace workflow hardening
+        - Graph explorer empty-state and navigation polish
+        - Report preview snapshot and interaction polish
+        - Unified UI empty/error/loading states
+        - Notification routing across status surfaces
+        - Comprehensive headless UI regression suite
+      exit_criteria:
+        - "No major menu, toolbar, dock, or panel action remains placeholder-only"
+        - "Sample loading, check execution, trace, filtering, graph exploration, and preview flows are test-covered"
+        - "Workspace state restores predictable UI-owned settings without test leakage"
+        - "Status, warning, and error messaging is consistent across status bar and docked UI surfaces"
+        - "Headless UI regression coverage guards all critical user workflows"
+
   dependencies:
     - P2 depends_on: [P1]
     - P3 depends_on: [P1, P2]
     - P4 depends_on: [P1, P2]
     - P5 depends_on: [P1, P2, P3, P4]
     - P6 depends_on: [P1, P2, P3, P4, P5]
+    - P7 depends_on: [P1, P2, P3]

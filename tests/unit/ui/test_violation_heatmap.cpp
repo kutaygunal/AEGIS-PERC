@@ -84,7 +84,7 @@ TEST_CASE("LayoutCanvas builds heatmap buckets and empty state", "[ui][P3-011][V
 
     canvas.set_violations(ViolationCollection{});
     REQUIRE(canvas.heatmap_bucket_count() == 0);
-    REQUIRE(canvas.heatmap_empty_state_text() == "No violation heatmap data");
+    REQUIRE(canvas.heatmap_empty_state_text() == "Run checks or clear filters to generate violation heatmap data.");
 }
 
 TEST_CASE("MainWindow heatmap respects filtered violations and settings", "[ui][P3-011][ViolationHeatmap]")

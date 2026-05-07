@@ -30,9 +30,20 @@ add_executable(aegis_unit_tests
     unit/ui/test_violation_filter.cpp
     unit/ui/test_connectivity_trace.cpp
     unit/ui/test_graph_explorer.cpp
+    unit/ui/test_graph_explorer_ui.cpp
     unit/ui/test_violation_heatmap.cpp
     unit/ui/test_report_preview.cpp
+    unit/ui/test_report_preview_ui.cpp
     unit/ui/test_workspace_actions.cpp
+    unit/ui/test_help_actions.cpp
+    unit/ui/test_activity_log.cpp
+    unit/ui/test_sample_workflow.cpp
+    unit/ui/test_run_checks.cpp
+    unit/ui/test_workspace_state.cpp
+    unit/ui/test_workspace_persistence.cpp
+    unit/ui/test_trace_workflow.cpp
+    unit/ui/test_ui_states.cpp
+    unit/ui/test_ui_notifications.cpp
     unit/ui/test_canvas_performance.cpp
     unit/ui/test_ui_workflow.cpp
     unit/data/test_sample_data.cpp

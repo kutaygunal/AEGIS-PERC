@@ -40,6 +40,8 @@ public:
     [[nodiscard]] QString current_violation_id() const;
     [[nodiscard]] QString details_summary_text() const;
     [[nodiscard]] int metadata_row_count() const;
+    void set_heatmap_visible(bool visible);
+    void set_heatmap_opacity(double opacity);
     [[nodiscard]] bool heatmap_visible() const;
     [[nodiscard]] double heatmap_opacity() const;
 
