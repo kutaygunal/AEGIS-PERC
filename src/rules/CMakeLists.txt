@@ -1,4 +1,5 @@
 add_library(aegis_rules STATIC
+    include/aegis/rules/violation.hpp
     include/aegis/rules/rule_engine.hpp
     src/rule_engine.cpp
 )

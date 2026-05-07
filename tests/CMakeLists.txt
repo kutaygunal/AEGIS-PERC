@@ -28,6 +28,7 @@ add_executable(aegis_unit_tests
     unit/parsing/test_def_parser.cpp
     unit/reporting/test_reporting_minimal.cpp
     unit/rules/test_rules_minimal.cpp
+    unit/rules/test_rule_engine.cpp
     unit/scripting/test_scripting_minimal.cpp
     unit/storage/test_storage_minimal.cpp
 )

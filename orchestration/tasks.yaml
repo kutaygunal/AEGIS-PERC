@@ -129,7 +129,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R RuleEngine"
-    status: todo
+    status: done
 
   - id: P2-007
     phase: P2
