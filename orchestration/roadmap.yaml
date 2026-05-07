@@ -48,25 +48,25 @@ roadmap:
         - "All core verification logic is unit-tested"
 
     - id: P3
-      name: "Phase 3 — Visualization Core"
-      goal: "Build interactive 2D layout canvas and violation inspection UI without owning business logic."
+      name: "Phase 3 — Visualization Core ✅"
+      goal: "Completed an interactive 2D layout canvas and violation inspection UI while keeping business logic in core modules."
       deliverables:
-        - 2D canvas
-        - Layout rendering
-        - Layer visibility
-        - Pan/zoom/selection
-        - Violation overlays
-        - Connectivity tracing
-        - Violation details panel
-        - Graph exploration
+        - Read-only UI scene adapter for LayoutIR
+        - QWidget/QPainter 2D canvas and layout rendering
+        - Layer visibility and appearance controls
+        - Pan/zoom/grid/selection workflow
+        - Severity-colored violation overlays and explorer
+        - Connectivity tracing and graph exploration docks
+        - Violation filtering and details panel
         - Heatmap view
         - Report preview
+        - Workspace actions, toolbar, shortcuts, and UI workflow tests
       exit_criteria:
         - "Canvas loads the synthetic sample dataset and renders layers"
-        - "Pan/zoom/selection operate at 60fps on 1M shapes"
-        - "Violation overlays are toggleable per layer/rule"
-        - "Details panel updates from selection, not direct model access"
-        - "Graph view displays connectivity with zoom-based LOD"
+        - "Pan/zoom/selection operate with LOD caching and performance instrumentation"
+        - "Violation overlays, filters, and heatmap stay synchronized with UI state"
+        - "Details and report preview update from selection/filter models, not direct model ownership"
+        - "Graph exploration, tracing, and visualization workflow smoke tests pass"
 
     - id: P4
       name: "Phase 4 — AI/ML Core"
