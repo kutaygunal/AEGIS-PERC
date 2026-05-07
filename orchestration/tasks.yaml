@@ -150,7 +150,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R ElectricalRules"
-    status: todo
+    status: done
 
   - id: P2-008
     phase: P2
