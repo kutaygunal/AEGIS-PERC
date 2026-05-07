@@ -170,7 +170,7 @@ AEGIS-PERC/
 │   ├── rules/              # RuleEngine + IRule stub
 │   ├── scripting/          # PythonApi stub
 │   ├── storage/            # StorageEngine stub
-│   └── ui/                 # MainWindow (dockable workspace)
+│   └── ui/                 # Dockable Qt workspace, canvas, filters, tracing, graph explorer, heatmap, report preview
 ├── tests/
 │   ├── unit/               # Catch2 v3 tests per module
 │   └── CMakeLists.txt      # catch_discover_tests auto-registration
@@ -271,11 +271,21 @@ ctest --preset ci-test
 - ✅ Power/signal domain tagging (graph traversal propagation, conflict detection)
 - ✅ SPICE-like netlist parser prototype (R/C/M/V/I + .SUBCKT/.ENDS, continuation, comments)
 
-### Phase 3 — Visualization Core (Sprint 3) — CURRENT SPRINT
-- [ ] 2D layout canvas (QPainter-based)
-- [ ] Multi-layer rendering
-- [ ] Violation highlighting
-- [ ] Interactive zoom/pan
+### Phase 3 — Visualization Core (Sprint 3) ✅ **COMPLETE**
+- ✅ Read-only `LayoutIR` → `UiScene` adapter with stable IDs, bounds, colors, and metadata
+- ✅ QWidget/QPainter 2D layout canvas installed as the central workspace view
+- ✅ Stable zoom/pan/reset/fit controls, grid rendering, coordinates, and status updates
+- ✅ Layer visibility/appearance dock with show-all, hide-all, and isolate workflows
+- ✅ Shape/port/annotation selection model with properties-panel synchronization
+- ✅ Severity-colored violation overlays with graceful handling of unresolved locations
+- ✅ Dockable violation explorer with details, metadata, copyable IDs, and canvas centering
+- ✅ UI-side violation filtering, search, serializable filter state, and overlay synchronization
+- ✅ Connectivity tracing and graph exploration docks with selection sync and nonfatal unresolved feedback
+- ✅ Violation density heatmap with opacity control, layer awareness, and empty-state messaging
+- ✅ Interactive report preview dock with design summary, severity totals, selected-violation details, and snapshot hook
+- ✅ Shared workspace actions/toolbar/shortcuts for sample loading, fit/reset, grid, overlays, run-checks hook, and clear selection
+- ✅ Canvas performance instrumentation, developer metrics, offscreen culling, tiny-geometry simplification, and synthetic large-scene coverage
+- ✅ End-to-end visualization workflow smoke tests plus a manual UI checklist under `orchestration/manual_ui_checklist_p3.md`
 
 ### Phase 4 — AI/ML Core (Sprint 4)
 - [ ] Feature extraction from violations
