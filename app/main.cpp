@@ -26,8 +26,6 @@ int main(int argc, char* argv[])
     aegis::ui::MainWindow window;
     window.show();
 
-    // P1-001 acceptance: minimal application starts successfully.
-    // We immediately exit to keep CI fast; visual verification is manual.
-    std::cout << "MainWindow shown. P1-001 acceptance satisfied.\n";
-    return 0;
+    std::cout << "MainWindow shown. Entering Qt event loop.\n";
+    return app.exec();
 }
