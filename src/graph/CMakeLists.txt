@@ -5,6 +5,8 @@ add_library(aegis_graph STATIC
     src/connectivity_graph.cpp
     include/aegis/graph/data_model.hpp
     src/data_model.cpp
+    include/aegis/graph/domain_tagging.hpp
+    src/domain_tagging.cpp
 )
 
 target_include_directories(aegis_graph

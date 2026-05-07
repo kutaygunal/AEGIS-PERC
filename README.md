@@ -257,21 +257,21 @@ ctest --preset ci-test
 - ✅ Application shell (Qt6 dockable workspace, QSettings persistence)
 - ✅ Synthetic sample data (inverter, NAND2, ring oscillator with JSON schema)
 - ✅ Config migration system (versioned chain migrations v0→v1→v2)
-- ✅ Catch2 v3 integration with per-module test discovery (52 CTest tests)
+- ✅ Catch2 v3 integration with per-module test discovery (247 CTest tests)
 
-### Phase 2 — Verification Core (Sprint 2)
-- [ ] Layout/netlist import abstraction
-- [ ] JSON intermediate layout representation
-- [ ] Basic DEF-like parser prototype
-- [ ] Connectivity graph model
-- [ ] Net/device/pin data model
-- [ ] Rule engine abstraction
-- [ ] Basic electrical rule checks
-- [ ] Violation result model
-- [ ] Power/signal domain tagging
-- [ ] SPICE-like netlist parser prototype
+### Phase 2 — Verification Core (Sprint 2) ✅ **COMPLETE**
+- ✅ Layout/netlist import abstraction (IParser, IParserCallbacks, cancellation tokens)
+- ✅ JSON intermediate layout representation (versioned, schema-validated, nlohmann/json)
+- ✅ Basic DEF-like parser prototype (streaming, line/column diagnostics, 10K-line perf)
+- ✅ Connectivity graph model (adjacency lists, DFS/BFS visitors, 100K-node scale)
+- ✅ Net/device/pin data model (strongly typed, PropertyMap with coercion, immutable)
+- ✅ Rule engine abstraction (registerable rules, dependency ordering, plugin-ready)
+- ✅ Basic electrical rule checks (floating net, open circuit, short circuit)
+- ✅ Violation result model (serializable, filter/group/paginate, stable IDs)
+- ✅ Power/signal domain tagging (graph traversal propagation, conflict detection)
+- ✅ SPICE-like netlist parser prototype (R/C/M/V/I + .SUBCKT/.ENDS, continuation, comments)
 
-### Phase 3 — Visualization Core (Sprint 3)
+### Phase 3 — Visualization Core (Sprint 3) — CURRENT SPRINT
 - [ ] 2D layout canvas (QPainter-based)
 - [ ] Multi-layer rendering
 - [ ] Violation highlighting

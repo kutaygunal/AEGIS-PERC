@@ -1,4 +1,5 @@
 #include "aegis/rules/electrical_rules.hpp"
+#include "aegis/graph/domain_tagging.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -16,6 +17,7 @@ using aegis::graph::PinNode;
 using aegis::graph::NetNode;
 using aegis::graph::DeviceNode;
 using aegis::graph::NodeData;
+using aegis::graph::DomainTagger;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -214,6 +216,70 @@ std::vector<Violation> ShortCircuitRule::execute(
                 net_data.name});
         }
     }
+    return violations;
+}
+
+// ---------------------------------------------------------------------------
+// DOMAIN-001 — Power/Signal Domain Tagging Check
+// ---------------------------------------------------------------------------
+
+std::string DomainTaggingRule::id() const { return "DOMAIN-001"; }
+std::string DomainTaggingRule::name() const { return "Domain tagging check"; }
+std::string DomainTaggingRule::category() const { return "domain"; }
+std::string DomainTaggingRule::description() const {
+    return "Propagates power/signal domain tags and detects conflicts.";
+}
+
+std::vector<Violation> DomainTaggingRule::execute(
+    const RuleContext& ctx) const
+{
+    std::vector<Violation> violations;
+    const auto& graph = ctx.graph;
+
+    DomainTagger tagger;
+
+    // Seed tags from net properties
+    for (std::size_t net_id : graph.nodes_of_type(NodeType::Net)) {
+        const auto& net = std::get<NetNode>(graph.node_data(net_id));
+        auto it = net.properties.find("domain");
+        if (it != net.properties.end()) {
+            std::string signal = "unknown";
+            auto sig_it = net.properties.find("signal_type");
+            if (sig_it != net.properties.end()) signal = sig_it->second;
+            tagger.seed(net_id, {it->second, signal});
+        }
+    }
+
+    // Seed tags from device properties
+    for (std::size_t dev_id : graph.nodes_of_type(NodeType::Device)) {
+        const auto& dev = std::get<DeviceNode>(graph.node_data(dev_id));
+        auto it = dev.properties.find("domain");
+        if (it != dev.properties.end()) {
+            std::string signal = "unknown";
+            auto sig_it = dev.properties.find("signal_type");
+            if (sig_it != dev.properties.end()) signal = sig_it->second;
+            tagger.seed(dev_id, {it->second, signal});
+        }
+    }
+
+    tagger.propagate(graph);
+
+    // Convert conflicts to violations
+    for (const auto& conflict : tagger.conflicts()) {
+        std::string node_name = std::to_string(conflict.node_id);
+        std::visit(
+            [&](const auto& node) { node_name = node.name; },
+            graph.node_data(conflict.node_id));
+
+        violations.push_back(Violation{
+            id(),
+            Severity::Error,
+            "Domain conflict on '" + node_name + "': existing '" +
+                conflict.existing_domain + "' vs conflicting '" +
+                conflict.conflicting_domain + "'. " + conflict.message,
+            node_name});
+    }
+
     return violations;
 }
 

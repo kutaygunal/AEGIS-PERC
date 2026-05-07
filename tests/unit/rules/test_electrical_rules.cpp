@@ -515,3 +515,107 @@ TEST_CASE("run_category electrical selects only electrical rules",
     REQUIRE(violations.size() == 1);
     CHECK(violations[0].rule_id == "ELEC-002");
 }
+
+// ---------------------------------------------------------------------------
+// Domain Tagging Rule
+// ---------------------------------------------------------------------------
+
+TEST_CASE("DomainTaggingRule no violations on empty graph",
+          "[DomainTagging][fast]")
+{
+    ConnectivityGraph graph;
+    DomainTaggingRule rule;
+    auto violations = rule.execute(make_ctx(graph));
+    REQUIRE(violations.empty());
+}
+
+TEST_CASE("DomainTaggingRule no violation when no seeds",
+          "[DomainTagging][fast]")
+{
+    ConnectivityGraph graph;
+    auto net = graph.add_net(NetNode{"n1", {}});
+    auto dev = graph.add_device(DeviceNode{"M1", "NMOS", {}});
+    auto pin = graph.add_pin(PinNode{"M1.source", "BIDIR", std::nullopt, std::nullopt, std::nullopt});
+    graph.add_edge(dev, pin, {EdgeType::DeviceToPin, "source"});
+    graph.add_edge(pin, net, {EdgeType::NetToPin, ""});
+
+    DomainTaggingRule rule;
+    auto violations = rule.execute(make_ctx(graph));
+    REQUIRE(violations.empty());
+}
+
+TEST_CASE("DomainTaggingRule propagates and reports conflict",
+          "[DomainTagging][fast]")
+{
+    ConnectivityGraph graph;
+    auto net1 = graph.add_net(NetNode{"VDD", {{"domain", "VDD"}, {"signal_type", "power"}}});
+    auto net2 = graph.add_net(NetNode{"GND", {{"domain", "GND"}, {"signal_type", "ground"}}});
+    auto dev = graph.add_device(DeviceNode{"M1", "NMOS", {}});
+    auto pin1 = graph.add_pin(PinNode{"M1.source", "BIDIR", std::nullopt, std::nullopt, std::nullopt});
+    auto pin2 = graph.add_pin(PinNode{"M1.drain", "BIDIR", std::nullopt, std::nullopt, std::nullopt});
+    graph.add_edge(dev, pin1, {EdgeType::DeviceToPin, "source"});
+    graph.add_edge(pin1, net1, {EdgeType::NetToPin, ""});
+    graph.add_edge(dev, pin2, {EdgeType::DeviceToPin, "drain"});
+    graph.add_edge(pin2, net2, {EdgeType::NetToPin, ""});
+
+    DomainTaggingRule rule;
+    auto violations = rule.execute(make_ctx(graph));
+    REQUIRE(violations.size() == 2);
+    CHECK(violations[0].rule_id == "DOMAIN-001");
+    CHECK(violations[1].rule_id == "DOMAIN-001");
+    CHECK(violations[0].severity == Severity::Error);
+    bool has_dev = false;
+    for (const auto& v : violations) {
+        if (v.message.find("M1") != std::string::npos) has_dev = true;
+    }
+    CHECK(has_dev);
+}
+
+TEST_CASE("DomainTaggingRule seeds from device properties",
+          "[DomainTagging][fast]")
+{
+    ConnectivityGraph graph;
+    auto net = graph.add_net(NetNode{"out", {}});
+    auto dev = graph.add_device(DeviceNode{"D1", "NMOS", {{"domain", "CLK"}, {"signal_type", "clock"}}});
+    auto pin = graph.add_pin(PinNode{"D1.out", "OUTPUT", std::nullopt, std::nullopt, std::nullopt});
+    graph.add_edge(dev, pin, {EdgeType::DeviceToPin, "out"});
+    graph.add_edge(pin, net, {EdgeType::NetToPin, ""});
+
+    DomainTaggingRule rule;
+    auto violations = rule.execute(make_ctx(graph));
+    REQUIRE(violations.empty());
+}
+
+TEST_CASE("DomainTaggingRule respects rule metadata",
+          "[DomainTagging][fast]")
+{
+    DomainTaggingRule rule;
+    CHECK(rule.id() == "DOMAIN-001");
+    CHECK(rule.category() == "domain");
+    CHECK_FALSE(rule.description().empty());
+}
+
+TEST_CASE("DomainTaggingRule integration with RuleEngine",
+          "[DomainTagging][Integration][fast]")
+{
+    RuleEngine engine;
+    engine.register_rule(std::make_unique<FloatingNetRule>());
+    engine.register_rule(std::make_unique<DomainTaggingRule>());
+
+    ConnectivityGraph graph;
+    auto net1 = graph.add_net(NetNode{"VDD", {{"domain", "VDD"}}});
+    auto net2 = graph.add_net(NetNode{"GND", {{"domain", "GND"}}});
+    auto dev = graph.add_device(DeviceNode{"M1", "NMOS", {}});
+    auto pin1 = graph.add_pin(PinNode{"M1.s", "BIDIR", std::nullopt, std::nullopt, std::nullopt});
+    auto pin2 = graph.add_pin(PinNode{"M1.d", "BIDIR", std::nullopt, std::nullopt, std::nullopt});
+    graph.add_edge(dev, pin1, {EdgeType::DeviceToPin, "s"});
+    graph.add_edge(pin1, net1, {EdgeType::NetToPin, ""});
+    graph.add_edge(dev, pin2, {EdgeType::DeviceToPin, "d"});
+    graph.add_edge(pin2, net2, {EdgeType::NetToPin, ""});
+
+    auto violations = engine.run_all(make_ctx(graph));
+    REQUIRE(violations.size() == 2);
+    for (const auto& v : violations) {
+        CHECK(v.rule_id == "DOMAIN-001");
+    }
+}

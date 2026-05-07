@@ -5,6 +5,8 @@ add_library(aegis_parsing STATIC
     src/layout_ir.cpp
     include/aegis/parsing/def_parser.hpp
     src/def_parser.cpp
+    include/aegis/parsing/spice_parser.hpp
+    src/spice_parser.cpp
 )
 
 target_include_directories(aegis_parsing

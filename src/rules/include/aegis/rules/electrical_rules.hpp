@@ -52,4 +52,19 @@ public:
     std::vector<Violation> execute(const RuleContext& ctx) const override;
 };
 
+/**
+ * DOMAIN-001 — Power/Signal Domain Tagging Check
+ *
+ * Propagates domain tags seeded on nets and devices through the
+ * connectivity graph and reports conflicts as violations.
+ */
+class DomainTaggingRule : public IRule {
+public:
+    std::string id() const override;
+    std::string name() const override;
+    std::string category() const override;
+    std::string description() const override;
+    std::vector<Violation> execute(const RuleContext& ctx) const override;
+};
+
 } // namespace aegis::rules
