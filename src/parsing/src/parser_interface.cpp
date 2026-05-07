@@ -2,6 +2,7 @@
 
 namespace aegis::parsing {
 
-// Abstract interface; concrete implementations follow in later tasks.
+// All interface classes are header-only; concrete implementations follow
+// in later tasks (P2-003, P2-010, etc.).
 
 } // namespace aegis::parsing

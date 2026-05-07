@@ -26,7 +26,7 @@ tasks:
     test_commands:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure --R ParserInterface"
-    status: todo
+    status: done
 
   - id: P2-002
     phase: P2
