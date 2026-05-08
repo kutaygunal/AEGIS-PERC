@@ -11,11 +11,22 @@ namespace {
 QColor severity_color(ActivityLogSeverity severity)
 {
     switch (severity) {
-        case ActivityLogSeverity::Info: return QColor("#D9EAD3");
-        case ActivityLogSeverity::Warning: return QColor("#FFF2CC");
-        case ActivityLogSeverity::Error: return QColor("#F4CCCC");
+        case ActivityLogSeverity::Info: return QColor("#243226");
+        case ActivityLogSeverity::Warning: return QColor("#3A3522");
+        case ActivityLogSeverity::Error: return QColor("#3A2424");
     }
-    return QColor("#FFFFFF");
+    return QColor("#2F2F2F");
+}
+
+QColor severity_text_color(ActivityLogSeverity severity)
+{
+    switch (severity) {
+        case ActivityLogSeverity::Info:
+        case ActivityLogSeverity::Warning:
+        case ActivityLogSeverity::Error:
+            return QColor("#F2F2F2");
+    }
+    return QColor("#F2F2F2");
 }
 
 QString severity_label(ActivityLogSeverity severity)
@@ -38,7 +49,26 @@ ActivityLogPanel::ActivityLogPanel(QWidget* parent)
 
     m_entries = new QListWidget(this);
     m_entries->setObjectName("ActivityLogEntries");
-    m_entries->setAlternatingRowColors(true);
+    m_entries->setAlternatingRowColors(false);
+    m_entries->setSelectionMode(QAbstractItemView::NoSelection);
+    m_entries->setFocusPolicy(Qt::NoFocus);
+    m_entries->setStyleSheet(
+        "QListWidget#ActivityLogEntries {"
+        "  background-color: #1F1F1F;"
+        "  color: #F2F2F2;"
+        "  border: 1px solid #3A3A3A;"
+        "}"
+        "QListWidget#ActivityLogEntries::item {"
+        "  color: #F2F2F2;"
+        "  padding: 2px 4px;"
+        "  margin: 1px 0px;"
+        "  border-radius: 3px;"
+        "}"
+        "QListWidget#ActivityLogEntries::item:selected {"
+        "  color: #F2F2F2;"
+        "  background: #4A628A;"
+        "}"
+    );
     layout->addWidget(m_entries);
 }
 
@@ -100,6 +130,7 @@ QListWidgetItem* ActivityLogPanel::make_item(const QString& text, ActivityLogSev
 {
     auto* item = new QListWidgetItem(text);
     item->setBackground(severity_color(severity));
+    item->setForeground(severity_text_color(severity));
     return item;
 }
 

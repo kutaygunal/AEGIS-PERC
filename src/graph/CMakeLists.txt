@@ -7,6 +7,10 @@ add_library(aegis_graph STATIC
     src/data_model.cpp
     include/aegis/graph/domain_tagging.hpp
     src/domain_tagging.cpp
+    include/aegis/graph/power_intent_application.hpp
+    src/power_intent_application.cpp
+    include/aegis/graph/current_activity_application.hpp
+    src/current_activity_application.cpp
 )
 
 target_include_directories(aegis_graph

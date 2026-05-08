@@ -110,25 +110,28 @@ roadmap:
         - "Sessions save and restore workspace state and analysis results"
 
     - id: P6
-      name: "Phase 6 — Enterprise Readiness"
-      goal: "Design distributed execution, complete packaging, and release engineering."
+      name: "Phase 6 — Customer Workflow Import & Scalable Execution"
+      goal: "Turn AEGIS-PERC into a realistic semiconductor customer-facing workflow by supporting practical design package import, project validation, scripted execution, and scalable job orchestration."
       deliverables:
-        - Distributed job execution architecture
-        - Worker process prototype
-        - gRPC or IPC abstraction
-        - Job queue
-        - Progress reporting
-        - Cancellation support
-        - Large dataset performance benchmarks
-        - Packaging
-        - Installer
-        - Release checklist
+        - Multi-file project import workflow
+        - Import manifest and project package model
+        - LEF/DEF + netlist intake contract
+        - Rule pack ingestion (YAML/JSON)
+        - Power-domain import (CSV first, UPF abstraction later)
+        - Current/activity import (CSV first)
+        - Existing report/waiver import
+        - Preflight validation and dependency diagnostics
+        - Drag-and-drop project folder ingestion
+        - Headless CLI import/run/report commands
+        - Local job execution pipeline with progress and cancellation
+        - Distributed execution design for future host/worker mode
       exit_criteria:
-        - "Job can be split across worker processes on localhost"
-        - "Progress streams back to host in real time"
-        - "Cancellation terminates workers cleanly without orphan processes"
-        - "Benchmarks demonstrate acceptable throughput on 10M+ shape designs"
-        - "Installer creates a signed, update-capable Windows deployment"
+        - "A customer-style project package can be imported from desktop UI or CLI"
+        - "Required vs optional inputs are validated with actionable diagnostics"
+        - "Imported data is normalized into a reusable internal project model"
+        - "Floating-net, power-domain, and current-limit workflows run end-to-end on imported datasets"
+        - "Progress, cancellation, and result export work in local execution mode"
+        - "Distributed execution follow-on design is documented against the import/job model"
 
     - id: P7
       name: "Phase 7 — UI Functional Hardening"

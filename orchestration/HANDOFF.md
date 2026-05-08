@@ -1,32 +1,31 @@
 # Handoff
 
 ## Last Updated
-2026-05-06
+2026-05-07
 
 ## Current Status
-Completed implementation of **P1-004: Configuration system**. All acceptance criteria verified and all unit tests passing.
+Repository maintenance completed: documentation drift was partially corrected, an MIT `LICENSE` file was added, and `app/main.cpp` startup text was cleaned up.
 
 ## Last Completed Task
-P1-004
+Repository maintenance (docs/license/startup-text cleanup)
 
 ## Current Task
-P1-004 — awaiting review
+No implementation task in progress
 
 ## Ready Tasks
-- P1-005: Diagnostic bundle export (blocked on P1-003 review)
-- P1-006: CMake/CI/test hardening
-- P1-007: Application shell with dockable workspace
-- P1-008: Synthetic sample data format
-- P1-010: Test framework setup integration
+- `P4-001`: Feature extraction from violations
+- `P5-001`: Batch analysis CLI
+- `P6-001`: Distributed job execution design doc
 
 ## Blocked Tasks
-- P1-005 (depends on P1-003 which is in review, not done)
+- None recorded in the current trimmed `tasks.yaml`
 
 ## Important Notes
-- P1-002 and P1-003 are in review.
-- nlohmann/json v3.11.3 integrated via FetchContent.
-- `aegis::core::Config` supports hierarchical JSON, schema validation, typed getters, environment overrides (AEGIS_* prefix), observability callbacks, and JSON round-trip.
-- Old `build` directory corrupted by locked spdlog files during reconfigure; `build2` used for this session. User may want to clean `build` manually.
+- `README.md` now reflects implemented `graph`, `parsing`, and `rules` modules more accurately and notes that `ml`, `reporting`, `scripting`, and `storage` are still lightweight placeholders.
+- `orchestration/README.md` now reflects that the codebase has progressed beyond the original P1-only execution lane.
+- Full regression check passed locally: `ctest --test-dir build -C Release --output-on-failure` → **332/332 tests passed**.
+- `app/main.cpp` startup output now uses neutral current-state messaging instead of historical "stub loaded" text.
+- `aegis-perc` was rebuilt successfully after the startup-text cleanup via `cmake --build build --config Release --target aegis-perc`.
 
 ## Next Recommended Action
-Run planner for P1-006 (highest priority ready task that is not blocked).
+Choose one forward backlog task (`P4-001`, `P5-001`, or `P6-001`) and create a focused implementation plan.

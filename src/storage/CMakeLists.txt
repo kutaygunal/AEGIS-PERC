@@ -1,6 +1,10 @@
 add_library(aegis_storage STATIC
     include/aegis/storage/storage_engine.hpp
+    include/aegis/storage/project_package.hpp
+    include/aegis/storage/import_validation.hpp
     src/storage_engine.cpp
+    src/project_package.cpp
+    src/import_validation.cpp
 )
 
 target_include_directories(aegis_storage

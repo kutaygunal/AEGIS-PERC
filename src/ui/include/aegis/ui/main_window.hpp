@@ -10,6 +10,9 @@
 #include <cstddef>
 #include <memory>
 
+class QDragEnterEvent;
+class QDropEvent;
+
 namespace aegis::ui {
 
 // ---------------------------------------------------------------------------
@@ -113,6 +116,13 @@ public:
     QString activity_log_entry_text(int index) const;
     QStringList activity_log_entries() const;
     int activity_log_max_entries() const;
+    bool is_import_dialog_visible() const;
+    bool import_project_paths(const QStringList& paths);
+    bool override_import_artifact_role(const QString& artifact_path, const QString& role_name);
+    QString import_validation_summary_text() const;
+    QStringList import_detected_roles() const;
+    int import_diagnostic_count() const;
+    bool import_has_blockers() const;
     void set_performance_metrics_visible(bool visible);
     bool performance_metrics_visible() const;
     QString performance_metrics_text() const;
@@ -124,6 +134,8 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     struct Impl;
@@ -144,6 +156,8 @@ private:
                                  bool update_trace_panel = false);
     void publish_trace_feedback(const QString& message, ActivityLogSeverity severity, int timeout_ms = 0);
     void execute_run_checks();
+    bool open_import_review_dialog(const QStringList& paths, bool from_drop);
+    void refresh_import_review();
 };
 
 } // namespace aegis::ui

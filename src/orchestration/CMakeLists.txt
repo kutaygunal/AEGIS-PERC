@@ -1,17 +1,15 @@
-add_library(aegis_scripting STATIC
-    include/aegis/scripting/python_api.hpp
-    include/aegis/scripting/cli_workflow.hpp
-    src/python_api.cpp
-    src/cli_workflow.cpp
+add_library(aegis_orchestration STATIC
+    include/aegis/orchestration/job_pipeline.hpp
+    src/job_pipeline.cpp
 )
 
-target_include_directories(aegis_scripting
+target_include_directories(aegis_orchestration
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(aegis_scripting
+target_link_libraries(aegis_orchestration
     PUBLIC
         aegis_core
         aegis_graph

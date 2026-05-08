@@ -56,5 +56,6 @@ target_link_libraries(aegis_ui
         aegis_rules
     PRIVATE
         aegis_core
+        aegis_storage
         aegis_warnings
 )

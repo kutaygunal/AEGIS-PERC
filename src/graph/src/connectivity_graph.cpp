@@ -214,6 +214,30 @@ std::optional<NodeId> ConnectivityGraph::find_pin(const std::string& name) const
     return std::nullopt;
 }
 
+bool ConnectivityGraph::set_device_property(const std::string& device_name,
+                                            const std::string& key,
+                                            const std::string& value) {
+    const auto id = find_device(device_name);
+    if (!id.has_value()) {
+        return false;
+    }
+    auto& dev = std::get<DeviceNode>(m_impl->nodes[*id].data);
+    dev.properties[key] = value;
+    return true;
+}
+
+bool ConnectivityGraph::set_net_property(const std::string& net_name,
+                                         const std::string& key,
+                                         const std::string& value) {
+    const auto id = find_net(net_name);
+    if (!id.has_value()) {
+        return false;
+    }
+    auto& net = std::get<NetNode>(m_impl->nodes[*id].data);
+    net.properties[key] = value;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Traversal
 // ---------------------------------------------------------------------------

@@ -90,11 +90,13 @@ After approval, update the task status in `tasks.yaml` to `done`. Unblock downst
 
 ## Current Execution Lane
 
-**Phase 1 — Commercial Foundation** is the active execution lane. Only one task is ready to begin:
+The repository has advanced well beyond the original Phase 1 bootstrap.
 
-- **P1-001: Project architecture skeleton** (`ready`)
+- **Completed in codebase:** P1, P2, P3, P6, and P7 deliverables reflected in `README.md`, `src/`, `docs/`, and `tests/`
+- **Active task registry contents:** forward-looking backlog items for P4 and P5
+- **Current tasks.yaml snapshot:** `P4-001` and `P5-001` remain `todo`
 
-All other tasks are `todo` and will become `ready` as dependencies complete.
+If additional historical task tracking is needed, recreate archived task entries rather than assuming the current `tasks.yaml` is a full project history.
 
 ## Risk and Priority Legend
 

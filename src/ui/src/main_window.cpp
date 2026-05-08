@@ -14,6 +14,8 @@
 #include "aegis/parsing/layout_ir.hpp"
 #include "aegis/rules/electrical_rules.hpp"
 #include "aegis/rules/rule_engine.hpp"
+#include "aegis/storage/import_validation.hpp"
+#include "aegis/storage/project_package.hpp"
 
 #include <QAction>
 #include <QApplication>
@@ -21,10 +23,14 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDockWidget>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QFileInfo>
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMimeData>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
@@ -227,6 +233,38 @@ void configure_action(QAction* action, const QString& tooltip)
     action->setStatusTip(tooltip);
 }
 
+QString import_summary_text(const aegis::storage::ProjectPackage& package)
+{
+    QStringList lines;
+    lines.append(QString("Project: %1").arg(QString::fromStdString(package.project().name)));
+    lines.append(QString("Validation: %1").arg(QString::fromStdString(aegis::storage::to_string(package.validation_status()))));
+    lines.append(QString("Artifacts: %1").arg(package.artifacts().size()));
+    lines.append(QString("Diagnostics: %1").arg(package.diagnostics().size()));
+    lines.append(QString{});
+    lines.append("Detected artifacts:");
+    for (const auto& artifact : package.artifacts()) {
+        lines.append(QString("- %1 [%2/%3]%4")
+                         .arg(QString::fromStdString(artifact.path.generic_string()))
+                         .arg(QString::fromStdString(aegis::storage::to_string(artifact.category)))
+                         .arg(QString::fromStdString(aegis::storage::to_string(artifact.role)))
+                         .arg(artifact.optional ? " optional" : " required-candidate"));
+    }
+    if (package.artifacts().empty()) {
+        lines.append("- No recognized artifacts");
+    }
+    lines.append(QString{});
+    lines.append("Diagnostics:");
+    for (const auto& diagnostic : package.diagnostics()) {
+        lines.append(QString("- [%1] %2")
+                         .arg(QString::fromStdString(aegis::storage::to_string(diagnostic.severity)))
+                         .arg(QString::fromStdString(diagnostic.message)));
+    }
+    if (package.diagnostics().empty()) {
+        lines.append("- No diagnostics");
+    }
+    return lines.join('\n');
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -254,8 +292,12 @@ struct MainWindow::Impl {
     QDialog* about_dialog = nullptr;
     QDialog* documentation_dialog = nullptr;
     QDialog* sample_browser_dialog = nullptr;
+    QDialog* import_review_dialog = nullptr;
     QPlainTextEdit* documentation_text = nullptr;
+    QPlainTextEdit* import_review_text = nullptr;
     QListWidget* sample_browser_list = nullptr;
+    aegis::storage::ImportPreflightValidator import_validator;
+    aegis::storage::ProjectPackage pending_import_package;
     QString last_status_message;
     ActionMap actions;
 };
@@ -280,6 +322,7 @@ void MainWindow::setup_ui()
 {
     setWindowTitle("AEGIS-PERC");
     resize(1280, 720);
+    setAcceptDrops(true);
 
     // Central reusable layout canvas. It owns rendering state only; scene data
     // is supplied through the UI scene adapter.
@@ -339,6 +382,14 @@ void MainWindow::setup_actions()
         m_impl->actions.emplace(id, action);
         return action;
     };
+
+    auto* import_project = register_action("import_project", "&Import Design Package...", QKeySequence("Ctrl+I"), false,
+                                           "Review customer design-package files or dropped project folders before analysis");
+    connect(import_project, &QAction::triggered, this, [this]() {
+        const QString message = "Import Design Package expects test-supplied paths or drag-and-drop folder input";
+        open_import_review_dialog({}, false);
+        publish_ui_notification(message, ActivityLogSeverity::Info, 4000);
+    });
 
     auto* open_sample = register_action("open_sample", "Open Sample: &Inverter", QKeySequence("Ctrl+Shift+O"), false,
                                         "Load the bundled inverter sample design");
@@ -574,6 +625,8 @@ void MainWindow::setup_menus()
 
     // File
     QMenu* fileMenu = m_impl->menu_bar->addMenu("&File");
+    fileMenu->addAction(m_impl->actions.at("import_project"));
+    fileMenu->addSeparator();
     auto* samples_menu = fileMenu->addMenu("Open &Bundled Sample");
     samples_menu->addAction(m_impl->actions.at("open_sample"));
     samples_menu->addAction(m_impl->actions.at("open_sample_nand2"));
@@ -616,6 +669,8 @@ void MainWindow::setup_toolbar()
 {
     m_impl->workspace_toolbar = addToolBar("Workspace");
     m_impl->workspace_toolbar->setObjectName("WorkspaceToolbar");
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("import_project"));
+    m_impl->workspace_toolbar->addSeparator();
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("open_sample"));
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("open_sample_nand2"));
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("open_sample_ring_oscillator"));
@@ -704,6 +759,124 @@ void MainWindow::execute_run_checks()
     } catch (const std::exception& error) {
         const QString message = QString("Run Checks failed: %1").arg(error.what());
         publish_ui_notification(message, ActivityLogSeverity::Error, 5000);
+    }
+}
+
+bool MainWindow::open_import_review_dialog(const QStringList& paths, bool from_drop)
+{
+    if (m_impl->import_review_dialog == nullptr) {
+        auto* dialog = new QDialog(this);
+        dialog->setObjectName("ImportReviewDialog");
+        dialog->setWindowTitle("Import Design Package");
+        dialog->setModal(false);
+        dialog->resize(640, 420);
+        auto* layout = new QVBoxLayout(dialog);
+        auto* intro = new QLabel("Review detected file roles, required inputs, optional enrichments, and validation diagnostics before analysis.", dialog);
+        intro->setWordWrap(true);
+        layout->addWidget(intro);
+        auto* text = new QPlainTextEdit(dialog);
+        text->setReadOnly(true);
+        layout->addWidget(text, 1);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+        auto* validate_button = new QPushButton("Validate Files", dialog);
+        buttons->addButton(validate_button, QDialogButtonBox::ActionRole);
+        connect(validate_button, &QPushButton::clicked, this, [this]() {
+            refresh_import_review();
+            const bool blocked = import_has_blockers();
+            publish_ui_notification(blocked ? "Import validation found blocking issues" : "Import validation completed",
+                                    blocked ? ActivityLogSeverity::Warning : ActivityLogSeverity::Info,
+                                    4000);
+        });
+        connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+        layout->addWidget(buttons);
+        m_impl->import_review_dialog = dialog;
+        m_impl->import_review_text = text;
+    }
+
+    if (!paths.isEmpty()) {
+        m_impl->pending_import_package = {};
+        if (paths.size() == 1 && QFileInfo(paths.front()).isDir()) {
+            m_impl->pending_import_package = m_impl->import_validator.scan_project_folder(paths.front().toStdString(), QFileInfo(paths.front()).fileName().toStdString());
+        } else {
+            aegis::storage::ProjectPackage package;
+            package.set_manifest_version(1);
+            package.project().name = "ImportedProject";
+            std::size_t index = 0;
+            for (const auto& path : paths) {
+                QFileInfo info(path);
+                if (!info.exists() || info.isDir()) {
+                    continue;
+                }
+                const auto detection = m_impl->import_validator.detect_file_role(path.toStdString());
+                const auto* best = detection.best();
+                aegis::storage::SourceArtifact artifact;
+                artifact.id = "artifact-" + std::to_string(++index);
+                artifact.path = info.filePath().toStdString();
+                artifact.origin = from_drop ? "drop" : "selection";
+                if (best != nullptr) {
+                    artifact.role = best->role;
+                    artifact.category = best->category;
+                    artifact.optional = artifact.category == aegis::storage::ArtifactCategory::Power ||
+                                        artifact.category == aegis::storage::ArtifactCategory::Current ||
+                                        artifact.category == aegis::storage::ArtifactCategory::Waivers ||
+                                        artifact.category == aegis::storage::ArtifactCategory::ExternalReports;
+                }
+                package.artifacts().push_back(std::move(artifact));
+                if (detection.is_ambiguous() && best != nullptr) {
+                    package.diagnostics().push_back({aegis::storage::DiagnosticSeverity::Warning,
+                                                     "AMBIGUOUS_ROLE",
+                                                     "Multiple role candidates detected; selected '" + aegis::storage::to_string(best->role) + "'",
+                                                     package.artifacts().back().id});
+                }
+            }
+            package.rebuild_normalized_view();
+            const auto diagnostics = m_impl->import_validator.validate(package);
+            package.diagnostics().insert(package.diagnostics().end(), diagnostics.begin(), diagnostics.end());
+            package.set_validation_status(m_impl->import_validator.derive_status(package.diagnostics()));
+            m_impl->pending_import_package = std::move(package);
+        }
+        refresh_import_review();
+    } else if (m_impl->pending_import_package.artifacts().empty()) {
+        refresh_import_review();
+    }
+
+    m_impl->import_review_dialog->show();
+    m_impl->import_review_dialog->raise();
+    m_impl->import_review_dialog->activateWindow();
+    publish_ui_notification(from_drop ? "Opened import review for dropped project content" : "Opened import review dialog",
+                            ActivityLogSeverity::Info,
+                            3000);
+    return true;
+}
+
+void MainWindow::refresh_import_review()
+{
+    if (!m_impl->pending_import_package.artifacts().empty()) {
+        m_impl->pending_import_package.rebuild_normalized_view();
+        const auto diagnostics = m_impl->import_validator.validate(m_impl->pending_import_package);
+        auto preserved = m_impl->pending_import_package.diagnostics();
+        preserved.erase(std::remove_if(preserved.begin(), preserved.end(), [](const auto& diagnostic) {
+            return diagnostic.code == "MISSING_REQUIRED_TECHNOLOGY" ||
+                   diagnostic.code == "MISSING_REQUIRED_LAYOUT" ||
+                   diagnostic.code == "MISSING_REQUIRED_NETLIST" ||
+                   diagnostic.code == "MISSING_REQUIRED_RULES" ||
+                   diagnostic.code == "MULTIPLE_TECHNOLOGY_FILES" ||
+                   diagnostic.code == "MULTIPLE_LAYOUT_FILES" ||
+                   diagnostic.code == "MULTIPLE_NETLIST_FILES" ||
+                   diagnostic.code == "MULTIPLE_RULE_PACKS" ||
+                   diagnostic.code == "DUPLICATE_ARTIFACT_PATH" ||
+                   diagnostic.code == "UNKNOWN_ROLE_ASSIGNMENT";
+        }), preserved.end());
+        preserved.insert(preserved.end(), diagnostics.begin(), diagnostics.end());
+        m_impl->pending_import_package.diagnostics() = std::move(preserved);
+        m_impl->pending_import_package.set_validation_status(
+            m_impl->import_validator.derive_status(m_impl->pending_import_package.diagnostics()));
+    } else {
+        m_impl->pending_import_package.set_validation_status(aegis::storage::ValidationStatus::Unknown);
+    }
+
+    if (m_impl->import_review_text != nullptr) {
+        m_impl->import_review_text->setPlainText(import_summary_text(m_impl->pending_import_package));
     }
 }
 
@@ -965,6 +1138,34 @@ void MainWindow::closeEvent(QCloseEvent* event)
 {
     save_window_state();
     QMainWindow::closeEvent(event);
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event != nullptr && event->mimeData() != nullptr && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+        return;
+    }
+    QMainWindow::dragEnterEvent(event);
+}
+
+void MainWindow::dropEvent(QDropEvent* event)
+{
+    if (event == nullptr || event->mimeData() == nullptr || !event->mimeData()->hasUrls()) {
+        QMainWindow::dropEvent(event);
+        return;
+    }
+
+    QStringList paths;
+    for (const auto& url : event->mimeData()->urls()) {
+        if (url.isLocalFile()) {
+            paths.push_back(url.toLocalFile());
+        }
+    }
+    event->acceptProposedAction();
+    if (!paths.isEmpty()) {
+        Q_UNUSED(open_import_review_dialog(paths, true));
+    }
 }
 
 bool MainWindow::load_bundled_sample(const QString& sample_id)
@@ -1620,6 +1821,67 @@ QString MainWindow::performance_metrics_text() const
 std::size_t MainWindow::canvas_lod_cache_item_count() const
 {
     return m_impl->canvas != nullptr ? m_impl->canvas->lod_cache_item_count() : 0;
+}
+
+bool MainWindow::is_import_dialog_visible() const
+{
+    return m_impl->import_review_dialog != nullptr && m_impl->import_review_dialog->isVisible();
+}
+
+bool MainWindow::import_project_paths(const QStringList& paths)
+{
+    if (paths.isEmpty()) {
+        return false;
+    }
+    return open_import_review_dialog(paths, false);
+}
+
+bool MainWindow::override_import_artifact_role(const QString& artifact_path, const QString& role_name)
+{
+    const auto role = aegis::storage::artifact_role_from_string(role_name.toStdString());
+    if (role == aegis::storage::ArtifactRole::Unknown) {
+        return false;
+    }
+
+    const QString normalized_target = QFileInfo(artifact_path).filePath();
+    for (auto& artifact : m_impl->pending_import_package.artifacts()) {
+        const QString candidate = QFileInfo(QString::fromStdString(artifact.path.string())).filePath();
+        if (candidate == normalized_target || artifact.path.filename() == artifact_path.toStdString()) {
+            artifact.role = role;
+            artifact.category = aegis::storage::category_for_role(role);
+            artifact.optional = artifact.category == aegis::storage::ArtifactCategory::Power ||
+                                artifact.category == aegis::storage::ArtifactCategory::Current ||
+                                artifact.category == aegis::storage::ArtifactCategory::Waivers ||
+                                artifact.category == aegis::storage::ArtifactCategory::ExternalReports;
+            refresh_import_review();
+            return true;
+        }
+    }
+    return false;
+}
+
+QString MainWindow::import_validation_summary_text() const
+{
+    return m_impl->import_review_text != nullptr ? m_impl->import_review_text->toPlainText() : import_summary_text(m_impl->pending_import_package);
+}
+
+QStringList MainWindow::import_detected_roles() const
+{
+    QStringList roles;
+    for (const auto& artifact : m_impl->pending_import_package.artifacts()) {
+        roles.append(QString::fromStdString(aegis::storage::to_string(artifact.role)));
+    }
+    return roles;
+}
+
+int MainWindow::import_diagnostic_count() const
+{
+    return static_cast<int>(m_impl->pending_import_package.diagnostics().size());
+}
+
+bool MainWindow::import_has_blockers() const
+{
+    return m_impl->pending_import_package.validation_status() == aegis::storage::ValidationStatus::Invalid;
 }
 
 } // namespace aegis::ui

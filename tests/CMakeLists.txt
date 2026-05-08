@@ -37,6 +37,7 @@ add_executable(aegis_unit_tests
     unit/ui/test_workspace_actions.cpp
     unit/ui/test_help_actions.cpp
     unit/ui/test_activity_log.cpp
+    unit/ui/test_import_wizard.cpp
     unit/ui/test_sample_workflow.cpp
     unit/ui/test_run_checks.cpp
     unit/ui/test_workspace_state.cpp
@@ -56,16 +57,26 @@ add_executable(aegis_unit_tests
     unit/parsing/test_layout_ir.cpp
     unit/parsing/test_def_parser.cpp
     unit/parsing/test_spice_parser.cpp
+    unit/parsing/test_power_intent.cpp
+    unit/parsing/test_current_activity.cpp
     unit/reporting/test_reporting_minimal.cpp
     unit/rules/test_rules_minimal.cpp
     unit/rules/test_rule_engine.cpp
     unit/rules/test_electrical_rules.cpp
     unit/rules/test_violation_model.cpp
+    unit/rules/test_rule_pack.cpp
     unit/scripting/test_scripting_minimal.cpp
+    unit/scripting/test_batch_cli.cpp
+    unit/orchestration/test_job_pipeline.cpp
     unit/storage/test_storage_minimal.cpp
+    unit/storage/test_project_package.cpp
+    unit/storage/test_import_validation.cpp
 )
 
-target_compile_definitions(aegis_unit_tests PRIVATE AEGIS_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(aegis_unit_tests PRIVATE
+    AEGIS_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    AEGIS_BINARY_DIR="${CMAKE_BINARY_DIR}"
+)
 
 target_link_libraries(aegis_unit_tests
     PRIVATE
@@ -78,6 +89,7 @@ target_link_libraries(aegis_unit_tests
         aegis_rules
         aegis_scripting
         aegis_storage
+        aegis_orchestration
         Catch2::Catch2WithMain
         Qt6::Test
         zip

@@ -110,6 +110,7 @@ session.export_report("executive_report.html", format="html", template="corporat
 │                                                                  │
 │  • Event-driven architecture    • Async task scheduling         │
 │  • Service registry / DI        • Thread pool orchestration     │
+│  • Import manifest + preflight  • Local job pipeline stages     │
 │  • Embedded Python interpreter (pybind11)                       │
 └────────────────────┬────────────────────────────────────────────┘
                      │ gRPC / REST / WebSocket
@@ -123,6 +124,8 @@ session.export_report("executive_report.html", format="html", template="corporat
 │  │ Report     │ │ Streaming  │                                  │
 │  │ Generator  │ │ Gateway    │                                  │
 │  └────────────┘ └────────────┘                                  │
+│  (Distributed host/worker execution is currently documented,    │
+│   with local job-pipeline execution implemented in code.)       │
 └─────────────────────────────────────────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────────────────────┐
@@ -162,15 +165,16 @@ AEGIS-PERC/
 │   ├── architecture/
 │   └── BUILD.md            # Build + warnings-as-errors policy
 ├── src/
-│   ├── core/               # ServiceRegistry, Logger, Config, DiagnosticBundle
-│   ├── graph/              # GraphModel stub
-│   ├── ml/                 # FeatureExtractor stub
-│   ├── parsing/            # ParserInterface stub
-│   ├── reporting/          # ReportGenerator stub
-│   ├── rules/              # RuleEngine + IRule stub
-│   ├── scripting/          # PythonApi stub
-│   ├── storage/            # StorageEngine stub
-│   └── ui/                 # Dockable Qt workspace, canvas, filters, tracing, graph explorer, heatmap, report preview
+│   ├── core/               # ServiceRegistry, Logger, Config, ConfigMigrator, DiagnosticBundle
+│   ├── graph/              # ConnectivityGraph, data model, domain tagging
+│   ├── ml/                 # FeatureExtractor placeholder (Sprint 4 target)
+│   ├── orchestration/      # LocalJobPipeline and staged execution primitives
+│   ├── parsing/            # Parser interface, LayoutIR, DEF/SPICE prototypes + CSV import helpers
+│   ├── reporting/          # HTML/JSON report generation primitives
+│   ├── rules/              # RuleEngine, electrical rules, violation model, rule-pack loading
+│   ├── scripting/          # PythonApi + headless CLI workflow / aegis-perc-cli
+│   ├── storage/            # ProjectPackage, import validation, storage engine
+│   └── ui/                 # Dockable Qt workspace, canvas, filters, tracing, graph explorer, heatmap, report preview, import wizard
 ├── tests/
 │   ├── unit/               # Catch2 v3 tests per module
 │   └── CMakeLists.txt      # catch_discover_tests auto-registration
@@ -217,7 +221,7 @@ cmake --workflow --preset ci-windows-release
 ```bash
 cmake --preset linux-release
 cmake --build build/linux-release --config Release
-ctest --preset ci-test
+ctest --preset linux-test
 ```
 
 ---
@@ -257,7 +261,7 @@ ctest --preset ci-test
 - ✅ Application shell (Qt6 dockable workspace, QSettings persistence)
 - ✅ Synthetic sample data (inverter, NAND2, ring oscillator with JSON schema)
 - ✅ Config migration system (versioned chain migrations v0→v1→v2)
-- ✅ Catch2 v3 integration with per-module test discovery (247 CTest tests)
+- ✅ Catch2 v3 integration with per-module test discovery (**332 CTest tests currently passing**)
 
 ### Phase 2 — Verification Core (Sprint 2) ✅ **COMPLETE**
 - ✅ Layout/netlist import abstraction (IParser, IParserCallbacks, cancellation tokens)
@@ -287,6 +291,20 @@ ctest --preset ci-test
 - ✅ Canvas performance instrumentation, developer metrics, offscreen culling, tiny-geometry simplification, and synthetic large-scene coverage
 - ✅ End-to-end visualization workflow smoke tests plus a manual UI checklist under `orchestration/manual_ui_checklist_p3.md`
 
+### Phase 7 — UI Functional Hardening (Sprint 7) ✅ **COMPLETE**
+- ✅ Functional Help/About/documentation actions with headless-safe dialogs and graceful local-doc fallback
+- ✅ Real session activity log dock with severity styling, bounded history, and UI-event routing
+- ✅ Bundled sample browser with deterministic inverter/NAND2/ring-oscillator workflows
+- ✅ Real `Run Checks` workspace command wired to the rule engine and connectivity graph generation
+- ✅ Shared QAction state hardening across menus, toolbar, shortcuts, selection, violations, and trace state
+- ✅ Persistent UI-owned workspace state for docks, grid, overlays, heatmap, metrics, and violation filters
+- ✅ Trace workflow hardening with validation, consistent feedback, replacement handling, and synchronized control enablement
+- ✅ Graph explorer empty-state, LOD, search, and reload/selection-stability polish
+- ✅ Report preview refresh/copy actions, selection-aware summary updates, and snapshot-control behavior
+- ✅ Unified actionable empty/error-state language across canvas, properties, violations, trace, graph explorer, and preview panels
+- ✅ Lightweight notification routing to coordinate status-bar, activity-log, and panel feedback without duplicate trace-request noise
+- ✅ Comprehensive Sprint 7 headless regression coverage via `ctest --test-dir build -C Release --output-on-failure -L P7` and broader `-R Ui`
+
 ### Phase 4 — AI/ML Core (Sprint 4)
 - [ ] Feature extraction from violations
 - [ ] XGBoost / LightGBM training pipeline
@@ -294,16 +312,24 @@ ctest --preset ci-test
 - [ ] SHAP explainability engine
 
 ### Phase 5 — Automation & Extensibility (Sprint 5)
-- [ ] Batch analysis CLI (headless)
-- [ ] Embedded Python automation API
+- [ ] Batch analysis CLI polishing beyond Sprint 6 customer-workflow scope
+- [ ] Embedded Python automation API expansion
 - [ ] Plugin SDK for third-party rules
-- [ ] Report generation (HTML/JSON)
+- [ ] Rich report generation/templates
 
-### Phase 6 — Enterprise Scale (Sprint 6)
-- [ ] Distributed job execution design
-- [ ] gRPC services + Redis job queue
-- [ ] Worker node pool
-- [ ] Enterprise PostgreSQL backend
+### Phase 6 — Customer Workflow Import & Scalable Execution (Sprint 6) ✅ **COMPLETE**
+- ✅ Customer import contract and manifest documentation (`docs/design/import-workflow.md`)
+- ✅ Versioned `ProjectPackage` intake model with normalized artifact references
+- ✅ Preflight validation and heuristic file-role detection
+- ✅ YAML/JSON rule-pack ingestion for configurable checks
+- ✅ Power-domain CSV import with UPF-ready abstraction
+- ✅ Current/activity CSV import for EM-style checks
+- ✅ Desktop import wizard and drag-and-drop ingestion flow
+- ✅ Headless CLI workflow: `import`, `run`, `report`
+- ✅ Local job pipeline with staged progress, cancellation, and JSON/HTML export
+- ✅ Distributed host/worker execution architecture documentation (`docs/design/distributed.md`)
+
+> Current implementation snapshot: deterministic verification, desktop visualization, customer import workflow, headless CLI flow, and local job-pipeline orchestration are implemented. `ml` remains the largest intentionally incomplete subsystem.
 
 ---
 

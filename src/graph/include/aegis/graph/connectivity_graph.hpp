@@ -188,6 +188,17 @@ public:
     [[nodiscard]] std::optional<NodeId> find_pin(const std::string& name) const;
 
     // -----------------------------------------------------------------------
+    // Property mutation helpers
+    // -----------------------------------------------------------------------
+
+    bool set_device_property(const std::string& device_name,
+                             const std::string& key,
+                             const std::string& value);
+    bool set_net_property(const std::string& net_name,
+                          const std::string& key,
+                          const std::string& value);
+
+    // -----------------------------------------------------------------------
     // Traversal
     // -----------------------------------------------------------------------
 

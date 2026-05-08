@@ -1,8 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "aegis/ui/activity_log_panel.hpp"
 #include "aegis/ui/main_window.hpp"
 
 #include <QApplication>
+#include <QAbstractItemView>
+#include <QListWidget>
 #include <QSettings>
 
 #include <memory>
@@ -93,4 +96,28 @@ TEST_CASE("ActivityLog keeps bounded history under repeated UI events", "[ui][P7
 
     REQUIRE(window.activity_log_entry_count() == max_entries);
     REQUIRE(window.activity_log_entry_text(window.activity_log_entry_count() - 1).contains("No active trace to clear"));
+}
+
+TEST_CASE("ActivityLog severity rows keep light readable text on dark backgrounds", "[ui][P7][P7-002][ActivityLog]")
+{
+    QtAppGuard guard;
+    aegis::ui::ActivityLogPanel panel;
+
+    panel.append_entry("Info entry", aegis::ui::ActivityLogSeverity::Info);
+    panel.append_entry("Warning entry", aegis::ui::ActivityLogSeverity::Warning);
+    panel.append_entry("Error entry", aegis::ui::ActivityLogSeverity::Error);
+
+    auto* list = panel.findChild<QListWidget*>("ActivityLogEntries");
+    REQUIRE(list != nullptr);
+    REQUIRE(list->count() == 3);
+    REQUIRE(list->selectionMode() == QAbstractItemView::NoSelection);
+    REQUIRE(list->focusPolicy() == Qt::NoFocus);
+    REQUIRE(list->styleSheet().contains("color: #F2F2F2"));
+
+    for (int i = 0; i < list->count(); ++i) {
+        const auto* item = list->item(i);
+        REQUIRE(item != nullptr);
+        const QColor text_color = item->foreground().color();
+        REQUIRE(text_color == QColor("#F2F2F2"));
+    }
 }

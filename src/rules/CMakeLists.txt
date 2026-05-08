@@ -2,8 +2,10 @@ add_library(aegis_rules STATIC
     include/aegis/rules/violation.hpp
     include/aegis/rules/rule_engine.hpp
     include/aegis/rules/electrical_rules.hpp
+    include/aegis/rules/rule_pack.hpp
     src/rule_engine.cpp
     src/electrical_rules.cpp
+    src/rule_pack.cpp
     src/violation.cpp
 )
 
