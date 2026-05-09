@@ -35,8 +35,8 @@ std::string ConfigValue::to_string() const {
     if (auto* p = std::get_if<std::int64_t>(&data)) return std::to_string(*p);
     if (auto* p = std::get_if<double>(&data)) return std::to_string(*p);
     if (auto* p = std::get_if<std::string>(&data)) return *p;
-    if (auto* p = std::get_if<ConfigArray>(&data)) return "[array]";
-    if (auto* p = std::get_if<ConfigObject>(&data)) return "{object}";
+    if (std::get_if<ConfigArray>(&data)) return "[array]";
+    if (std::get_if<ConfigObject>(&data)) return "{object}";
     return "null";
 }
 
