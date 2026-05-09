@@ -152,6 +152,18 @@
             "execution": { "noTestsAction": "error", "stopOnFailure": false }
         },
         {
+            "name": "linux-coverage-test",
+            "configurePreset": "linux-coverage",
+            "output": { "outputOnFailure": true },
+            "execution": { "noTestsAction": "error", "stopOnFailure": false }
+        },
+        {
+            "name": "linux-asan-test",
+            "configurePreset": "linux-asan-debug",
+            "output": { "outputOnFailure": true },
+            "execution": { "noTestsAction": "error", "stopOnFailure": false }
+        },
+        {
             "name": "linux-test",
             "configurePreset": "linux-release",
             "output": { "outputOnFailure": true },

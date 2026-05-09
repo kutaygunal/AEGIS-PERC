@@ -89,7 +89,7 @@ jobs:
         run: cmake --build --preset linux-coverage --parallel
 
       - name: Test
-        run: ctest --preset linux-test
+        run: ctest --preset linux-coverage-test
 
       - name: Capture coverage baseline
         run: |
@@ -125,7 +125,7 @@ jobs:
         run: cmake --build --preset linux-asan-debug --parallel
 
       - name: Test
-        run: ctest --preset linux-test
+        run: ctest --preset linux-asan-test
         env:
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
           ASAN_OPTIONS: detect_leaks=1
