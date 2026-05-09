@@ -1,0 +1,4 @@
+net_name,current_mA,voltage_domain,layer
+out,18.4,CORE_1V8,met2
+reg_out,4.1,CORE_1V8,met1
+clk,1.2,CORE_1V8,met1

@@ -13,4 +13,10 @@ target_include_directories(aegis_storage
         $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(aegis_storage PUBLIC aegis_core PRIVATE aegis_warnings)
+target_link_libraries(aegis_storage
+    PUBLIC
+        aegis_core
+        aegis_parsing
+    PRIVATE
+        aegis_warnings
+)

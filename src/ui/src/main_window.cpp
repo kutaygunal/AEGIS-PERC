@@ -11,31 +11,55 @@
 #include "aegis/ui/ui_state_text.hpp"
 #include "aegis/ui/violation_explorer_panel.hpp"
 #include "aegis/graph/connectivity_graph.hpp"
+#include "aegis/graph/current_activity_application.hpp"
+#include "aegis/graph/power_intent_application.hpp"
+#include "aegis/parsing/current_activity.hpp"
 #include "aegis/parsing/layout_ir.hpp"
+#include "aegis/parsing/power_intent.hpp"
+#include "aegis/orchestration/job_pipeline.hpp"
+#include "aegis/reporting/report_generator.hpp"
 #include "aegis/rules/electrical_rules.hpp"
 #include "aegis/rules/rule_engine.hpp"
+#include "aegis/rules/rule_pack.hpp"
 #include "aegis/storage/import_validation.hpp"
 #include "aegis/storage/project_package.hpp"
 
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QBrush>
+#include <QClipboard>
+#include <QColor>
+#include <QComboBox>
+#include <QDateTime>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDockWidget>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QFileDialog>
 #include <QFileInfo>
+#include <QHeaderView>
+#include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMetaObject>
 #include <QMimeData>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QStatusBar>
+#include <QTableWidget>
+#include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -47,6 +71,7 @@
 #include <map>
 #include <optional>
 #include <sstream>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -56,8 +81,125 @@ namespace {
 using ActionMap = std::map<QString, QAction*>;
 
 constexpr int kWorkspaceUiStateVersion = 1;
+constexpr int kRecentProjectsStateVersion = 1;
 constexpr auto kSettingsMainWindowGroup = "mainWindow";
 constexpr auto kSettingsWorkspaceUiGroup = "mainWindow/workspaceUi";
+constexpr auto kSettingsRecentProjectsGroup = "mainWindow/recentProjects";
+constexpr auto kSettingsOnboardingGroup = "mainWindow/onboarding";
+
+struct SavedFilterPreset {
+    QString name;
+    ViolationFilterState state;
+};
+
+struct SavedWorkspaceView {
+    QString name;
+    QByteArray dock_state;
+    bool grid_visible = true;
+    bool overlays_visible = true;
+    bool heatmap_visible = false;
+    double heatmap_opacity = 0.6;
+    bool performance_metrics_visible = false;
+};
+
+QString normalize_saved_name(const QString& name)
+{
+    return name.trimmed();
+}
+
+QString metadata_value(const aegis::rules::Violation& violation, std::initializer_list<const char*> keys)
+{
+    for (const auto* key : keys) {
+        if (const auto value = violation.metadata.get<std::string>(key); value.has_value() && !value->empty()) {
+            return QString::fromStdString(*value);
+        }
+    }
+    return {};
+}
+
+bool violation_matches_artifact(const aegis::rules::Violation& violation, const QString& artifact_id, const QString& artifact_path)
+{
+    const QString violation_artifact_id = metadata_value(violation, {"artifact_id", "source_artifact_id"});
+    if (!artifact_id.trimmed().isEmpty() && !violation_artifact_id.trimmed().isEmpty()
+        && violation_artifact_id.compare(artifact_id, Qt::CaseInsensitive) == 0) {
+        return true;
+    }
+
+    const QString violation_artifact_path = metadata_value(violation, {"artifact_path", "source_artifact_path"});
+    if (!artifact_path.trimmed().isEmpty() && !violation_artifact_path.trimmed().isEmpty()) {
+        return QFileInfo(violation_artifact_path).filePath().compare(QFileInfo(artifact_path).filePath(), Qt::CaseInsensitive) == 0;
+    }
+    return false;
+}
+
+bool saved_name_matches(const QString& lhs, const QString& rhs)
+{
+    return normalize_saved_name(lhs).compare(normalize_saved_name(rhs), Qt::CaseInsensitive) == 0;
+}
+
+QVariantMap to_variant_map(const SavedFilterPreset& preset)
+{
+    QVariantMap map;
+    map.insert("name", preset.name);
+    map.insert("state", preset.state.to_variant_map());
+    return map;
+}
+
+std::optional<SavedFilterPreset> saved_filter_preset_from_variant(const QVariant& value)
+{
+    const QVariantMap map = value.toMap();
+    const QString name = normalize_saved_name(map.value("name").toString());
+    if (name.isEmpty()) {
+        return std::nullopt;
+    }
+
+    SavedFilterPreset preset;
+    preset.name = name;
+    preset.state = ViolationFilterState::from_variant_map(map.value("state").toMap());
+    return preset;
+}
+
+QVariantMap to_variant_map(const SavedWorkspaceView& view)
+{
+    QVariantMap map;
+    map.insert("name", view.name);
+    map.insert("dockState", view.dock_state);
+    map.insert("gridVisible", view.grid_visible);
+    map.insert("overlaysVisible", view.overlays_visible);
+    map.insert("heatmapVisible", view.heatmap_visible);
+    map.insert("heatmapOpacity", view.heatmap_opacity);
+    map.insert("performanceMetricsVisible", view.performance_metrics_visible);
+    return map;
+}
+
+std::optional<SavedWorkspaceView> saved_workspace_view_from_variant(const QVariant& value)
+{
+    const QVariantMap map = value.toMap();
+    const QString name = normalize_saved_name(map.value("name").toString());
+    if (name.isEmpty()) {
+        return std::nullopt;
+    }
+
+    SavedWorkspaceView view;
+    view.name = name;
+    view.dock_state = map.value("dockState").toByteArray();
+    view.grid_visible = map.value("gridVisible", true).toBool();
+    view.overlays_visible = map.value("overlaysVisible", true).toBool();
+    view.heatmap_visible = map.value("heatmapVisible", false).toBool();
+    view.heatmap_opacity = map.value("heatmapOpacity", 0.6).toDouble();
+    view.performance_metrics_visible = map.value("performanceMetricsVisible", false).toBool();
+    return view;
+}
+
+template <typename Entry>
+QStringList saved_entry_names(const std::vector<Entry>& entries)
+{
+    QStringList names;
+    for (const auto& entry : entries) {
+        names.push_back(entry.name);
+    }
+    return names;
+}
 
 struct BundledSampleInfo {
     QString id;
@@ -227,10 +369,37 @@ std::optional<aegis::parsing::LayoutIR> load_sample_design_ir(const char* name)
     return ir;
 }
 
-void configure_action(QAction* action, const QString& tooltip)
+void configure_action(QAction* action, const QString& tooltip, const QString& object_name = {})
 {
+    if (action == nullptr) {
+        return;
+    }
     action->setToolTip(tooltip);
     action->setStatusTip(tooltip);
+    action->setShortcutVisibleInContextMenu(true);
+    if (!object_name.trimmed().isEmpty()) {
+        action->setObjectName(object_name);
+    }
+}
+
+template <typename Widget>
+Widget* configure_accessible_widget(Widget* widget,
+                                    const QString& accessible_name,
+                                    const QString& tooltip = {},
+                                    const QString& accessible_description = {})
+{
+    if (widget == nullptr) {
+        return nullptr;
+    }
+    widget->setAccessibleName(accessible_name);
+    if (!accessible_description.trimmed().isEmpty()) {
+        widget->setAccessibleDescription(accessible_description);
+    }
+    if (!tooltip.trimmed().isEmpty()) {
+        widget->setToolTip(tooltip);
+        widget->setStatusTip(tooltip);
+    }
+    return widget;
 }
 
 QString import_summary_text(const aegis::storage::ProjectPackage& package)
@@ -265,12 +434,241 @@ QString import_summary_text(const aegis::storage::ProjectPackage& package)
     return lines.join('\n');
 }
 
+QStringList choose_import_paths(QWidget* parent)
+{
+    QDialog dialog(parent);
+    dialog.setWindowTitle("Import Design Package");
+    dialog.setModal(true);
+    dialog.resize(420, 160);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* intro = new QLabel("Choose a customer project folder or select individual design-package files.", &dialog);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+    auto* folder_button = buttons->addButton("Choose Project Folder...", QDialogButtonBox::ActionRole);
+    auto* files_button = buttons->addButton("Choose Files...", QDialogButtonBox::ActionRole);
+    layout->addWidget(buttons);
+
+    QStringList selected_paths;
+    QObject::connect(folder_button, &QPushButton::clicked, &dialog, [&dialog, parent, &selected_paths]() {
+        const QString folder = QFileDialog::getExistingDirectory(parent,
+                                                                 "Select Project Folder",
+                                                                 QString{},
+                                                                 QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+        if (folder.trimmed().isEmpty()) {
+            return;
+        }
+        selected_paths = {folder};
+        dialog.accept();
+    });
+    QObject::connect(files_button, &QPushButton::clicked, &dialog, [&dialog, parent, &selected_paths]() {
+        const QStringList files = QFileDialog::getOpenFileNames(parent,
+                                                                "Select Design Package Files",
+                                                                QString{},
+                                                                "All Files (*.*)");
+        if (files.isEmpty()) {
+            return;
+        }
+        selected_paths = files;
+        dialog.accept();
+    });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return {};
+    }
+    return selected_paths;
+}
+
+QString artifact_requirement_text(const aegis::storage::SourceArtifact& artifact)
+{
+    return artifact.optional ? "Optional" : "Required candidate";
+}
+
+QString artifact_status_text(const aegis::storage::ProjectPackage& package,
+                             const aegis::storage::SourceArtifact& artifact)
+{
+    bool has_warning = false;
+    int related_count = 0;
+    for (const auto& diagnostic : package.diagnostics()) {
+        if (!diagnostic.artifact_id.has_value() || *diagnostic.artifact_id != artifact.id) {
+            continue;
+        }
+        ++related_count;
+        if (diagnostic.severity == aegis::storage::DiagnosticSeverity::Error) {
+            return QString("error (%1)").arg(related_count);
+        }
+        if (diagnostic.severity == aegis::storage::DiagnosticSeverity::Warning) {
+            has_warning = true;
+        }
+    }
+    if (has_warning) {
+        return QString("warning (%1)").arg(related_count);
+    }
+
+    const bool package_missing_required_inputs = std::any_of(package.diagnostics().begin(), package.diagnostics().end(), [](const auto& diagnostic) {
+        return diagnostic.code == "MISSING_REQUIRED_TECHNOLOGY" ||
+               diagnostic.code == "MISSING_REQUIRED_LAYOUT" ||
+               diagnostic.code == "MISSING_REQUIRED_NETLIST" ||
+               diagnostic.code == "MISSING_REQUIRED_RULES";
+    });
+    if (package_missing_required_inputs
+        && (artifact.category == aegis::storage::ArtifactCategory::ExternalReports
+            || artifact.category == aegis::storage::ArtifactCategory::Unknown)) {
+        return "warning (review role)";
+    }
+
+    return related_count > 0 ? QString("info (%1)").arg(related_count) : QString("ok");
+}
+
+QString import_diagnostics_text(const aegis::storage::ProjectPackage& package)
+{
+    QStringList lines;
+    for (const auto& diagnostic : package.diagnostics()) {
+        lines.append(QString("- [%1] %2")
+                         .arg(QString::fromStdString(aegis::storage::to_string(diagnostic.severity)))
+                         .arg(QString::fromStdString(diagnostic.message)));
+    }
+    if (lines.isEmpty()) {
+        lines.append("- No diagnostics");
+    }
+    return lines.join('\n');
+}
+
+QString current_diagnostic_summary(const aegis::parsing::CurrentActivityDiagnostic& diagnostic)
+{
+    return QString("[%1] %2")
+        .arg(diagnostic.severity == aegis::parsing::CurrentActivityDiagnostic::Severity::Error ? "error" : "warning")
+        .arg(QString::fromStdString(diagnostic.message));
+}
+
+QString power_diagnostic_summary(const aegis::parsing::PowerIntentDiagnostic& diagnostic)
+{
+    return QString("[%1] %2")
+        .arg(diagnostic.severity == aegis::parsing::PowerIntentDiagnostic::Severity::Error ? "error" : "warning")
+        .arg(QString::fromStdString(diagnostic.message));
+}
+
+std::filesystem::path resolve_import_artifact_path(const std::filesystem::path& base_path,
+                                                   const aegis::storage::SourceArtifact& artifact)
+{
+    return artifact.path.is_absolute() ? artifact.path : (base_path / artifact.path);
+}
+
+std::unique_ptr<aegis::graph::ConnectivityGraph> clone_graph(const aegis::graph::ConnectivityGraph& source)
+{
+    using namespace aegis::graph;
+
+    auto cloned = std::make_unique<ConnectivityGraph>();
+    std::map<NodeId, NodeId> id_map;
+
+    for (const auto type : {NodeType::Device, NodeType::Net, NodeType::Pin}) {
+        for (const auto source_id : source.nodes_of_type(type)) {
+            const auto& data = source.node_data(source_id);
+            NodeId cloned_id = INVALID_NODE;
+            if (type == NodeType::Device) {
+                cloned_id = cloned->add_device(std::get<DeviceNode>(data));
+            } else if (type == NodeType::Net) {
+                cloned_id = cloned->add_net(std::get<NetNode>(data));
+            } else {
+                cloned_id = cloned->add_pin(std::get<PinNode>(data));
+            }
+            id_map[source_id] = cloned_id;
+        }
+    }
+
+    for (const auto type : {NodeType::Device, NodeType::Net, NodeType::Pin}) {
+        for (const auto source_id : source.nodes_of_type(type)) {
+            for (const auto edge_id : source.outgoing_edges(source_id)) {
+                const auto from_it = id_map.find(source.edge_from(edge_id));
+                const auto to_it = id_map.find(source.edge_to(edge_id));
+                if (from_it == id_map.end() || to_it == id_map.end()) {
+                    continue;
+                }
+                cloned->add_edge(from_it->second, to_it->second, source.edge_data(edge_id));
+            }
+        }
+    }
+
+    return cloned;
+}
+
+std::vector<aegis::storage::ArtifactRole> supported_import_roles()
+{
+    using aegis::storage::ArtifactRole;
+    return {
+        ArtifactRole::Lef,
+        ArtifactRole::Def,
+        ArtifactRole::Verilog,
+        ArtifactRole::SystemVerilog,
+        ArtifactRole::Spice,
+        ArtifactRole::Spi,
+        ArtifactRole::Cdl,
+        ArtifactRole::AegisRulePack,
+        ArtifactRole::PowerDomainsCsv,
+        ArtifactRole::CurrentCsv,
+        ArtifactRole::WaiverCsv,
+        ArtifactRole::WaiverYaml,
+        ArtifactRole::WaiverJson,
+        ArtifactRole::ImportedReport,
+        ArtifactRole::Unknown,
+    };
+}
+
+bool imported_package_inputs_exist(const aegis::storage::ProjectPackage& package,
+                                   const std::filesystem::path& base_path)
+{
+    if (package.artifacts().empty()) {
+        return false;
+    }
+    return std::all_of(package.artifacts().begin(), package.artifacts().end(), [&](const auto& artifact) {
+        return std::filesystem::exists(resolve_import_artifact_path(base_path, artifact));
+    });
+}
+
+QString html_escape(QString text)
+{
+    text.replace('&', "&amp;");
+    text.replace('<', "&lt;");
+    text.replace('>', "&gt;");
+    text.replace('"', "&quot;");
+    return text;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
 // Impl
 // ---------------------------------------------------------------------------
 struct MainWindow::Impl {
+    struct DiagnosticEntry {
+        QString severity;
+        QString source;
+        QString summary;
+        QString details;
+        QString artifact_id;
+        QString artifact_path;
+        QString violation_id;
+        bool blocking = false;
+    };
+
+    struct JobHistoryEntry {
+        aegis::orchestration::JobId job_id = 0;
+        QString action_name;
+        QString project_name;
+        QString state;
+        QString summary;
+        QString result_summary;
+        QString error_message;
+        QStringList progress_history;
+        QDateTime started_at;
+        QDateTime finished_at;
+        std::optional<std::filesystem::path> json_report_path;
+        std::optional<std::filesystem::path> html_report_path;
+    };
+
     LayoutCanvas* canvas = nullptr;
     LayerPanel* layer_panel = nullptr;
     PropertiesPanel* properties_panel = nullptr;
@@ -280,6 +678,17 @@ struct MainWindow::Impl {
     GraphExplorerPanel* graph_explorer = nullptr;
     TracePanel* trace_panel = nullptr;
     ActivityLogPanel* activity_log = nullptr;
+    QLabel* workspace_summary_label = nullptr;
+    QWidget* onboarding_panel = nullptr;
+    QLabel* onboarding_label = nullptr;
+    QComboBox* diagnostics_severity_filter = nullptr;
+    QTableWidget* diagnostics_table = nullptr;
+    QPlainTextEdit* diagnostics_details = nullptr;
+    QPushButton* diagnostics_related_button = nullptr;
+    QListWidget* job_history_list = nullptr;
+    QPlainTextEdit* job_history_details = nullptr;
+    QPushButton* job_history_open_json_button = nullptr;
+    QPushButton* job_history_open_html_button = nullptr;
     std::unique_ptr<aegis::graph::ConnectivityGraph> owned_graph;
     const aegis::graph::ConnectivityGraph* current_graph = nullptr;
     ConnectivityTraceAdapter trace_adapter;
@@ -287,19 +696,56 @@ struct MainWindow::Impl {
     QList<QDockWidget*> docks;
     QMenuBar* menu_bar = nullptr;
     QMenu* view_menu = nullptr;
+    QMenu* recent_projects_menu = nullptr;
+    QMenu* filter_presets_menu = nullptr;
+    QMenu* workspace_views_menu = nullptr;
     QToolBar* workspace_toolbar = nullptr;
     QLabel* performance_status_label = nullptr;
+    QLabel* job_progress_label = nullptr;
     QDialog* about_dialog = nullptr;
     QDialog* documentation_dialog = nullptr;
     QDialog* sample_browser_dialog = nullptr;
     QDialog* import_review_dialog = nullptr;
+    QPushButton* import_load_button = nullptr;
+    QPushButton* import_related_button = nullptr;
     QPlainTextEdit* documentation_text = nullptr;
     QPlainTextEdit* import_review_text = nullptr;
+    QTableWidget* import_artifact_table = nullptr;
     QListWidget* sample_browser_list = nullptr;
     aegis::storage::ImportPreflightValidator import_validator;
     aegis::storage::ProjectPackage pending_import_package;
+    std::filesystem::path pending_import_base_path;
+    aegis::storage::ProjectPackage loaded_import_package;
+    std::filesystem::path loaded_import_base_path;
+    bool has_loaded_import_package = false;
+    bool sample_mode_active = false;
+    aegis::orchestration::LocalJobPipeline job_pipeline;
+    aegis::orchestration::JobPipelineOptions job_pipeline_options;
+    QTimer* job_poll_timer = nullptr;
+    std::optional<aegis::orchestration::JobId> active_job_id;
+    std::optional<aegis::orchestration::JobProgressSnapshot> last_job_snapshot;
+    std::filesystem::path active_job_output_dir;
+    QString last_workspace_summary_text;
+    std::vector<aegis::rules::Violation> latest_violations;
+    std::vector<DiagnosticEntry> diagnostics_entries;
+    QStringList recent_project_paths;
+    bool reopen_last_session_enabled = false;
+    QString last_successful_project_path;
+    QString last_job_progress_text;
+    bool last_job_retry_available = false;
+    QString last_job_retry_reason;
     QString last_status_message;
+    bool onboarding_dismissed = false;
+    std::vector<SavedFilterPreset> filter_presets;
+    std::vector<SavedWorkspaceView> workspace_views;
     ActionMap actions;
+    std::vector<JobHistoryEntry> job_history;
+    int job_history_max_entries = 12;
+    std::function<QStringList(QWidget*)> import_picker;
+    std::function<bool(const QString&)> report_opener = [](const QString& path) {
+        return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    };
+    std::function<QString(const QString&)> report_export_path_picker;
 };
 
 // ---------------------------------------------------------------------------
@@ -327,7 +773,12 @@ void MainWindow::setup_ui()
     // Central reusable layout canvas. It owns rendering state only; scene data
     // is supplied through the UI scene adapter.
     m_impl->selection_model = new SelectionModel(this);
-    m_impl->canvas = new LayoutCanvas(this);
+    m_impl->canvas = configure_accessible_widget(new LayoutCanvas(this),
+                                                 "Layout Canvas",
+                                                 "Interactive layout canvas for selection, tracing, and viewport navigation",
+                                                 "Primary workspace canvas for the active design scene");
+    m_impl->canvas->setObjectName("LayoutCanvas");
+    m_impl->canvas->setFocusPolicy(Qt::StrongFocus);
     m_impl->canvas->set_selection_model(m_impl->selection_model);
     connect(m_impl->canvas, &LayoutCanvas::cursor_position_changed, this,
             [this](const QPointF& scene_pos, double zoom) {
@@ -350,7 +801,17 @@ void MainWindow::setup_ui()
     setCentralWidget(m_impl->canvas);
 
     // Status bar
-    m_impl->performance_status_label = new QLabel(this);
+    m_impl->job_progress_label = configure_accessible_widget(new QLabel(this),
+                                                             "Job Progress Status",
+                                                             "Current local workflow job progress",
+                                                             "Status-bar summary for the active local workflow job");
+    m_impl->job_progress_label->setObjectName("JobProgressStatusLabel");
+    m_impl->job_progress_label->setVisible(false);
+    statusBar()->addPermanentWidget(m_impl->job_progress_label);
+    m_impl->performance_status_label = configure_accessible_widget(new QLabel(this),
+                                                                   "Performance Metrics Status",
+                                                                   "Current layout canvas performance metrics",
+                                                                   "Status-bar performance metrics for the layout canvas");
     m_impl->performance_status_label->setVisible(false);
     statusBar()->addPermanentWidget(m_impl->performance_status_label);
     show_status_message("Ready");
@@ -378,7 +839,7 @@ void MainWindow::setup_actions()
             action->setShortcut(shortcut);
         }
         action->setCheckable(checkable);
-        configure_action(action, tooltip);
+        configure_action(action, tooltip, QString("WorkspaceAction_%1").arg(id));
         m_impl->actions.emplace(id, action);
         return action;
     };
@@ -386,9 +847,13 @@ void MainWindow::setup_actions()
     auto* import_project = register_action("import_project", "&Import Design Package...", QKeySequence("Ctrl+I"), false,
                                            "Review customer design-package files or dropped project folders before analysis");
     connect(import_project, &QAction::triggered, this, [this]() {
-        const QString message = "Import Design Package expects test-supplied paths or drag-and-drop folder input";
-        open_import_review_dialog({}, false);
-        publish_ui_notification(message, ActivityLogSeverity::Info, 4000);
+        const auto picker = m_impl->import_picker != nullptr ? m_impl->import_picker : choose_import_paths;
+        const QStringList paths = picker(this);
+        if (paths.isEmpty()) {
+            publish_ui_notification("Import canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+        Q_UNUSED(open_import_review_dialog(paths, false));
     });
 
     auto* open_sample = register_action("open_sample", "Open Sample: &Inverter", QKeySequence("Ctrl+Shift+O"), false,
@@ -448,6 +913,16 @@ void MainWindow::setup_actions()
         publish_ui_notification(message, ActivityLogSeverity::Info, 3000);
     });
 
+    auto* reopen_last_project = register_action("reopen_last_project", "Reopen &Last Imported Project", QKeySequence("Ctrl+Shift+I"), false,
+                                                "Reopen the last successful imported project package from disk");
+    connect(reopen_last_project, &QAction::triggered, this, [this]() {
+        if (m_impl->last_successful_project_path.trimmed().isEmpty()) {
+            publish_ui_notification("Reopen unavailable: no successful imported project has been recorded", ActivityLogSeverity::Warning, 4000);
+            return;
+        }
+        Q_UNUSED(reopen_project_from_path(m_impl->last_successful_project_path, true));
+    });
+
     auto* open_sample_nand2 = register_action("open_sample_nand2", "Open Sample: &NAND2", QKeySequence(), false,
                                               "Load the bundled NAND2 sample design");
     connect(open_sample_nand2, &QAction::triggered, this, [this]() {
@@ -494,10 +969,211 @@ void MainWindow::setup_actions()
         }
     });
 
+    auto* save_filter_preset = register_action("save_filter_preset", "Save Filter Preset...", QKeySequence(), false,
+                                                "Save the current violation filters as a named preset");
+    connect(save_filter_preset, &QAction::triggered, this, [this]() {
+        bool accepted = false;
+        const QString name = QInputDialog::getText(this,
+                                                   "Save Filter Preset",
+                                                   "Preset name:",
+                                                   QLineEdit::Normal,
+                                                   QString{},
+                                                   &accepted);
+        if (!accepted) {
+            publish_ui_notification("Filter preset save canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+        if (save_violation_filter_preset(name)) {
+            publish_ui_notification(QString("Saved filter preset '%1'").arg(normalize_saved_name(name)), ActivityLogSeverity::Info, 3000);
+        } else {
+            publish_ui_notification("Filter preset save failed: name is required", ActivityLogSeverity::Warning, 4000);
+        }
+    });
+
+    auto* manage_filter_presets = register_action("manage_filter_presets", "Manage Filter Presets...", QKeySequence(), false,
+                                                  "Apply, rename, or delete saved violation filter presets");
+    connect(manage_filter_presets, &QAction::triggered, this, [this]() {
+        const QStringList names = violation_filter_preset_names();
+        if (names.isEmpty()) {
+            publish_ui_notification("No saved filter presets", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        bool accepted = false;
+        const QString choice = QInputDialog::getItem(this,
+                                                     "Manage Filter Presets",
+                                                     "Choose preset:",
+                                                     names,
+                                                     0,
+                                                     false,
+                                                     &accepted);
+        if (!accepted || choice.trimmed().isEmpty()) {
+            publish_ui_notification("Filter preset management canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        const QStringList operations{"Apply", "Rename", "Delete"};
+        const QString operation = QInputDialog::getItem(this,
+                                                        "Manage Filter Presets",
+                                                        "Operation:",
+                                                        operations,
+                                                        0,
+                                                        false,
+                                                        &accepted);
+        if (!accepted || operation.isEmpty()) {
+            publish_ui_notification("Filter preset management canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        if (operation == "Apply") {
+            if (apply_violation_filter_preset(choice)) {
+                publish_ui_notification(QString("Applied filter preset '%1'").arg(choice), ActivityLogSeverity::Info, 3000);
+            }
+            return;
+        }
+        if (operation == "Rename") {
+            const QString renamed = QInputDialog::getText(this,
+                                                          "Rename Filter Preset",
+                                                          "New preset name:",
+                                                          QLineEdit::Normal,
+                                                          choice,
+                                                          &accepted);
+            if (!accepted) {
+                publish_ui_notification("Filter preset rename canceled", ActivityLogSeverity::Info, 3000);
+                return;
+            }
+            if (rename_violation_filter_preset(choice, renamed)) {
+                publish_ui_notification(QString("Renamed filter preset to '%1'").arg(normalize_saved_name(renamed)), ActivityLogSeverity::Info, 3000);
+            } else {
+                publish_ui_notification("Filter preset rename failed", ActivityLogSeverity::Warning, 4000);
+            }
+            return;
+        }
+        if (delete_violation_filter_preset(choice)) {
+            publish_ui_notification(QString("Deleted filter preset '%1'").arg(choice), ActivityLogSeverity::Info, 3000);
+        }
+    });
+
+    auto* save_workspace_view_action = register_action("save_workspace_view", "Save Workspace View...", QKeySequence(), false,
+                                                       "Save the current dock layout and workspace toggles as a named view");
+    connect(save_workspace_view_action, &QAction::triggered, this, [this]() {
+        bool accepted = false;
+        const QString name = QInputDialog::getText(this,
+                                                   "Save Workspace View",
+                                                   "View name:",
+                                                   QLineEdit::Normal,
+                                                   QString{},
+                                                   &accepted);
+        if (!accepted) {
+            publish_ui_notification("Workspace view save canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+        if (this->save_workspace_view(name)) {
+            publish_ui_notification(QString("Saved workspace view '%1'").arg(normalize_saved_name(name)), ActivityLogSeverity::Info, 3000);
+        } else {
+            publish_ui_notification("Workspace view save failed: name is required", ActivityLogSeverity::Warning, 4000);
+        }
+    });
+
+    auto* manage_workspace_views = register_action("manage_workspace_views", "Manage Workspace Views...", QKeySequence(), false,
+                                                   "Apply, rename, or delete saved workspace views");
+    connect(manage_workspace_views, &QAction::triggered, this, [this]() {
+        const QStringList names = workspace_view_names();
+        if (names.isEmpty()) {
+            publish_ui_notification("No saved workspace views", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        bool accepted = false;
+        const QString choice = QInputDialog::getItem(this,
+                                                     "Manage Workspace Views",
+                                                     "Choose view:",
+                                                     names,
+                                                     0,
+                                                     false,
+                                                     &accepted);
+        if (!accepted || choice.trimmed().isEmpty()) {
+            publish_ui_notification("Workspace view management canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        const QStringList operations{"Apply", "Rename", "Delete"};
+        const QString operation = QInputDialog::getItem(this,
+                                                        "Manage Workspace Views",
+                                                        "Operation:",
+                                                        operations,
+                                                        0,
+                                                        false,
+                                                        &accepted);
+        if (!accepted || operation.isEmpty()) {
+            publish_ui_notification("Workspace view management canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        if (operation == "Apply") {
+            if (apply_workspace_view(choice)) {
+                publish_ui_notification(QString("Applied workspace view '%1'").arg(choice), ActivityLogSeverity::Info, 3000);
+            }
+            return;
+        }
+        if (operation == "Rename") {
+            const QString renamed = QInputDialog::getText(this,
+                                                          "Rename Workspace View",
+                                                          "New view name:",
+                                                          QLineEdit::Normal,
+                                                          choice,
+                                                          &accepted);
+            if (!accepted) {
+                publish_ui_notification("Workspace view rename canceled", ActivityLogSeverity::Info, 3000);
+                return;
+            }
+            if (rename_workspace_view(choice, renamed)) {
+                publish_ui_notification(QString("Renamed workspace view to '%1'").arg(normalize_saved_name(renamed)), ActivityLogSeverity::Info, 3000);
+            } else {
+                publish_ui_notification("Workspace view rename failed", ActivityLogSeverity::Warning, 4000);
+            }
+            return;
+        }
+        if (delete_workspace_view(choice)) {
+            publish_ui_notification(QString("Deleted workspace view '%1'").arg(choice), ActivityLogSeverity::Info, 3000);
+        }
+    });
+
     auto* run_checks = register_action("run_checks", "&Run Checks", QKeySequence(Qt::Key_F5), false,
                                        "Run available electrical checks for the active design graph");
     connect(run_checks, &QAction::triggered, this, [this]() {
         execute_run_checks();
+    });
+
+    auto* cancel_active_job = register_action("cancel_active_job", "Cancel Active &Job", QKeySequence("Shift+F5"), false,
+                                              "Cancel the active local workflow job");
+    connect(cancel_active_job, &QAction::triggered, this, [this]() {
+        if (!m_impl->active_job_id.has_value()) {
+            publish_ui_notification("Cancel unavailable: no active local job", ActivityLogSeverity::Warning, 3000);
+            return;
+        }
+        if (m_impl->job_pipeline.request_cancel(*m_impl->active_job_id)) {
+            publish_ui_notification("Cancellation requested for active local job", ActivityLogSeverity::Warning, 4000);
+            if (m_impl->last_job_snapshot.has_value()) {
+                m_impl->last_job_snapshot->cancel_requested = true;
+            }
+            update_action_states();
+            return;
+        }
+        publish_ui_notification("Cancellation request failed: active local job no longer exists", ActivityLogSeverity::Error, 4000);
+    });
+
+    auto* retry_last_job = register_action("retry_last_job", "&Retry Last Job", QKeySequence("Ctrl+Shift+R"), false,
+                                           "Retry the most recent imported-package local workflow job");
+    connect(retry_last_job, &QAction::triggered, this, [this]() {
+        if (!can_retry_last_job()) {
+            const QString reason = m_impl->last_job_retry_reason.trimmed().isEmpty()
+                ? QString("Retry unavailable: last job inputs are no longer valid")
+                : m_impl->last_job_retry_reason;
+            publish_ui_notification(reason, ActivityLogSeverity::Warning, 4000);
+            return;
+        }
+        Q_UNUSED(start_imported_run_checks(true));
     });
 
     auto* trace_from_selection = register_action("trace_from_selection", "Trace from &Selection", QKeySequence("Ctrl+T"), false,
@@ -626,6 +1302,9 @@ void MainWindow::setup_menus()
     // File
     QMenu* fileMenu = m_impl->menu_bar->addMenu("&File");
     fileMenu->addAction(m_impl->actions.at("import_project"));
+    fileMenu->addAction(m_impl->actions.at("reopen_last_project"));
+    m_impl->recent_projects_menu = fileMenu->addMenu("Recent &Projects");
+    refresh_recent_project_actions();
     fileMenu->addSeparator();
     auto* samples_menu = fileMenu->addMenu("Open &Bundled Sample");
     samples_menu->addAction(m_impl->actions.at("open_sample"));
@@ -647,15 +1326,26 @@ void MainWindow::setup_menus()
     viewMenu->addSeparator();
     viewMenu->addAction(m_impl->actions.at("toggle_grid"));
     viewMenu->addAction(m_impl->actions.at("toggle_overlays"));
+    m_impl->filter_presets_menu = viewMenu->addMenu("Filter &Presets");
+    connect(m_impl->filter_presets_menu, &QMenu::aboutToShow, this, &MainWindow::refresh_filter_preset_menu);
+    m_impl->workspace_views_menu = viewMenu->addMenu("Workspace &Views");
+    connect(m_impl->workspace_views_menu, &QMenu::aboutToShow, this, &MainWindow::refresh_workspace_view_menu);
 
     // Tools
     QMenu* toolsMenu = m_impl->menu_bar->addMenu("&Tools");
     toolsMenu->addAction(m_impl->actions.at("run_checks"));
+    toolsMenu->addAction(m_impl->actions.at("cancel_active_job"));
+    toolsMenu->addAction(m_impl->actions.at("retry_last_job"));
     toolsMenu->addSeparator();
     toolsMenu->addAction(m_impl->actions.at("trace_from_selection"));
     toolsMenu->addAction(m_impl->actions.at("trace_from_violation"));
     toolsMenu->addAction(m_impl->actions.at("focus_trace"));
     toolsMenu->addAction(m_impl->actions.at("clear_trace_action"));
+    toolsMenu->addSeparator();
+    toolsMenu->addAction(m_impl->actions.at("save_filter_preset"));
+    toolsMenu->addAction(m_impl->actions.at("manage_filter_presets"));
+    toolsMenu->addAction(m_impl->actions.at("save_workspace_view"));
+    toolsMenu->addAction(m_impl->actions.at("manage_workspace_views"));
     toolsMenu->addSeparator();
     toolsMenu->addAction(m_impl->actions.at("clear_selection"));
 
@@ -667,7 +1357,10 @@ void MainWindow::setup_menus()
 
 void MainWindow::setup_toolbar()
 {
-    m_impl->workspace_toolbar = addToolBar("Workspace");
+    m_impl->workspace_toolbar = configure_accessible_widget(addToolBar("Workspace"),
+                                                            "Workspace Toolbar",
+                                                            "Primary desktop actions for import, samples, view control, checks, and tracing",
+                                                            "Toolbar containing the main workspace actions");
     m_impl->workspace_toolbar->setObjectName("WorkspaceToolbar");
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("import_project"));
     m_impl->workspace_toolbar->addSeparator();
@@ -682,6 +1375,8 @@ void MainWindow::setup_toolbar()
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("toggle_overlays"));
     m_impl->workspace_toolbar->addSeparator();
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("run_checks"));
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("cancel_active_job"));
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("retry_last_job"));
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("trace_from_selection"));
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("trace_from_violation"));
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("focus_trace"));
@@ -727,13 +1422,18 @@ void MainWindow::publish_trace_feedback(const QString& message, ActivityLogSever
 
 void MainWindow::execute_run_checks()
 {
+    if (m_impl->has_loaded_import_package) {
+        Q_UNUSED(start_imported_run_checks(false));
+        return;
+    }
+
     if (m_impl->current_graph == nullptr) {
         const QString message = "Run Checks unavailable: no connectivity graph available";
         publish_ui_notification(message, ActivityLogSeverity::Error, 4000);
         return;
     }
 
-    publish_ui_notification("Run Checks started", ActivityLogSeverity::Info, 2000);
+    publish_ui_notification("Run Checks started using built-in desktop defaults", ActivityLogSeverity::Info, 2000);
 
     try {
         aegis::rules::RuleEngine engine;
@@ -752,7 +1452,8 @@ void MainWindow::execute_run_checks()
         aegis::rules::ViolationCollection collection{std::move(violations)};
         set_violations(collection);
 
-        const QString message = QString("Run Checks completed: %1 violation(s)").arg(collection.size());
+        const QString message = QString("Run Checks completed: %1 violation(s) using built-in desktop defaults")
+                                    .arg(collection.size());
         publish_ui_notification(message,
                                 collection.empty() ? ActivityLogSeverity::Info : ActivityLogSeverity::Warning,
                                 5000);
@@ -760,6 +1461,379 @@ void MainWindow::execute_run_checks()
         const QString message = QString("Run Checks failed: %1").arg(error.what());
         publish_ui_notification(message, ActivityLogSeverity::Error, 5000);
     }
+}
+
+bool MainWindow::export_report_preview(bool html_export)
+{
+    if (m_impl->report_preview == nullptr) {
+        return false;
+    }
+    const QString format = html_export ? QString("html") : QString("json");
+    QString target_path;
+    if (m_impl->report_export_path_picker) {
+        target_path = m_impl->report_export_path_picker(format);
+    } else {
+        target_path = QFileDialog::getSaveFileName(this,
+                                                   html_export ? "Export HTML Report" : "Export JSON Report",
+                                                   html_export ? "aegis_report.html" : "aegis_report.json",
+                                                   html_export ? "HTML Files (*.html)" : "JSON Files (*.json)");
+    }
+    if (target_path.trimmed().isEmpty()) {
+        m_impl->report_preview->set_action_status_for_host(html_export
+            ? "HTML export canceled"
+            : "JSON export canceled");
+        publish_ui_notification(html_export ? "HTML export canceled" : "JSON export canceled", ActivityLogSeverity::Info, 3000);
+        return false;
+    }
+
+    const auto filtered = m_impl->violation_explorer != nullptr
+        ? m_impl->violation_explorer->filtered_violations()
+        : aegis::rules::ViolationCollection{};
+    std::vector<aegis::rules::Violation> violations;
+    violations.reserve(filtered.size());
+    for (const auto& violation : filtered.violations()) {
+        violations.push_back(violation);
+    }
+
+    nlohmann::json import_diagnostics = nlohmann::json::array();
+    if (m_impl->has_loaded_import_package) {
+        for (const auto& diagnostic : m_impl->loaded_import_package.diagnostics()) {
+            import_diagnostics.push_back({
+                {"severity", aegis::storage::to_string(diagnostic.severity)},
+                {"code", diagnostic.code},
+                {"message", diagnostic.message},
+                {"artifact_id", diagnostic.artifact_id.has_value() ? nlohmann::json(*diagnostic.artifact_id) : nlohmann::json(nullptr)}
+            });
+        }
+    }
+
+    nlohmann::json runtime_diagnostics = nlohmann::json::array();
+    for (auto it = m_impl->job_history.rbegin(); it != m_impl->job_history.rend(); ++it) {
+        if (it->json_report_path.has_value() && std::filesystem::exists(*it->json_report_path)) {
+            try {
+                std::ifstream input(*it->json_report_path);
+                nlohmann::json existing;
+                input >> existing;
+                if (existing.contains("runtime_diagnostics") && existing["runtime_diagnostics"].is_array()) {
+                    runtime_diagnostics = existing["runtime_diagnostics"];
+                }
+            } catch (...) {
+            }
+            break;
+        }
+    }
+    if (runtime_diagnostics.empty() && !m_impl->job_history.empty()) {
+        const auto& latest = m_impl->job_history.back();
+        if (!latest.error_message.trimmed().isEmpty()) {
+            runtime_diagnostics.push_back({{"severity", "error"}, {"message", latest.error_message.toStdString()}});
+        }
+        for (const auto& line : latest.progress_history) {
+            runtime_diagnostics.push_back({{"severity", "info"}, {"message", line.toStdString()}});
+        }
+    }
+
+    nlohmann::json export_json{
+        {"project", {
+            {"design_name", m_impl->canvas != nullptr ? m_impl->canvas->scene().design_name : std::string{}},
+            {"imported_project_name", m_impl->has_loaded_import_package ? m_impl->loaded_import_package.project().name : std::string{}},
+            {"validation_status", m_impl->has_loaded_import_package ? aegis::storage::to_string(m_impl->loaded_import_package.validation_status()) : std::string{"not_imported"}}
+        }},
+        {"summary", {
+            {"text", m_impl->report_preview->summary_text().toStdString()},
+            {"snapshot_status", m_impl->report_preview->snapshot_status_text().toStdString()},
+            {"activity_log", activity_log_entries().join('\n').toStdString()},
+            {"violation_count", violations.size()}
+        }},
+        {"import_diagnostics", import_diagnostics},
+        {"runtime_diagnostics", runtime_diagnostics},
+        {"violations", violations}
+    };
+
+    try {
+        std::filesystem::create_directories(std::filesystem::path(target_path.toStdString()).parent_path());
+        if (html_export) {
+            QStringList lines;
+            lines.append("<!doctype html><html><head><meta charset=\"utf-8\"><title>AEGIS-PERC Report Preview Export</title></head><body>");
+            lines.append("<h1>AEGIS-PERC Report Preview Export</h1>");
+            lines.append(QString("<p><strong>Design:</strong> %1</p>").arg(html_escape(m_impl->canvas != nullptr
+                ? QString::fromStdString(m_impl->canvas->scene().design_name)
+                : QString{})));
+            if (m_impl->has_loaded_import_package) {
+                lines.append(QString("<p><strong>Imported project:</strong> %1</p>").arg(html_escape(QString::fromStdString(m_impl->loaded_import_package.project().name))));
+            }
+            lines.append(QString("<p><strong>Snapshot:</strong> %1</p>").arg(html_escape(m_impl->report_preview->snapshot_status_text())));
+            lines.append(QString("<h2>Summary</h2><pre>%1</pre>").arg(html_escape(m_impl->report_preview->summary_text())));
+            lines.append("<h2>Violations</h2><ul>");
+            for (const auto& violation : violations) {
+                lines.append(QString("<li>[%1] %2: %3</li>")
+                                 .arg(html_escape(QString::fromStdString(aegis::rules::severity_to_string(violation.severity))))
+                                 .arg(html_escape(QString::fromStdString(violation.rule_id)))
+                                 .arg(html_escape(QString::fromStdString(violation.message))));
+            }
+            if (violations.empty()) {
+                lines.append("<li>No violations in current preview</li>");
+            }
+            lines.append("</ul><h2>Import Diagnostics</h2><ul>");
+            if (import_diagnostics.empty()) {
+                lines.append("<li>No import diagnostics</li>");
+            } else {
+                for (const auto& diagnostic : import_diagnostics) {
+                    lines.append(QString("<li>[%1] %2</li>")
+                                     .arg(html_escape(QString::fromStdString(diagnostic.value("severity", "info"))))
+                                     .arg(html_escape(QString::fromStdString(diagnostic.value("message", "")))));
+                }
+            }
+            lines.append("</ul><h2>Runtime Diagnostics</h2><ul>");
+            if (runtime_diagnostics.empty()) {
+                lines.append("<li>No runtime diagnostics</li>");
+            } else {
+                for (const auto& diagnostic : runtime_diagnostics) {
+                    lines.append(QString("<li>[%1] %2</li>")
+                                     .arg(html_escape(QString::fromStdString(diagnostic.value("severity", "info"))))
+                                     .arg(html_escape(QString::fromStdString(diagnostic.value("message", "")))));
+                }
+            }
+            lines.append("</ul></body></html>");
+            std::ofstream out(target_path.toStdString(), std::ios::binary);
+            out << lines.join('\n').toStdString();
+        } else {
+            std::ofstream out(target_path.toStdString(), std::ios::binary);
+            out << export_json.dump(2);
+        }
+    } catch (const std::exception& error) {
+        const QString message = QString("Report export failed: %1").arg(error.what());
+        m_impl->report_preview->set_action_status_for_host(message);
+        publish_ui_notification(message, ActivityLogSeverity::Error, 5000);
+        return false;
+    }
+
+    const QString message = QString("Exported report preview to %1").arg(target_path);
+    m_impl->report_preview->set_action_status_for_host(message);
+    publish_ui_notification(message, ActivityLogSeverity::Info, 5000);
+    return true;
+}
+
+bool MainWindow::start_imported_run_checks(bool is_retry)
+{
+    if (m_impl->active_job_id.has_value()) {
+        publish_ui_notification("Run Checks already in progress through the local job pipeline", ActivityLogSeverity::Warning, 4000);
+        return false;
+    }
+    if (!m_impl->has_loaded_import_package) {
+        publish_ui_notification("Run Checks unavailable: no imported package is loaded", ActivityLogSeverity::Warning, 4000);
+        return false;
+    }
+    if (!imported_package_inputs_exist(m_impl->loaded_import_package, m_impl->loaded_import_base_path)) {
+        m_impl->last_job_retry_available = false;
+        m_impl->last_job_retry_reason = "Retry unavailable: imported package inputs are missing on disk";
+        publish_ui_notification(m_impl->last_job_retry_reason, ActivityLogSeverity::Error, 5000);
+        update_action_states();
+        return false;
+    }
+
+    aegis::orchestration::JobRequest request;
+    request.package = m_impl->loaded_import_package;
+    request.base_path = m_impl->loaded_import_base_path;
+    request.options = m_impl->job_pipeline_options;
+    m_impl->active_job_output_dir = std::filesystem::temp_directory_path() /
+                                    ("aegis_ui_run_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    request.output_dir = m_impl->active_job_output_dir;
+    request.progress_callback = [this](const aegis::orchestration::JobProgressSnapshot& snapshot) {
+        QMetaObject::invokeMethod(this, [this, snapshot]() {
+            update_job_progress_ui(snapshot);
+            const QString message = QString("Run Checks pipeline: %1 (%2/%3) — %4")
+                                        .arg(QString::fromStdString(aegis::orchestration::to_string(snapshot.stage)))
+                                        .arg(snapshot.completed_stages)
+                                        .arg(snapshot.total_stages)
+                                        .arg(QString::fromStdString(snapshot.message));
+            publish_ui_notification(message, ActivityLogSeverity::Info, 1500);
+        }, Qt::QueuedConnection);
+    };
+
+    const auto job_id = m_impl->job_pipeline.submit(std::move(request));
+    m_impl->active_job_id = job_id;
+    m_impl->last_job_retry_available = false;
+    m_impl->last_job_retry_reason = "Retry unavailable while a local job is active";
+    m_impl->job_history.push_back({job_id,
+                                   "Run Checks",
+                                   QString::fromStdString(m_impl->loaded_import_package.project().name),
+                                   "queued",
+                                   QString("Queued imported Run Checks job"),
+                                   QString{},
+                                   QString{},
+                                   {},
+                                   QDateTime::currentDateTime(),
+                                   {},
+                                   std::nullopt,
+                                   std::nullopt});
+    if (static_cast<int>(m_impl->job_history.size()) > m_impl->job_history_max_entries) {
+        m_impl->job_history.erase(m_impl->job_history.begin(),
+                                  m_impl->job_history.begin() + (m_impl->job_history.size() - m_impl->job_history_max_entries));
+    }
+    update_job_progress_ui({job_id,
+                            aegis::orchestration::JobState::Queued,
+                            aegis::orchestration::JobStage::None,
+                            0,
+                            5,
+                            false,
+                            m_impl->loaded_import_package.project().name,
+                            "Queued imported Run Checks job"});
+    if (m_impl->job_poll_timer == nullptr) {
+        m_impl->job_poll_timer = new QTimer(this);
+        m_impl->job_poll_timer->setInterval(25);
+        connect(m_impl->job_poll_timer, &QTimer::timeout, this, &MainWindow::finalize_active_job);
+    }
+    m_impl->job_poll_timer->start();
+    publish_ui_notification(is_retry
+                                ? "Retrying Run Checks using imported package content via local job pipeline"
+                                : "Run Checks started using imported package content via local job pipeline",
+                            ActivityLogSeverity::Info,
+                            2000);
+    update_action_states();
+    return true;
+}
+
+bool MainWindow::can_retry_last_job() const
+{
+    return !m_impl->active_job_id.has_value()
+        && m_impl->has_loaded_import_package
+        && m_impl->last_job_retry_available
+        && imported_package_inputs_exist(m_impl->loaded_import_package, m_impl->loaded_import_base_path);
+}
+
+void MainWindow::update_job_progress_ui(const aegis::orchestration::JobProgressSnapshot& snapshot)
+{
+    m_impl->last_job_snapshot = snapshot;
+    m_impl->last_job_progress_text = QString("Job: %1 (%2/%3) — %4")
+        .arg(QString::fromStdString(aegis::orchestration::to_string(snapshot.stage)))
+        .arg(snapshot.completed_stages)
+        .arg(snapshot.total_stages)
+        .arg(QString::fromStdString(snapshot.message));
+    if (m_impl->job_progress_label != nullptr) {
+        m_impl->job_progress_label->setText(m_impl->last_job_progress_text);
+        m_impl->job_progress_label->setVisible(snapshot.state == aegis::orchestration::JobState::Running
+                                               || snapshot.state == aegis::orchestration::JobState::Queued
+                                               || snapshot.state == aegis::orchestration::JobState::Cancelling);
+    }
+
+    const QString progress_line = QString("%1 | %2 (%3/%4) | %5")
+        .arg(QString::fromStdString(aegis::orchestration::to_string(snapshot.state)))
+        .arg(QString::fromStdString(aegis::orchestration::to_string(snapshot.stage)))
+        .arg(snapshot.completed_stages)
+        .arg(snapshot.total_stages)
+        .arg(QString::fromStdString(snapshot.message));
+    for (auto& entry : m_impl->job_history) {
+        if (entry.job_id != snapshot.job_id) {
+            continue;
+        }
+        entry.state = QString::fromStdString(aegis::orchestration::to_string(snapshot.state));
+        entry.summary = QString("%1 — %2").arg(entry.action_name, progress_line);
+        if (entry.progress_history.isEmpty() || entry.progress_history.back() != progress_line) {
+            entry.progress_history.push_back(progress_line);
+        }
+        entry.json_report_path = snapshot.json_report_path;
+        entry.html_report_path = snapshot.html_report_path;
+        break;
+    }
+    refresh_job_history_panel();
+    update_action_states();
+}
+
+void MainWindow::refresh_job_history_panel()
+{
+    if (m_impl->job_history_list == nullptr || m_impl->job_history_details == nullptr
+        || m_impl->job_history_open_json_button == nullptr || m_impl->job_history_open_html_button == nullptr) {
+        return;
+    }
+
+    const int current_row = m_impl->job_history_list->currentRow();
+    m_impl->job_history_list->blockSignals(true);
+    m_impl->job_history_list->clear();
+    for (const auto& entry : m_impl->job_history) {
+        const QString started = entry.started_at.isValid()
+            ? entry.started_at.toString(Qt::ISODate)
+            : QString("unknown-start");
+        m_impl->job_history_list->addItem(QString("[%1] %2 — %3 — %4")
+                                              .arg(entry.state, entry.action_name, entry.project_name, started));
+    }
+    m_impl->job_history_list->blockSignals(false);
+
+    if (m_impl->job_history.empty()) {
+        m_impl->job_history_details->setPlainText("No local workflow jobs yet.");
+        m_impl->job_history_open_json_button->setEnabled(false);
+        m_impl->job_history_open_html_button->setEnabled(false);
+        return;
+    }
+
+    const int bounded_row = std::clamp(current_row < 0 ? static_cast<int>(m_impl->job_history.size()) - 1 : current_row,
+                                       0,
+                                       static_cast<int>(m_impl->job_history.size()) - 1);
+    const bool restore_signals = m_impl->job_history_list->blockSignals(true);
+    m_impl->job_history_list->setCurrentRow(bounded_row);
+    m_impl->job_history_list->blockSignals(restore_signals);
+
+    const auto& entry = m_impl->job_history.at(static_cast<std::size_t>(bounded_row));
+    QStringList lines;
+    lines.append(QString("Action: %1").arg(entry.action_name));
+    lines.append(QString("Project: %1").arg(entry.project_name));
+    lines.append(QString("State: %1").arg(entry.state));
+    lines.append(QString("Started: %1").arg(entry.started_at.isValid() ? entry.started_at.toString(Qt::ISODate) : QString("n/a")));
+    lines.append(QString("Finished: %1").arg(entry.finished_at.isValid() ? entry.finished_at.toString(Qt::ISODate) : QString("in progress")));
+    if (!entry.result_summary.trimmed().isEmpty()) {
+        lines.append(QString("Result: %1").arg(entry.result_summary));
+    }
+    if (!entry.error_message.trimmed().isEmpty()) {
+        lines.append(QString("Error: %1").arg(entry.error_message));
+    }
+    if (entry.json_report_path.has_value()) {
+        lines.append(QString("JSON report: %1").arg(QString::fromStdString(entry.json_report_path->string())));
+    }
+    if (entry.html_report_path.has_value()) {
+        lines.append(QString("HTML report: %1").arg(QString::fromStdString(entry.html_report_path->string())));
+    }
+    lines.append(QString{});
+    lines.append("Progress history:");
+    if (entry.progress_history.isEmpty()) {
+        lines.append("- No progress updates recorded");
+    } else {
+        for (const auto& progress : entry.progress_history) {
+            lines.append(QString("- %1").arg(progress));
+        }
+    }
+    m_impl->job_history_details->setPlainText(lines.join('\n'));
+    m_impl->job_history_open_json_button->setEnabled(entry.json_report_path.has_value() && std::filesystem::exists(*entry.json_report_path));
+    m_impl->job_history_open_html_button->setEnabled(entry.html_report_path.has_value() && std::filesystem::exists(*entry.html_report_path));
+}
+
+bool MainWindow::open_selected_job_history_report(bool html_report)
+{
+    if (m_impl->job_history_list == nullptr) {
+        return false;
+    }
+    const int row = m_impl->job_history_list->currentRow();
+    if (row < 0 || row >= static_cast<int>(m_impl->job_history.size())) {
+        publish_ui_notification("Job report open unavailable: no recent job selected", ActivityLogSeverity::Warning, 4000);
+        return false;
+    }
+
+    const auto& entry = m_impl->job_history.at(static_cast<std::size_t>(row));
+    const auto& path = html_report ? entry.html_report_path : entry.json_report_path;
+    if (!path.has_value() || !std::filesystem::exists(*path)) {
+        publish_ui_notification(html_report ? "HTML report unavailable for selected job" : "JSON report unavailable for selected job",
+                                ActivityLogSeverity::Warning,
+                                4000);
+        refresh_job_history_panel();
+        return false;
+    }
+
+    const QString report_path = QString::fromStdString(path->string());
+    if (m_impl->report_opener && !m_impl->report_opener(report_path)) {
+        publish_ui_notification(QString("Failed to open job report: %1").arg(report_path), ActivityLogSeverity::Error, 5000);
+        return false;
+    }
+
+    publish_ui_notification(QString("Opened job report: %1").arg(report_path), ActivityLogSeverity::Info, 4000);
+    return true;
 }
 
 bool MainWindow::open_import_review_dialog(const QStringList& paths, bool from_drop)
@@ -774,12 +1848,58 @@ bool MainWindow::open_import_review_dialog(const QStringList& paths, bool from_d
         auto* intro = new QLabel("Review detected file roles, required inputs, optional enrichments, and validation diagnostics before analysis.", dialog);
         intro->setWordWrap(true);
         layout->addWidget(intro);
-        auto* text = new QPlainTextEdit(dialog);
+
+        auto* artifact_label = new QLabel("Detected &Artifacts", dialog);
+        layout->addWidget(artifact_label);
+        auto* artifact_table = configure_accessible_widget(new QTableWidget(dialog),
+                                                           "Detected Import Artifacts",
+                                                           "Detected project artifacts and inferred roles",
+                                                           "Review detected import artifacts, inferred roles, requirements, and validation status");
+        artifact_table->setObjectName("ImportArtifactTable");
+        artifact_table->setColumnCount(6);
+        artifact_table->setHorizontalHeaderLabels({"Path", "Category", "Role", "Requirement", "Status", "Origin"});
+        artifact_table->horizontalHeader()->setStretchLastSection(true);
+        artifact_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+        artifact_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+        artifact_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+        artifact_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+        artifact_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+        artifact_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+        artifact_table->verticalHeader()->setVisible(false);
+        artifact_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+        artifact_table->setSelectionMode(QAbstractItemView::SingleSelection);
+        artifact_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        artifact_table->setContextMenuPolicy(Qt::CustomContextMenu);
+        artifact_label->setBuddy(artifact_table);
+        layout->addWidget(artifact_table, 2);
+
+        auto* diagnostics_label = new QLabel("Validation &Diagnostics", dialog);
+        layout->addWidget(diagnostics_label);
+        auto* text = configure_accessible_widget(new QPlainTextEdit(dialog),
+                                                 "Import Validation Diagnostics",
+                                                 "Validation diagnostics for the pending design package",
+                                                 "Read-only validation diagnostics for the pending import package");
+        text->setObjectName("ImportDiagnosticsText");
         text->setReadOnly(true);
+        diagnostics_label->setBuddy(text);
         layout->addWidget(text, 1);
+
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
-        auto* validate_button = new QPushButton("Validate Files", dialog);
+        auto* validate_button = configure_accessible_widget(new QPushButton("&Validate Files", dialog),
+                                                            "Validate Import Files",
+                                                            "Re-run design-package validation for the current import selection");
+        validate_button->setObjectName("ImportValidateButton");
+        auto* related_button = configure_accessible_widget(new QPushButton("Show Related &Violations", dialog),
+                                                           "Show Related Violations",
+                                                           "Select violations related to the currently selected artifact");
+        related_button->setObjectName("ImportRelatedViolationsButton");
+        auto* load_button = configure_accessible_widget(new QPushButton("&Load Project", dialog),
+                                                        "Load Imported Project",
+                                                        "Load the validated project package into the workspace");
+        load_button->setObjectName("ImportLoadProjectButton");
         buttons->addButton(validate_button, QDialogButtonBox::ActionRole);
+        buttons->addButton(related_button, QDialogButtonBox::ActionRole);
+        buttons->addButton(load_button, QDialogButtonBox::AcceptRole);
         connect(validate_button, &QPushButton::clicked, this, [this]() {
             refresh_import_review();
             const bool blocked = import_has_blockers();
@@ -787,20 +1907,65 @@ bool MainWindow::open_import_review_dialog(const QStringList& paths, bool from_d
                                     blocked ? ActivityLogSeverity::Warning : ActivityLogSeverity::Info,
                                     4000);
         });
+        connect(load_button, &QPushButton::clicked, this, &MainWindow::apply_import_package);
+        connect(related_button, &QPushButton::clicked, this, [this]() {
+            Q_UNUSED(select_related_violations_for_current_artifact());
+        });
+        auto* validate_action = new QAction("Validate Files", artifact_table);
+        configure_action(validate_action, "Re-run validation for the current import package", "ImportContextValidateFiles");
+        connect(validate_action, &QAction::triggered, validate_button, &QPushButton::click);
+        auto* related_action = new QAction("Show Related Violations", artifact_table);
+        configure_action(related_action, "Select violations related to the current artifact", "ImportContextShowRelatedViolations");
+        connect(related_action, &QAction::triggered, related_button, &QPushButton::click);
+        auto* load_action = new QAction("Load Project", artifact_table);
+        configure_action(load_action, "Load the current import package into the workspace", "ImportContextLoadProject");
+        connect(load_action, &QAction::triggered, load_button, &QPushButton::click);
+        connect(artifact_table, &QTableWidget::itemSelectionChanged, this, [this, related_button, related_action]() {
+            const bool has_selection = m_impl->import_artifact_table != nullptr && m_impl->import_artifact_table->currentRow() >= 0;
+            related_button->setEnabled(has_selection);
+            related_action->setEnabled(has_selection);
+        });
+        connect(artifact_table, &QWidget::customContextMenuRequested, this, [artifact_table, related_action, validate_action, load_action](const QPoint& pos) {
+            if (artifact_table == nullptr) {
+                return;
+            }
+            if (const QModelIndex index = artifact_table->indexAt(pos); index.isValid()) {
+                artifact_table->selectRow(index.row());
+            }
+            QMenu menu(artifact_table);
+            menu.addAction(related_action);
+            menu.addSeparator();
+            menu.addAction(validate_action);
+            menu.addAction(load_action);
+            menu.exec(artifact_table->viewport()->mapToGlobal(pos));
+        });
         connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
         layout->addWidget(buttons);
+        QWidget::setTabOrder(artifact_table, text);
+        QWidget::setTabOrder(text, validate_button);
+        QWidget::setTabOrder(validate_button, related_button);
+        QWidget::setTabOrder(related_button, load_button);
         m_impl->import_review_dialog = dialog;
+        m_impl->import_load_button = load_button;
+        m_impl->import_related_button = related_button;
+        m_impl->import_related_button->setEnabled(false);
         m_impl->import_review_text = text;
+        m_impl->import_artifact_table = artifact_table;
     }
 
     if (!paths.isEmpty()) {
         m_impl->pending_import_package = {};
+        m_impl->pending_import_base_path.clear();
         if (paths.size() == 1 && QFileInfo(paths.front()).isDir()) {
+            m_impl->pending_import_base_path = std::filesystem::path(paths.front().toStdString());
             m_impl->pending_import_package = m_impl->import_validator.scan_project_folder(paths.front().toStdString(), QFileInfo(paths.front()).fileName().toStdString());
         } else {
             aegis::storage::ProjectPackage package;
             package.set_manifest_version(1);
             package.project().name = "ImportedProject";
+            if (!paths.isEmpty()) {
+                m_impl->pending_import_base_path = QFileInfo(paths.front()).absoluteDir().absolutePath().toStdString();
+            }
             std::size_t index = 0;
             for (const auto& path : paths) {
                 QFileInfo info(path);
@@ -875,9 +2040,501 @@ void MainWindow::refresh_import_review()
         m_impl->pending_import_package.set_validation_status(aegis::storage::ValidationStatus::Unknown);
     }
 
-    if (m_impl->import_review_text != nullptr) {
-        m_impl->import_review_text->setPlainText(import_summary_text(m_impl->pending_import_package));
+    if (m_impl->import_artifact_table != nullptr) {
+        auto* table = m_impl->import_artifact_table;
+        table->clearContents();
+        table->setRowCount(static_cast<int>(m_impl->pending_import_package.artifacts().size()));
+        int row = 0;
+        for (const auto& artifact : m_impl->pending_import_package.artifacts()) {
+            auto* path_item = new QTableWidgetItem(QString::fromStdString(artifact.path.generic_string()));
+            path_item->setData(Qt::UserRole, QString::fromStdString(artifact.id));
+            table->setItem(row, 0, path_item);
+            table->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(aegis::storage::to_string(artifact.category))));
+
+            auto* role_combo = new QComboBox(table);
+            role_combo->setObjectName(QString("ImportArtifactRoleCombo_%1").arg(row));
+            for (const auto role : supported_import_roles()) {
+                role_combo->addItem(QString::fromStdString(aegis::storage::to_string(role)),
+                                    QString::fromStdString(aegis::storage::to_string(role)));
+            }
+            role_combo->setCurrentText(QString::fromStdString(aegis::storage::to_string(artifact.role)));
+            const QString artifact_path = QString::fromStdString(artifact.path.generic_string());
+            connect(role_combo, &QComboBox::currentTextChanged, this, [this, artifact_path](const QString& text) {
+                Q_UNUSED(override_import_artifact_role(artifact_path, text));
+            });
+            table->setCellWidget(row, 2, role_combo);
+
+            table->setItem(row, 3, new QTableWidgetItem(artifact_requirement_text(artifact)));
+            table->setItem(row, 4, new QTableWidgetItem(artifact_status_text(m_impl->pending_import_package, artifact)));
+            table->setItem(row, 5, new QTableWidgetItem(QString::fromStdString(artifact.origin)));
+            ++row;
+        }
     }
+
+    if (m_impl->import_review_text != nullptr) {
+        m_impl->import_review_text->setPlainText(import_summary_text(m_impl->pending_import_package)
+                                                 + "\n\nValidation Diagnostics:\n"
+                                                 + import_diagnostics_text(m_impl->pending_import_package));
+    }
+
+    if (m_impl->import_load_button != nullptr) {
+        const bool enable_load = !m_impl->pending_import_package.artifacts().empty() && !import_has_blockers();
+        m_impl->import_load_button->setEnabled(enable_load);
+        m_impl->import_load_button->setToolTip(enable_load
+            ? "Commit the validated import package into the workspace"
+            : "Resolve blocking import diagnostics before loading the project");
+    }
+    if (m_impl->import_related_button != nullptr) {
+        m_impl->import_related_button->setEnabled(m_impl->import_artifact_table != nullptr && m_impl->import_artifact_table->currentRow() >= 0);
+    }
+    refresh_diagnostics_panel();
+}
+
+void MainWindow::apply_import_package()
+{
+    if (m_impl->pending_import_package.artifacts().empty()) {
+        publish_ui_notification("Load Project unavailable: no import package is ready", ActivityLogSeverity::Warning, 4000);
+        return;
+    }
+    if (import_has_blockers()) {
+        publish_ui_notification("Load Project blocked: resolve import diagnostics first", ActivityLogSeverity::Warning, 4000);
+        refresh_import_review();
+        return;
+    }
+
+    m_impl->loaded_import_package = m_impl->pending_import_package;
+    m_impl->loaded_import_base_path = m_impl->pending_import_base_path;
+    m_impl->has_loaded_import_package = true;
+    m_impl->sample_mode_active = false;
+
+    const QString project_name = QString::fromStdString(m_impl->loaded_import_package.project().name.empty()
+        ? std::string{"ImportedProject"}
+        : m_impl->loaded_import_package.project().name);
+    const QString message = QString("Loaded imported project package metadata: %1 (%2 artifact(s))")
+                                .arg(project_name)
+                                .arg(m_impl->loaded_import_package.artifacts().size());
+    publish_ui_notification(message, ActivityLogSeverity::Info, 5000);
+    if (!m_impl->loaded_import_base_path.empty() && std::filesystem::exists(m_impl->loaded_import_base_path)) {
+        const QString recent_path = QString::fromStdString(m_impl->loaded_import_base_path.string());
+        m_impl->recent_project_paths.removeAll(recent_path);
+        m_impl->recent_project_paths.prepend(recent_path);
+        m_impl->last_successful_project_path = recent_path;
+        refresh_recent_project_actions();
+    }
+    refresh_workspace_summary();
+    refresh_diagnostics_panel();
+    update_action_states();
+
+    if (m_impl->import_review_dialog != nullptr) {
+        m_impl->import_review_dialog->close();
+    }
+}
+
+void MainWindow::finalize_active_job()
+{
+    if (!m_impl->active_job_id.has_value()) {
+        if (m_impl->job_poll_timer != nullptr) {
+            m_impl->job_poll_timer->stop();
+        }
+        return;
+    }
+
+    if (const auto snapshot = m_impl->job_pipeline.snapshot(*m_impl->active_job_id); snapshot.has_value()) {
+        update_job_progress_ui(*snapshot);
+    }
+
+    const auto result = m_impl->job_pipeline.result(*m_impl->active_job_id);
+    if (!result.has_value() || (result->state != aegis::orchestration::JobState::Completed
+                                && result->state != aegis::orchestration::JobState::Failed
+                                && result->state != aegis::orchestration::JobState::Cancelled)) {
+        return;
+    }
+
+    if (m_impl->job_poll_timer != nullptr) {
+        m_impl->job_poll_timer->stop();
+    }
+
+    if (m_impl->job_progress_label != nullptr) {
+        m_impl->job_progress_label->setVisible(false);
+    }
+
+    QString history_result_summary;
+    QString history_error_message;
+    if (result->state == aegis::orchestration::JobState::Completed) {
+        aegis::rules::ViolationCollection collection{result->violations};
+        set_violations(collection);
+        m_impl->last_job_retry_available = false;
+        m_impl->last_job_retry_reason = "Retry unavailable: last local job completed successfully";
+        history_result_summary = QString("Completed with %1 violation(s)").arg(collection.size());
+        const QString message = QString("Run Checks completed: %1 violation(s) using imported package content via local job pipeline")
+                                    .arg(collection.size());
+        publish_ui_notification(message,
+                                collection.empty() ? ActivityLogSeverity::Info : ActivityLogSeverity::Warning,
+                                5000);
+    } else if (result->state == aegis::orchestration::JobState::Cancelled) {
+        m_impl->last_job_retry_available = imported_package_inputs_exist(m_impl->loaded_import_package, m_impl->loaded_import_base_path);
+        m_impl->last_job_retry_reason = m_impl->last_job_retry_available
+            ? QString("Retry available for canceled local job")
+            : QString("Retry unavailable: imported package inputs are missing on disk");
+        history_result_summary = "Cancelled";
+        publish_ui_notification("Run Checks canceled in local job pipeline", ActivityLogSeverity::Warning, 5000);
+    } else {
+        m_impl->last_job_retry_available = imported_package_inputs_exist(m_impl->loaded_import_package, m_impl->loaded_import_base_path);
+        m_impl->last_job_retry_reason = m_impl->last_job_retry_available
+            ? QString("Retry available for failed local job")
+            : QString("Retry unavailable: imported package inputs are missing on disk");
+        history_result_summary = "Failed";
+        history_error_message = QString::fromStdString(result->error_message);
+        const QString message = QString("Run Checks failed: %1").arg(QString::fromStdString(result->error_message));
+        publish_ui_notification(message, ActivityLogSeverity::Error, 5000);
+        if (m_impl->last_job_retry_available) {
+            append_activity_log("Retry available for failed local job", ActivityLogSeverity::Info);
+        }
+    }
+
+    for (auto& entry : m_impl->job_history) {
+        if (entry.job_id != result->job_id) {
+            continue;
+        }
+        entry.state = QString::fromStdString(aegis::orchestration::to_string(result->state));
+        entry.result_summary = history_result_summary;
+        entry.error_message = history_error_message;
+        entry.finished_at = QDateTime::currentDateTime();
+        entry.json_report_path = result->json_report_path;
+        entry.html_report_path = result->html_report_path;
+        entry.summary = QString("%1 — %2").arg(entry.action_name, history_result_summary);
+        break;
+    }
+
+    m_impl->active_job_id.reset();
+    refresh_job_history_panel();
+    update_action_states();
+}
+
+void MainWindow::refresh_workspace_summary()
+{
+    QString project_name = "(no project loaded)";
+    QString mode = "empty workspace";
+    QString rule_source = "built-in desktop defaults";
+    int artifact_count = 0;
+    QString readiness = "Missing design scene and connectivity graph";
+
+    if (m_impl->has_loaded_import_package) {
+        mode = "imported customer project";
+        project_name = QString::fromStdString(m_impl->loaded_import_package.project().name.empty()
+            ? std::string{"ImportedProject"}
+            : m_impl->loaded_import_package.project().name);
+        artifact_count = static_cast<int>(m_impl->loaded_import_package.artifacts().size());
+        rule_source = m_impl->loaded_import_package.normalized().rule_artifact_ids.empty()
+            ? QString("imported package without rule pack")
+            : QString("imported rule pack");
+        if (!imported_package_inputs_exist(m_impl->loaded_import_package, m_impl->loaded_import_base_path)) {
+            readiness = "Imported package inputs missing on disk";
+        } else if (m_impl->loaded_import_package.validation_status() == aegis::storage::ValidationStatus::Invalid) {
+            readiness = "Import package has blocking diagnostics";
+        } else if (m_impl->current_graph == nullptr) {
+            readiness = "Ready to run imported package via local job pipeline (no scene/graph loaded yet)";
+        } else {
+            readiness = "Ready to run with imported package content";
+        }
+    } else if (m_impl->sample_mode_active) {
+        mode = "sample mode";
+        project_name = m_impl->canvas != nullptr ? QString::fromStdString(m_impl->canvas->scene().design_name) : QString("sample");
+        rule_source = "built-in desktop defaults";
+        readiness = m_impl->current_graph != nullptr
+            ? QString("Ready to run bundled sample")
+            : QString("Missing connectivity graph");
+    } else if (m_impl->canvas != nullptr && m_impl->canvas->has_scene()) {
+        mode = "manual/custom scene";
+        project_name = QString::fromStdString(m_impl->canvas->scene().design_name.empty()
+            ? std::string{"(unnamed scene)"}
+            : m_impl->canvas->scene().design_name);
+        readiness = m_impl->current_graph != nullptr
+            ? QString("Ready to run with built-in desktop defaults")
+            : QString("Missing connectivity graph");
+    }
+
+    const int violation_count = m_impl->violation_explorer != nullptr ? m_impl->violation_explorer->total_violation_count() : 0;
+    m_impl->last_workspace_summary_text = QString("Project: %1\nMode: %2\nArtifacts: %3\nRule source: %4\nViolations: %5\nReadiness: %6")
+        .arg(project_name, mode)
+        .arg(artifact_count)
+        .arg(rule_source)
+        .arg(violation_count)
+        .arg(readiness);
+    if (m_impl->workspace_summary_label != nullptr) {
+        m_impl->workspace_summary_label->setText(m_impl->last_workspace_summary_text);
+    }
+    refresh_onboarding_panel();
+}
+
+void MainWindow::refresh_onboarding_panel()
+{
+    if (m_impl->onboarding_panel == nullptr || m_impl->onboarding_label == nullptr) {
+        return;
+    }
+
+    const bool has_scene = m_impl->canvas != nullptr && m_impl->canvas->has_scene();
+    const bool show_onboarding = !m_impl->onboarding_dismissed && !has_scene && !m_impl->has_loaded_import_package;
+    m_impl->onboarding_panel->setVisible(show_onboarding);
+    if (!show_onboarding) {
+        return;
+    }
+
+    QStringList lines;
+    lines.append("New here? Start from the empty workspace using one of the guided actions below.");
+    lines.append("- Browse Samples: load a bundled design and then run checks.");
+    lines.append("- Import Design Package: review customer project files before analysis.");
+    lines.append("- Run Checks (F5): available after loading a sample or imported project with connectivity data.");
+    lines.append("- Documentation: open local README and docs entry points.");
+    m_impl->onboarding_label->setText(lines.join('\n'));
+}
+
+void MainWindow::refresh_diagnostics_panel()
+{
+    m_impl->diagnostics_entries.clear();
+
+    const auto* package = !m_impl->pending_import_package.artifacts().empty()
+        ? &m_impl->pending_import_package
+        : (m_impl->has_loaded_import_package ? &m_impl->loaded_import_package : nullptr);
+    if (package != nullptr) {
+        for (const auto& diagnostic : package->diagnostics()) {
+            MainWindow::Impl::DiagnosticEntry entry;
+            entry.severity = QString::fromStdString(aegis::storage::to_string(diagnostic.severity));
+            entry.source = "import";
+            entry.summary = QString::fromStdString(diagnostic.message);
+            entry.details = QString("Import diagnostic\nSeverity: %1\nCode: %2\nMessage: %3")
+                .arg(entry.severity,
+                     QString::fromStdString(diagnostic.code),
+                     QString::fromStdString(diagnostic.message));
+            entry.blocking = diagnostic.severity == aegis::storage::DiagnosticSeverity::Error;
+            if (diagnostic.artifact_id.has_value()) {
+                entry.artifact_id = QString::fromStdString(*diagnostic.artifact_id);
+                if (const auto* artifact = package->find_artifact_by_id(*diagnostic.artifact_id)) {
+                    entry.artifact_path = QString::fromStdString(artifact->path.generic_string());
+                    entry.details += QString("\nArtifact: %1").arg(entry.artifact_path);
+                }
+            }
+            m_impl->diagnostics_entries.push_back(std::move(entry));
+        }
+    }
+
+    for (const auto& violation : m_impl->latest_violations) {
+        MainWindow::Impl::DiagnosticEntry entry;
+        entry.severity = QString::fromStdString(aegis::rules::severity_to_string(violation.severity));
+        entry.source = "run";
+        entry.summary = QString::fromStdString(violation.message);
+        entry.violation_id = QString::fromStdString(violation.id);
+        entry.details = QString("Run diagnostic\nViolation: %1\nRule: %2\nSeverity: %3\nMessage: %4")
+            .arg(entry.violation_id,
+                 QString::fromStdString(violation.rule_id),
+                 entry.severity,
+                 QString::fromStdString(violation.message));
+        entry.blocking = violation.severity == aegis::rules::Severity::Error || violation.severity == aegis::rules::Severity::Fatal;
+        m_impl->diagnostics_entries.push_back(std::move(entry));
+    }
+
+    if (m_impl->diagnostics_table == nullptr || m_impl->diagnostics_details == nullptr || m_impl->diagnostics_severity_filter == nullptr) {
+        return;
+    }
+
+    const QString severity_filter = m_impl->diagnostics_severity_filter->currentText().trimmed().toLower();
+    std::vector<int> visible_indexes;
+    for (int i = 0; i < static_cast<int>(m_impl->diagnostics_entries.size()); ++i) {
+        const auto& entry = m_impl->diagnostics_entries[static_cast<std::size_t>(i)];
+        if (severity_filter != "all" && !severity_filter.isEmpty() && entry.severity.compare(severity_filter, Qt::CaseInsensitive) != 0) {
+            continue;
+        }
+        visible_indexes.push_back(i);
+    }
+
+    const QSignalBlocker blocker(m_impl->diagnostics_table);
+    m_impl->diagnostics_table->clearContents();
+    m_impl->diagnostics_table->setRowCount(static_cast<int>(visible_indexes.size()));
+    for (int row = 0; row < static_cast<int>(visible_indexes.size()); ++row) {
+        const auto& entry = m_impl->diagnostics_entries[static_cast<std::size_t>(visible_indexes[static_cast<std::size_t>(row)])];
+        auto* severity_item = new QTableWidgetItem(entry.severity);
+        severity_item->setData(Qt::UserRole, visible_indexes[static_cast<std::size_t>(row)]);
+        if (entry.blocking) {
+            severity_item->setBackground(QBrush(QColor(255, 225, 225)));
+        }
+        m_impl->diagnostics_table->setItem(row, 0, severity_item);
+        m_impl->diagnostics_table->setItem(row, 1, new QTableWidgetItem(entry.source));
+        m_impl->diagnostics_table->setItem(row, 2, new QTableWidgetItem(entry.summary));
+    }
+
+    if (visible_indexes.empty()) {
+        m_impl->diagnostics_details->setPlainText("No diagnostics match the current filters. Clear filters or adjust the severity selection.");
+        if (m_impl->diagnostics_related_button != nullptr) {
+            m_impl->diagnostics_related_button->setEnabled(false);
+        }
+        return;
+    }
+
+    int row = m_impl->diagnostics_table->currentRow();
+    if (row < 0 || row >= m_impl->diagnostics_table->rowCount()) {
+        row = 0;
+        m_impl->diagnostics_table->selectRow(row);
+    }
+    const auto* severity_item = m_impl->diagnostics_table->item(row, 0);
+    if (severity_item == nullptr) {
+        m_impl->diagnostics_details->setPlainText("Select a diagnostic to inspect its details.");
+        if (m_impl->diagnostics_related_button != nullptr) {
+            m_impl->diagnostics_related_button->setEnabled(false);
+        }
+        return;
+    }
+    const int entry_index = severity_item->data(Qt::UserRole).toInt();
+    const auto& entry = m_impl->diagnostics_entries[static_cast<std::size_t>(entry_index)];
+    m_impl->diagnostics_details->setPlainText(entry.details);
+
+    if (entry.source == "import" && !entry.artifact_path.trimmed().isEmpty() && m_impl->import_artifact_table != nullptr) {
+        for (int artifact_row = 0; artifact_row < m_impl->import_artifact_table->rowCount(); ++artifact_row) {
+            if (auto* item = m_impl->import_artifact_table->item(artifact_row, 0); item != nullptr
+                && item->text() == entry.artifact_path) {
+                m_impl->import_artifact_table->selectRow(artifact_row);
+                break;
+            }
+        }
+    } else if (entry.source == "run" && !entry.violation_id.trimmed().isEmpty() && m_impl->violation_explorer != nullptr) {
+        for (int violation_row = 0; violation_row < m_impl->violation_explorer->violation_count(); ++violation_row) {
+            m_impl->violation_explorer->select_row(violation_row);
+            if (m_impl->violation_explorer->current_violation() != nullptr
+                && QString::fromStdString(m_impl->violation_explorer->current_violation()->id) == entry.violation_id) {
+                break;
+            }
+        }
+    }
+
+    if (m_impl->diagnostics_related_button != nullptr) {
+        m_impl->diagnostics_related_button->setEnabled(true);
+    }
+}
+
+bool MainWindow::navigate_current_violation_relationships()
+{
+    if (m_impl->violation_explorer == nullptr || m_impl->violation_explorer->current_violation() == nullptr) {
+        publish_ui_notification("Navigation unavailable: no current violation selected", ActivityLogSeverity::Warning, 4000);
+        return false;
+    }
+
+    const auto& violation = *m_impl->violation_explorer->current_violation();
+    bool opened_any = false;
+
+    const QStringList graph_targets{
+        violation.location.pin_name.has_value() ? QString::fromStdString(*violation.location.pin_name) : QString{},
+        violation.location.net_name.has_value() ? QString::fromStdString(*violation.location.net_name) : QString{},
+        violation.location.device_name.has_value() ? QString::fromStdString(*violation.location.device_name) : QString{},
+        metadata_value(violation, {"pin_name", "graph_pin"}),
+        metadata_value(violation, {"net_name", "graph_net"}),
+        metadata_value(violation, {"device", "device_name", "graph_node"})
+    };
+    for (const auto& target : graph_targets) {
+        if (!target.trimmed().isEmpty() && search_graph_node(target)) {
+            opened_any = true;
+            break;
+        }
+    }
+
+    const QString artifact_id = metadata_value(violation, {"artifact_id", "source_artifact_id"});
+    const QString artifact_path = metadata_value(violation, {"artifact_path", "source_artifact_path"});
+    if ((!artifact_id.trimmed().isEmpty() || !artifact_path.trimmed().isEmpty()) && m_impl->import_artifact_table != nullptr) {
+        for (int row = 0; row < m_impl->import_artifact_table->rowCount(); ++row) {
+            auto* item = m_impl->import_artifact_table->item(row, 0);
+            if (item == nullptr) {
+                continue;
+            }
+            const QString row_artifact_id = item->data(Qt::UserRole).toString();
+            const QString row_artifact_path = item->text();
+            if ((!artifact_id.trimmed().isEmpty() && row_artifact_id.compare(artifact_id, Qt::CaseInsensitive) == 0)
+                || (!artifact_path.trimmed().isEmpty()
+                    && QFileInfo(row_artifact_path).filePath().compare(QFileInfo(artifact_path).filePath(), Qt::CaseInsensitive) == 0)) {
+                m_impl->import_artifact_table->selectRow(row);
+                opened_any = true;
+                break;
+            }
+        }
+    }
+
+    if (!opened_any) {
+        publish_ui_notification("No related graph or import metadata link could be resolved for the current violation", ActivityLogSeverity::Warning, 5000);
+        return false;
+    }
+
+    publish_ui_notification("Opened related graph/import context for current violation", ActivityLogSeverity::Info, 4000);
+    return true;
+}
+
+bool MainWindow::select_related_violations_for_current_diagnostic()
+{
+    if (m_impl->diagnostics_table == nullptr || m_impl->violation_explorer == nullptr) {
+        return false;
+    }
+    const int row = m_impl->diagnostics_table->currentRow();
+    if (row < 0) {
+        publish_ui_notification("Related violation navigation unavailable: no diagnostic selected", ActivityLogSeverity::Warning, 4000);
+        return false;
+    }
+    const auto* severity_item = m_impl->diagnostics_table->item(row, 0);
+    if (severity_item == nullptr) {
+        publish_ui_notification("Related violation navigation unavailable: diagnostic details are incomplete", ActivityLogSeverity::Warning, 4000);
+        return false;
+    }
+    const auto& entry = m_impl->diagnostics_entries.at(static_cast<std::size_t>(severity_item->data(Qt::UserRole).toInt()));
+
+    QStringList related_ids;
+    if (!entry.violation_id.trimmed().isEmpty()) {
+        related_ids.append(entry.violation_id);
+    } else {
+        for (const auto& violation : m_impl->latest_violations) {
+            if (violation_matches_artifact(violation, entry.artifact_id, entry.artifact_path)) {
+                related_ids.append(QString::fromStdString(violation.id));
+            }
+        }
+    }
+
+    const int selected = m_impl->violation_explorer->select_violation_ids(related_ids);
+    if (selected <= 0) {
+        publish_ui_notification("No related visible violations were found for the selected diagnostic", ActivityLogSeverity::Warning, 5000);
+        return false;
+    }
+
+    publish_ui_notification(QString("Opened %1 related violation(s) from selected diagnostic").arg(selected), ActivityLogSeverity::Info, 4000);
+    return true;
+}
+
+bool MainWindow::select_related_violations_for_current_artifact()
+{
+    if (m_impl->import_artifact_table == nullptr || m_impl->violation_explorer == nullptr) {
+        return false;
+    }
+    const int row = m_impl->import_artifact_table->currentRow();
+    if (row < 0) {
+        publish_ui_notification("Related violation navigation unavailable: no import artifact selected", ActivityLogSeverity::Warning, 4000);
+        return false;
+    }
+    const auto* item = m_impl->import_artifact_table->item(row, 0);
+    if (item == nullptr) {
+        publish_ui_notification("Related violation navigation unavailable: import artifact details are incomplete", ActivityLogSeverity::Warning, 4000);
+        return false;
+    }
+
+    const QString artifact_id = item->data(Qt::UserRole).toString();
+    const QString artifact_path = item->text();
+    QStringList related_ids;
+    for (const auto& violation : m_impl->latest_violations) {
+        if (violation_matches_artifact(violation, artifact_id, artifact_path)) {
+            related_ids.append(QString::fromStdString(violation.id));
+        }
+    }
+
+    const int selected = m_impl->violation_explorer->select_violation_ids(related_ids);
+    if (selected <= 0) {
+        publish_ui_notification("No related visible violations were found for the selected import artifact", ActivityLogSeverity::Warning, 5000);
+        return false;
+    }
+
+    publish_ui_notification(QString("Opened %1 related violation(s) from selected import artifact").arg(selected), ActivityLogSeverity::Info, 4000);
+    return true;
 }
 
 void MainWindow::setup_dock_panels()
@@ -891,6 +2548,160 @@ void MainWindow::setup_dock_panels()
         m_impl->docks.append(dock);
         return dock;
     };
+
+    auto* workspace_summary_panel = new QWidget(this);
+    auto* workspace_summary_layout = new QVBoxLayout(workspace_summary_panel);
+    workspace_summary_layout->setContentsMargins(8, 8, 8, 8);
+    auto* workspace_summary_intro = configure_accessible_widget(new QLabel("Current project, rule source, and analysis readiness.", workspace_summary_panel),
+                                                                "Workspace Summary Introduction");
+    workspace_summary_intro->setWordWrap(true);
+    workspace_summary_layout->addWidget(workspace_summary_intro);
+    m_impl->workspace_summary_label = configure_accessible_widget(new QLabel(workspace_summary_panel),
+                                                                  "Workspace Summary",
+                                                                  "Current project mode, rule source, artifact counts, and readiness summary");
+    m_impl->workspace_summary_label->setWordWrap(true);
+    workspace_summary_layout->addWidget(m_impl->workspace_summary_label);
+
+    m_impl->onboarding_panel = new QWidget(workspace_summary_panel);
+    auto* onboarding_layout = new QVBoxLayout(m_impl->onboarding_panel);
+    onboarding_layout->setContentsMargins(0, 4, 0, 0);
+    m_impl->onboarding_label = configure_accessible_widget(new QLabel(m_impl->onboarding_panel),
+                                                           "Onboarding Guidance",
+                                                           "First-run guidance with shortcut entry points for import, samples, checks, and documentation");
+    m_impl->onboarding_label->setWordWrap(true);
+    onboarding_layout->addWidget(m_impl->onboarding_label);
+    auto* onboarding_actions = new QHBoxLayout();
+    auto* import_button = configure_accessible_widget(new QToolButton(m_impl->onboarding_panel),
+                                                      "Import Design Package",
+                                                      m_impl->actions.at("import_project")->toolTip());
+    import_button->setObjectName("OnboardingImportButton");
+    import_button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    import_button->setDefaultAction(m_impl->actions.at("import_project"));
+    onboarding_actions->addWidget(import_button);
+    auto* samples_button = configure_accessible_widget(new QToolButton(m_impl->onboarding_panel),
+                                                       "Browse Samples",
+                                                       m_impl->actions.at("browse_samples")->toolTip());
+    samples_button->setObjectName("OnboardingBrowseSamplesButton");
+    samples_button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    samples_button->setDefaultAction(m_impl->actions.at("browse_samples"));
+    onboarding_actions->addWidget(samples_button);
+    auto* run_checks_button = configure_accessible_widget(new QToolButton(m_impl->onboarding_panel),
+                                                          "Run Checks",
+                                                          m_impl->actions.at("run_checks")->toolTip());
+    run_checks_button->setObjectName("OnboardingRunChecksButton");
+    run_checks_button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    run_checks_button->setDefaultAction(m_impl->actions.at("run_checks"));
+    onboarding_actions->addWidget(run_checks_button);
+    auto* docs_button = configure_accessible_widget(new QToolButton(m_impl->onboarding_panel),
+                                                    "Documentation",
+                                                    m_impl->actions.at("documentation")->toolTip());
+    docs_button->setObjectName("OnboardingDocumentationButton");
+    docs_button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    docs_button->setDefaultAction(m_impl->actions.at("documentation"));
+    onboarding_actions->addWidget(docs_button);
+    onboarding_actions->addStretch(1);
+    auto* dismiss_button = configure_accessible_widget(new QPushButton("&Dismiss", m_impl->onboarding_panel),
+                                                       "Dismiss Onboarding",
+                                                       "Hide the first-run onboarding guidance panel");
+    dismiss_button->setObjectName("OnboardingDismissButton");
+    connect(dismiss_button, &QPushButton::clicked, this, &MainWindow::dismiss_onboarding);
+    onboarding_actions->addWidget(dismiss_button);
+    onboarding_layout->addLayout(onboarding_actions);
+    workspace_summary_layout->addWidget(m_impl->onboarding_panel);
+
+    auto* workspace_summary_dock = make_dock("Workspace Summary", Qt::LeftDockWidgetArea, workspace_summary_panel);
+
+    auto* diagnostics_panel = new QWidget(this);
+    auto* diagnostics_layout = new QVBoxLayout(diagnostics_panel);
+    diagnostics_layout->setContentsMargins(8, 8, 8, 8);
+    auto* diagnostics_intro = configure_accessible_widget(new QLabel("Import and run diagnostics with severity filtering and quick navigation.", diagnostics_panel),
+                                                          "Diagnostics Introduction");
+    diagnostics_intro->setWordWrap(true);
+    diagnostics_layout->addWidget(diagnostics_intro);
+    auto* diagnostics_filter_row = new QHBoxLayout();
+    auto* diagnostics_severity_label = new QLabel("&Severity:", diagnostics_panel);
+    diagnostics_filter_row->addWidget(diagnostics_severity_label);
+    m_impl->diagnostics_severity_filter = configure_accessible_widget(new QComboBox(diagnostics_panel),
+                                                                      "Diagnostics Severity Filter",
+                                                                      "Filter import and run diagnostics by severity");
+    m_impl->diagnostics_severity_filter->setObjectName("DiagnosticsSeverityFilter");
+    m_impl->diagnostics_severity_filter->addItems({"All", "info", "warning", "error"});
+    diagnostics_filter_row->addWidget(m_impl->diagnostics_severity_filter);
+    diagnostics_filter_row->addStretch(1);
+    diagnostics_layout->addLayout(diagnostics_filter_row);
+    diagnostics_severity_label->setBuddy(m_impl->diagnostics_severity_filter);
+    m_impl->diagnostics_table = configure_accessible_widget(new QTableWidget(diagnostics_panel),
+                                                            "Diagnostics Table",
+                                                            "Visible import and run diagnostics",
+                                                            "Diagnostics table with severity, source, and summary columns");
+    m_impl->diagnostics_table->setObjectName("DiagnosticsTable");
+    m_impl->diagnostics_table->setColumnCount(3);
+    m_impl->diagnostics_table->setHorizontalHeaderLabels({"Severity", "Source", "Summary"});
+    m_impl->diagnostics_table->horizontalHeader()->setStretchLastSection(true);
+    m_impl->diagnostics_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_impl->diagnostics_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_impl->diagnostics_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_impl->diagnostics_table->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_impl->diagnostics_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_impl->diagnostics_table->setContextMenuPolicy(Qt::CustomContextMenu);
+    diagnostics_layout->addWidget(m_impl->diagnostics_table, 1);
+    m_impl->diagnostics_details = configure_accessible_widget(new QPlainTextEdit(diagnostics_panel),
+                                                              "Diagnostic Details",
+                                                              "Details for the selected diagnostic entry",
+                                                              "Read-only details for the selected diagnostic entry");
+    m_impl->diagnostics_details->setObjectName("DiagnosticsDetails");
+    m_impl->diagnostics_details->setReadOnly(true);
+    diagnostics_layout->addWidget(m_impl->diagnostics_details, 1);
+    m_impl->diagnostics_related_button = configure_accessible_widget(new QPushButton("Show Related &Violations", diagnostics_panel),
+                                                                     "Diagnostics Related Violations",
+                                                                     "Select violations related to the selected diagnostic entry");
+    m_impl->diagnostics_related_button->setObjectName("DiagnosticsRelatedViolationsButton");
+    m_impl->diagnostics_related_button->setEnabled(false);
+    diagnostics_layout->addWidget(m_impl->diagnostics_related_button);
+    connect(m_impl->diagnostics_severity_filter, &QComboBox::currentTextChanged, this, [this](const QString&) {
+        refresh_diagnostics_panel();
+    });
+    connect(m_impl->diagnostics_table, &QTableWidget::itemSelectionChanged, this, [this]() {
+        refresh_diagnostics_panel();
+    });
+    connect(m_impl->diagnostics_related_button, &QPushButton::clicked, this, [this]() {
+        Q_UNUSED(select_related_violations_for_current_diagnostic());
+    });
+    auto* diagnostics_related_action = new QAction("Show Related Violations", m_impl->diagnostics_table);
+    configure_action(diagnostics_related_action,
+                     "Select violations related to the current diagnostic entry",
+                     "DiagnosticsContextShowRelatedViolations");
+    connect(diagnostics_related_action, &QAction::triggered, m_impl->diagnostics_related_button, &QPushButton::click);
+    auto* diagnostics_copy_action = new QAction("Copy Diagnostic Details", m_impl->diagnostics_table);
+    configure_action(diagnostics_copy_action,
+                     "Copy the selected diagnostic details to the clipboard",
+                     "DiagnosticsContextCopyDetails");
+    connect(diagnostics_copy_action, &QAction::triggered, this, [this]() {
+        if (auto* clipboard = QApplication::clipboard(); clipboard != nullptr && m_impl->diagnostics_details != nullptr) {
+            clipboard->setText(m_impl->diagnostics_details->toPlainText());
+            publish_ui_notification("Diagnostics context action: copied diagnostic details", ActivityLogSeverity::Info, 3000);
+        }
+    });
+    connect(m_impl->diagnostics_table, &QWidget::customContextMenuRequested, this, [this, diagnostics_related_action, diagnostics_copy_action](const QPoint& pos) {
+        if (m_impl->diagnostics_table == nullptr) {
+            return;
+        }
+        if (const QModelIndex index = m_impl->diagnostics_table->indexAt(pos); index.isValid()) {
+            m_impl->diagnostics_table->selectRow(index.row());
+        }
+        const bool has_selection = m_impl->diagnostics_table->currentRow() >= 0;
+        diagnostics_related_action->setEnabled(has_selection);
+        diagnostics_copy_action->setEnabled(has_selection);
+        QMenu menu(m_impl->diagnostics_table);
+        menu.addAction(diagnostics_related_action);
+        menu.addSeparator();
+        menu.addAction(diagnostics_copy_action);
+        menu.exec(m_impl->diagnostics_table->viewport()->mapToGlobal(pos));
+    });
+    QWidget::setTabOrder(m_impl->diagnostics_severity_filter, m_impl->diagnostics_table);
+    QWidget::setTabOrder(m_impl->diagnostics_table, m_impl->diagnostics_details);
+    QWidget::setTabOrder(m_impl->diagnostics_details, m_impl->diagnostics_related_button);
+    auto* diagnostics_dock = make_dock("Diagnostics", Qt::BottomDockWidgetArea, diagnostics_panel);
 
     m_impl->layer_panel = new LayerPanel(this);
     connect(m_impl->layer_panel, &LayerPanel::layer_visibility_changed, this,
@@ -965,6 +2776,80 @@ void MainWindow::setup_dock_panels()
                     m_impl->canvas->set_heatmap_opacity(opacity);
                 }
             });
+    connect(m_impl->violation_explorer, &ViolationExplorerPanel::trace_current_violation_requested,
+            this, [this]() {
+                if (request_trace_from_current_violation()) {
+                    append_activity_log("Violation context action: trace from violation", ActivityLogSeverity::Info);
+                }
+            });
+    connect(m_impl->violation_explorer, &ViolationExplorerPanel::center_current_violation_requested,
+            this, [this]() {
+                if (m_impl->violation_explorer == nullptr || m_impl->canvas == nullptr) {
+                    return;
+                }
+                const auto* violation = m_impl->violation_explorer->current_violation();
+                if (violation == nullptr) {
+                    return;
+                }
+                if (violation->location.point.has_value()) {
+                    m_impl->canvas->center_on_scene_point(QPointF(violation->location.point->x, violation->location.point->y));
+                } else {
+                    Q_UNUSED(m_impl->canvas->center_on_violation(violation->id));
+                }
+                publish_ui_notification("Violation context action: centered current violation on canvas", ActivityLogSeverity::Info, 3000);
+            });
+    connect(m_impl->violation_explorer, &ViolationExplorerPanel::copy_current_violation_id_requested,
+            this, [this]() {
+                if (auto* clipboard = QApplication::clipboard(); clipboard != nullptr && m_impl->violation_explorer != nullptr) {
+                    clipboard->setText(m_impl->violation_explorer->current_violation_id_for_copy());
+                    publish_ui_notification("Violation context action: copied violation ID", ActivityLogSeverity::Info, 3000);
+                }
+            });
+    connect(m_impl->violation_explorer, &ViolationExplorerPanel::copy_current_violation_details_requested,
+            this, [this]() {
+                if (auto* clipboard = QApplication::clipboard(); clipboard != nullptr && m_impl->violation_explorer != nullptr) {
+                    clipboard->setText(m_impl->violation_explorer->current_violation_details_for_copy());
+                    publish_ui_notification("Violation context action: copied violation details", ActivityLogSeverity::Info, 3000);
+                }
+            });
+    connect(m_impl->violation_explorer, &ViolationExplorerPanel::navigate_current_violation_requested,
+            this, [this]() {
+                Q_UNUSED(navigate_current_violation_relationships());
+            });
+    connect(m_impl->violation_explorer, &ViolationExplorerPanel::copy_selected_violations_requested,
+            this, [this]() {
+                if (auto* clipboard = QApplication::clipboard(); clipboard != nullptr && m_impl->violation_explorer != nullptr) {
+                    clipboard->setText(m_impl->violation_explorer->selected_violations_text());
+                    publish_ui_notification(QString("Violation bulk action: copied %1 selected row(s)")
+                                                .arg(m_impl->violation_explorer->selected_violation_count()),
+                                            ActivityLogSeverity::Info,
+                                            3000);
+                }
+            });
+    connect(m_impl->violation_explorer, &ViolationExplorerPanel::export_selected_violations_requested,
+            this, [this]() {
+                if (m_impl->violation_explorer == nullptr) {
+                    return;
+                }
+                QString target_path;
+                if (m_impl->report_export_path_picker) {
+                    target_path = m_impl->report_export_path_picker("violation_json");
+                } else {
+                    target_path = QFileDialog::getSaveFileName(this,
+                                                               "Export Selected Violations",
+                                                               "selected_violations.json",
+                                                               "JSON Files (*.json)");
+                }
+                if (target_path.trimmed().isEmpty()) {
+                    publish_ui_notification("Violation export canceled", ActivityLogSeverity::Info, 3000);
+                    return;
+                }
+                std::ofstream out(target_path.toStdString(), std::ios::binary);
+                out << m_impl->violation_explorer->selected_violations_json_text().toStdString();
+                publish_ui_notification(QString("Violation bulk action: exported selected rows to %1").arg(target_path),
+                                        ActivityLogSeverity::Info,
+                                        4000);
+            });
     auto* violations_dock = make_dock("Violations", Qt::BottomDockWidgetArea, m_impl->violation_explorer);
 
     m_impl->report_preview = new ReportPreviewPanel(this);
@@ -972,6 +2857,12 @@ void MainWindow::setup_dock_panels()
         if (m_impl->report_preview != nullptr && m_impl->canvas != nullptr) {
             m_impl->report_preview->set_snapshot(m_impl->canvas->grab());
         }
+    });
+    connect(m_impl->report_preview, &ReportPreviewPanel::export_json_requested, this, [this]() {
+        Q_UNUSED(export_report_preview(false));
+    });
+    connect(m_impl->report_preview, &ReportPreviewPanel::export_html_requested, this, [this]() {
+        Q_UNUSED(export_report_preview(true));
     });
     auto* report_dock = make_dock("Report Preview", Qt::RightDockWidgetArea, m_impl->report_preview);
 
@@ -1004,12 +2895,86 @@ void MainWindow::setup_dock_panels()
     connect(m_impl->trace_panel, &TracePanel::focus_trace_requested, this, &MainWindow::focus_trace);
     auto* trace_dock = make_dock("Trace", Qt::RightDockWidgetArea, m_impl->trace_panel);
 
+    auto* job_history_panel = new QWidget(this);
+    job_history_panel->setObjectName("JobHistoryPanel");
+    auto* job_history_layout = new QVBoxLayout(job_history_panel);
+    auto* job_history_intro = configure_accessible_widget(new QLabel("Recent local workflow jobs with progress history and generated report links.", job_history_panel),
+                                                          "Job History Introduction");
+    job_history_intro->setWordWrap(true);
+    job_history_layout->addWidget(job_history_intro);
+    m_impl->job_history_list = configure_accessible_widget(new QListWidget(job_history_panel),
+                                                           "Job History",
+                                                           "Recent local workflow jobs",
+                                                           "List of recent local workflow jobs and their completion states");
+    m_impl->job_history_list->setObjectName("JobHistoryList");
+    m_impl->job_history_list->setContextMenuPolicy(Qt::CustomContextMenu);
+    job_history_layout->addWidget(m_impl->job_history_list, 1);
+    m_impl->job_history_details = configure_accessible_widget(new QPlainTextEdit(job_history_panel),
+                                                              "Job History Details",
+                                                              "Progress history and report paths for the selected local workflow job",
+                                                              "Read-only details for the selected local workflow job");
+    m_impl->job_history_details->setObjectName("JobHistoryDetails");
+    m_impl->job_history_details->setReadOnly(true);
+    job_history_layout->addWidget(m_impl->job_history_details, 1);
+    auto* job_history_buttons = new QHBoxLayout();
+    m_impl->job_history_open_json_button = configure_accessible_widget(new QPushButton("Open &JSON Report", job_history_panel),
+                                                                       "Open JSON Report",
+                                                                       "Open the JSON report for the selected local workflow job");
+    m_impl->job_history_open_html_button = configure_accessible_widget(new QPushButton("Open &HTML Report", job_history_panel),
+                                                                       "Open HTML Report",
+                                                                       "Open the HTML report for the selected local workflow job");
+    m_impl->job_history_open_json_button->setObjectName("JobHistoryOpenJsonButton");
+    m_impl->job_history_open_html_button->setObjectName("JobHistoryOpenHtmlButton");
+    job_history_buttons->addWidget(m_impl->job_history_open_json_button);
+    job_history_buttons->addWidget(m_impl->job_history_open_html_button);
+    job_history_layout->addLayout(job_history_buttons);
+    connect(m_impl->job_history_list, &QListWidget::currentRowChanged, this, [this](int) {
+        refresh_job_history_panel();
+    });
+    connect(m_impl->job_history_open_json_button, &QPushButton::clicked, this, [this]() {
+        Q_UNUSED(open_selected_job_history_report(false));
+    });
+    connect(m_impl->job_history_open_html_button, &QPushButton::clicked, this, [this]() {
+        Q_UNUSED(open_selected_job_history_report(true));
+    });
+    auto* job_history_open_json_action = new QAction("Open JSON Report", m_impl->job_history_list);
+    configure_action(job_history_open_json_action,
+                     "Open the JSON report for the selected local workflow job",
+                     "JobHistoryContextOpenJsonReport");
+    connect(job_history_open_json_action, &QAction::triggered, m_impl->job_history_open_json_button, &QPushButton::click);
+    auto* job_history_open_html_action = new QAction("Open HTML Report", m_impl->job_history_list);
+    configure_action(job_history_open_html_action,
+                     "Open the HTML report for the selected local workflow job",
+                     "JobHistoryContextOpenHtmlReport");
+    connect(job_history_open_html_action, &QAction::triggered, m_impl->job_history_open_html_button, &QPushButton::click);
+    connect(m_impl->job_history_list, &QWidget::customContextMenuRequested, this, [this, job_history_open_json_action, job_history_open_html_action](const QPoint& pos) {
+        if (m_impl->job_history_list == nullptr) {
+            return;
+        }
+        if (QListWidgetItem* item = m_impl->job_history_list->itemAt(pos); item != nullptr) {
+            m_impl->job_history_list->setCurrentItem(item);
+        }
+        job_history_open_json_action->setEnabled(m_impl->job_history_open_json_button != nullptr && m_impl->job_history_open_json_button->isEnabled());
+        job_history_open_html_action->setEnabled(m_impl->job_history_open_html_button != nullptr && m_impl->job_history_open_html_button->isEnabled());
+        QMenu menu(m_impl->job_history_list);
+        menu.addAction(job_history_open_json_action);
+        menu.addAction(job_history_open_html_action);
+        menu.exec(m_impl->job_history_list->viewport()->mapToGlobal(pos));
+    });
+    QWidget::setTabOrder(m_impl->job_history_list, m_impl->job_history_details);
+    QWidget::setTabOrder(m_impl->job_history_details, m_impl->job_history_open_json_button);
+    QWidget::setTabOrder(m_impl->job_history_open_json_button, m_impl->job_history_open_html_button);
+    auto* job_history_dock = make_dock("Jobs", Qt::BottomDockWidgetArea, job_history_panel);
+
     m_impl->activity_log = new ActivityLogPanel(this);
     append_activity_log("Workspace initialized", ActivityLogSeverity::Info);
     auto* log_dock = make_dock("Log", Qt::BottomDockWidgetArea, m_impl->activity_log);
+    refresh_job_history_panel();
 
     if (m_impl->view_menu != nullptr) {
         m_impl->view_menu->addSeparator();
+        m_impl->view_menu->addAction(workspace_summary_dock->toggleViewAction());
+        m_impl->view_menu->addAction(diagnostics_dock->toggleViewAction());
         m_impl->view_menu->addAction(layers_dock->toggleViewAction());
         m_impl->view_menu->addAction(properties_dock->toggleViewAction());
         m_impl->view_menu->addAction(violations_dock->toggleViewAction());
@@ -1018,8 +2983,17 @@ void MainWindow::setup_dock_panels()
             m_impl->view_menu->addAction(m_impl->graph_dock->toggleViewAction());
         }
         m_impl->view_menu->addAction(trace_dock->toggleViewAction());
+        m_impl->view_menu->addAction(job_history_dock->toggleViewAction());
         m_impl->view_menu->addAction(log_dock->toggleViewAction());
     }
+    QWidget::setTabOrder(m_impl->canvas, m_impl->layer_panel);
+    QWidget::setTabOrder(m_impl->layer_panel, m_impl->violation_explorer);
+    QWidget::setTabOrder(m_impl->violation_explorer, m_impl->graph_explorer);
+    QWidget::setTabOrder(m_impl->graph_explorer, m_impl->trace_panel);
+    QWidget::setTabOrder(m_impl->trace_panel, m_impl->diagnostics_severity_filter);
+    QWidget::setTabOrder(m_impl->diagnostics_related_button, m_impl->job_history_list);
+    refresh_workspace_summary();
+    refresh_diagnostics_panel();
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,6 +3003,11 @@ void MainWindow::update_action_states()
 {
     const bool has_scene = m_impl->canvas != nullptr && m_impl->canvas->has_scene();
     const bool has_graph = m_impl->current_graph != nullptr;
+    const bool job_active = m_impl->active_job_id.has_value();
+    const bool can_run_imported = m_impl->has_loaded_import_package
+        && m_impl->loaded_import_package.validation_status() != aegis::storage::ValidationStatus::Invalid
+        && imported_package_inputs_exist(m_impl->loaded_import_package, m_impl->loaded_import_base_path);
+    const bool cancel_requested = m_impl->last_job_snapshot.has_value() && m_impl->last_job_snapshot->cancel_requested;
     const bool has_violations = m_impl->canvas != nullptr && m_impl->canvas->violation_count() > 0;
     const bool has_selection = m_impl->selection_model != nullptr && !m_impl->selection_model->empty();
     const bool has_active_trace = m_impl->canvas != nullptr && m_impl->canvas->has_active_trace();
@@ -1037,13 +3016,19 @@ void MainWindow::update_action_states()
     m_impl->actions.at("fit_view")->setEnabled(has_scene);
     m_impl->actions.at("reset_view")->setEnabled(has_scene);
     m_impl->actions.at("toggle_grid")->setEnabled(has_scene);
-    m_impl->actions.at("run_checks")->setEnabled(has_graph);
+    m_impl->actions.at("run_checks")->setEnabled((has_graph || can_run_imported) && !job_active);
+    m_impl->actions.at("cancel_active_job")->setEnabled(job_active && !cancel_requested);
+    m_impl->actions.at("retry_last_job")->setEnabled(can_retry_last_job());
     m_impl->actions.at("trace_from_selection")->setEnabled(has_graph && has_selection);
     m_impl->actions.at("trace_from_violation")->setEnabled(has_graph && has_current_violation);
     m_impl->actions.at("focus_trace")->setEnabled(has_active_trace);
     m_impl->actions.at("clear_trace_action")->setEnabled(has_active_trace);
     m_impl->actions.at("clear_selection")->setEnabled(has_selection);
     m_impl->actions.at("toggle_overlays")->setEnabled(has_violations);
+    m_impl->actions.at("save_filter_preset")->setEnabled(m_impl->violation_explorer != nullptr);
+    m_impl->actions.at("manage_filter_presets")->setEnabled(!m_impl->filter_presets.empty());
+    m_impl->actions.at("save_workspace_view")->setEnabled(true);
+    m_impl->actions.at("manage_workspace_views")->setEnabled(!m_impl->workspace_views.empty());
 
     if (m_impl->canvas != nullptr) {
         m_impl->actions.at("toggle_grid")->setChecked(m_impl->canvas->grid_visible());
@@ -1051,6 +3036,140 @@ void MainWindow::update_action_states()
     }
 
     update_trace_controls();
+}
+
+void MainWindow::refresh_recent_project_actions()
+{
+    if (m_impl->recent_projects_menu == nullptr) {
+        return;
+    }
+
+    QStringList filtered;
+    for (const auto& path : m_impl->recent_project_paths) {
+        if (path.trimmed().isEmpty()) {
+            continue;
+        }
+        if (!std::filesystem::exists(path.toStdString())) {
+            continue;
+        }
+        if (!filtered.contains(path)) {
+            filtered.push_back(path);
+        }
+    }
+    m_impl->recent_project_paths = filtered;
+    if (!m_impl->recent_project_paths.contains(m_impl->last_successful_project_path)
+        && !m_impl->last_successful_project_path.trimmed().isEmpty()
+        && std::filesystem::exists(m_impl->last_successful_project_path.toStdString())) {
+        m_impl->recent_project_paths.prepend(m_impl->last_successful_project_path);
+    }
+    while (m_impl->recent_project_paths.size() > 8) {
+        m_impl->recent_project_paths.removeLast();
+    }
+
+    m_impl->recent_projects_menu->clear();
+    if (m_impl->recent_project_paths.isEmpty()) {
+        auto* action = m_impl->recent_projects_menu->addAction("No recent imported projects");
+        action->setEnabled(false);
+    } else {
+        for (int i = 0; i < m_impl->recent_project_paths.size(); ++i) {
+            const QString path = m_impl->recent_project_paths.at(i);
+            auto* action = m_impl->recent_projects_menu->addAction(QString("%1. %2").arg(i + 1).arg(path));
+            connect(action, &QAction::triggered, this, [this, path]() {
+                Q_UNUSED(reopen_project_from_path(path, true));
+            });
+        }
+    }
+    if (m_impl->actions.contains("reopen_last_project") && m_impl->actions.at("reopen_last_project") != nullptr) {
+        m_impl->actions.at("reopen_last_project")->setEnabled(!m_impl->last_successful_project_path.trimmed().isEmpty());
+    }
+}
+
+void MainWindow::refresh_filter_preset_menu()
+{
+    if (m_impl->filter_presets_menu == nullptr) {
+        return;
+    }
+
+    m_impl->filter_presets_menu->clear();
+    m_impl->filter_presets_menu->addAction(m_impl->actions.at("save_filter_preset"));
+    m_impl->filter_presets_menu->addAction(m_impl->actions.at("manage_filter_presets"));
+    if (m_impl->filter_presets.empty()) {
+        auto* empty = m_impl->filter_presets_menu->addAction("No saved filter presets");
+        empty->setEnabled(false);
+        return;
+    }
+
+    m_impl->filter_presets_menu->addSeparator();
+    for (const auto& preset : m_impl->filter_presets) {
+        auto* action = m_impl->filter_presets_menu->addAction(preset.name);
+        connect(action, &QAction::triggered, this, [this, name = preset.name]() {
+            Q_UNUSED(apply_violation_filter_preset(name));
+        });
+    }
+}
+
+void MainWindow::refresh_workspace_view_menu()
+{
+    if (m_impl->workspace_views_menu == nullptr) {
+        return;
+    }
+
+    m_impl->workspace_views_menu->clear();
+    m_impl->workspace_views_menu->addAction(m_impl->actions.at("save_workspace_view"));
+    m_impl->workspace_views_menu->addAction(m_impl->actions.at("manage_workspace_views"));
+    if (m_impl->workspace_views.empty()) {
+        auto* empty = m_impl->workspace_views_menu->addAction("No saved workspace views");
+        empty->setEnabled(false);
+        return;
+    }
+
+    m_impl->workspace_views_menu->addSeparator();
+    for (const auto& view : m_impl->workspace_views) {
+        auto* action = m_impl->workspace_views_menu->addAction(view.name);
+        connect(action, &QAction::triggered, this, [this, name = view.name]() {
+            Q_UNUSED(apply_workspace_view(name));
+        });
+    }
+}
+
+bool MainWindow::reopen_project_from_path(const QString& path, bool mark_as_last_session)
+{
+    const QString normalized = QFileInfo(path).absoluteFilePath();
+    if (normalized.trimmed().isEmpty() || !QFileInfo(normalized).exists() || !QFileInfo(normalized).isDir()) {
+        m_impl->recent_project_paths.removeAll(path);
+        m_impl->recent_project_paths.removeAll(normalized);
+        if (m_impl->last_successful_project_path == path || m_impl->last_successful_project_path == normalized) {
+            m_impl->last_successful_project_path.clear();
+        }
+        refresh_recent_project_actions();
+        publish_ui_notification(QString("Recent project path is unavailable and was removed: %1").arg(path), ActivityLogSeverity::Warning, 5000);
+        return false;
+    }
+
+    m_impl->pending_import_base_path = normalized.toStdString();
+    m_impl->pending_import_package = m_impl->import_validator.scan_project_folder(normalized.toStdString(), QFileInfo(normalized).fileName().toStdString());
+    refresh_import_review();
+    if (import_has_blockers()) {
+        if (mark_as_last_session) {
+            publish_ui_notification(QString("Reopened recent project with blocking diagnostics: %1").arg(normalized), ActivityLogSeverity::Warning, 5000);
+        } else {
+            publish_ui_notification(QString("Last session project reopened with blocking diagnostics: %1").arg(normalized), ActivityLogSeverity::Warning, 5000);
+        }
+        open_import_review_dialog({}, false);
+        return false;
+    }
+
+    apply_import_package();
+    m_impl->recent_project_paths.removeAll(normalized);
+    m_impl->recent_project_paths.prepend(normalized);
+    m_impl->last_successful_project_path = normalized;
+    refresh_recent_project_actions();
+    publish_ui_notification(mark_as_last_session
+                                ? QString("Reopened imported project: %1").arg(normalized)
+                                : QString("Reopened last session project: %1").arg(normalized),
+                            ActivityLogSeverity::Info,
+                            5000);
+    return true;
 }
 
 void MainWindow::update_trace_controls()
@@ -1087,6 +3206,27 @@ void MainWindow::restore_window_state()
 
     const int version = settings.value(QString("%1/version").arg(kSettingsWorkspaceUiGroup), 0).toInt();
     const bool has_ui_state = version >= 1;
+    const int recent_projects_version = settings.value(QString("%1/version").arg(kSettingsRecentProjectsGroup), 0).toInt();
+    if (recent_projects_version >= 1) {
+        m_impl->recent_project_paths = settings.value(QString("%1/paths").arg(kSettingsRecentProjectsGroup)).toStringList();
+        m_impl->reopen_last_session_enabled = settings.value(QString("%1/reopenLastSession").arg(kSettingsRecentProjectsGroup), false).toBool();
+        m_impl->last_successful_project_path = settings.value(QString("%1/lastSuccessfulPath").arg(kSettingsRecentProjectsGroup)).toString();
+    }
+    m_impl->onboarding_dismissed = settings.value(QString("%1/dismissed").arg(kSettingsOnboardingGroup), false).toBool();
+
+    m_impl->filter_presets.clear();
+    for (const auto& value : settings.value(QString("%1/filterPresets").arg(kSettingsWorkspaceUiGroup)).toList()) {
+        if (const auto preset = saved_filter_preset_from_variant(value); preset.has_value()) {
+            m_impl->filter_presets.push_back(*preset);
+        }
+    }
+
+    m_impl->workspace_views.clear();
+    for (const auto& value : settings.value(QString("%1/workspaceViews").arg(kSettingsWorkspaceUiGroup)).toList()) {
+        if (const auto view = saved_workspace_view_from_variant(value); view.has_value()) {
+            m_impl->workspace_views.push_back(*view);
+        }
+    }
 
     const bool grid_visible = settings.value(QString("%1/gridVisible").arg(kSettingsWorkspaceUiGroup), true).toBool();
     if (m_impl->actions.contains("toggle_grid") && m_impl->actions.at("toggle_grid") != nullptr) {
@@ -1117,7 +3257,14 @@ void MainWindow::restore_window_state()
         clear_violation_filters();
     }
 
+    refresh_recent_project_actions();
+    refresh_filter_preset_menu();
+    refresh_workspace_view_menu();
+    refresh_onboarding_panel();
     update_action_states();
+    if (m_impl->reopen_last_session_enabled && !m_impl->last_successful_project_path.trimmed().isEmpty()) {
+        Q_UNUSED(reopen_project_from_path(m_impl->last_successful_project_path, false));
+    }
 }
 
 void MainWindow::save_window_state()
@@ -1132,6 +3279,22 @@ void MainWindow::save_window_state()
     settings.setValue(QString("%1/heatmapOpacity").arg(kSettingsWorkspaceUiGroup), heatmap_opacity());
     settings.setValue(QString("%1/performanceMetricsVisible").arg(kSettingsWorkspaceUiGroup), performance_metrics_visible());
     settings.setValue(QString("%1/violationFilter").arg(kSettingsWorkspaceUiGroup), violation_filter_state().to_variant_map());
+    QVariantList filter_presets;
+    for (const auto& preset : m_impl->filter_presets) {
+        filter_presets.push_back(to_variant_map(preset));
+    }
+    settings.setValue(QString("%1/filterPresets").arg(kSettingsWorkspaceUiGroup), filter_presets);
+    QVariantList workspace_views;
+    for (const auto& view : m_impl->workspace_views) {
+        workspace_views.push_back(to_variant_map(view));
+    }
+    settings.setValue(QString("%1/workspaceViews").arg(kSettingsWorkspaceUiGroup), workspace_views);
+    refresh_recent_project_actions();
+    settings.setValue(QString("%1/version").arg(kSettingsRecentProjectsGroup), kRecentProjectsStateVersion);
+    settings.setValue(QString("%1/paths").arg(kSettingsRecentProjectsGroup), m_impl->recent_project_paths);
+    settings.setValue(QString("%1/reopenLastSession").arg(kSettingsRecentProjectsGroup), m_impl->reopen_last_session_enabled);
+    settings.setValue(QString("%1/lastSuccessfulPath").arg(kSettingsRecentProjectsGroup), m_impl->last_successful_project_path);
+    settings.setValue(QString("%1/dismissed").arg(kSettingsOnboardingGroup), m_impl->onboarding_dismissed);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -1187,9 +3350,11 @@ bool MainWindow::load_bundled_sample(const QString& sample_id)
         std::vector<std::string> unresolved;
         auto graph = aegis::graph::ConnectivityGraph::from_layout_ir(*ir, unresolved);
         set_scene(build_ui_scene(*ir));
+        m_impl->sample_mode_active = true;
         m_impl->owned_graph = std::make_unique<aegis::graph::ConnectivityGraph>(std::move(graph));
         set_connectivity_graph(m_impl->owned_graph.get());
         set_violations({});
+        refresh_workspace_summary();
         const QString message = QString("Loaded sample: %1").arg(QString::fromStdString(ir->design_name));
         publish_ui_notification(message, ActivityLogSeverity::Info);
         if (!unresolved.empty()) {
@@ -1210,6 +3375,7 @@ bool MainWindow::load_bundled_sample(const QString& sample_id)
 void MainWindow::set_scene(UiScene scene)
 {
     m_impl->owned_graph.reset();
+    m_impl->sample_mode_active = false;
     set_connectivity_graph(nullptr);
 
     if (m_impl->layer_panel != nullptr) {
@@ -1230,6 +3396,7 @@ void MainWindow::set_scene(UiScene scene)
             m_impl->report_preview->set_snapshot(m_impl->canvas->grab());
         }
     }
+    refresh_workspace_summary();
     update_action_states();
 }
 
@@ -1241,12 +3408,15 @@ void MainWindow::set_violations(aegis::rules::ViolationCollection violations)
     if (m_impl->report_preview != nullptr) {
         m_impl->report_preview->set_violations(violations);
     }
+    m_impl->latest_violations = violations.violations();
     if (m_impl->canvas != nullptr) {
         m_impl->canvas->set_violations(std::move(violations));
         if (m_impl->report_preview != nullptr) {
             m_impl->report_preview->set_snapshot(m_impl->canvas->grab());
         }
     }
+    refresh_workspace_summary();
+    refresh_diagnostics_panel();
     update_action_states();
 }
 
@@ -1257,6 +3427,7 @@ void MainWindow::set_connectivity_graph(const aegis::graph::ConnectivityGraph* g
     if (m_impl->graph_explorer != nullptr) {
         m_impl->graph_explorer->set_graph(graph);
     }
+    refresh_workspace_summary();
     update_action_states();
 }
 
@@ -1348,6 +3519,11 @@ int MainWindow::violation_explorer_count() const
     return m_impl->violation_explorer != nullptr ? m_impl->violation_explorer->violation_count() : 0;
 }
 
+int MainWindow::selected_violation_count() const
+{
+    return m_impl->violation_explorer != nullptr ? m_impl->violation_explorer->selected_violation_count() : 0;
+}
+
 int MainWindow::graph_explorer_count() const
 {
     return m_impl->graph_explorer != nullptr ? m_impl->graph_explorer->visible_item_count() : 0;
@@ -1357,6 +3533,13 @@ void MainWindow::select_violation_row(int row)
 {
     if (m_impl->violation_explorer != nullptr) {
         m_impl->violation_explorer->select_row(row);
+    }
+}
+
+void MainWindow::select_violation_rows(const std::vector<int>& rows)
+{
+    if (m_impl->violation_explorer != nullptr) {
+        m_impl->violation_explorer->select_rows(rows);
     }
 }
 
@@ -1503,6 +3686,196 @@ ViolationFilterState MainWindow::violation_filter_state() const
     return m_impl->violation_explorer != nullptr ? m_impl->violation_explorer->filter_state() : ViolationFilterState{};
 }
 
+bool MainWindow::save_violation_filter_preset(const QString& name)
+{
+    const QString normalized = normalize_saved_name(name);
+    if (normalized.isEmpty()) {
+        return false;
+    }
+
+    const auto it = std::find_if(m_impl->filter_presets.begin(), m_impl->filter_presets.end(), [&normalized](const SavedFilterPreset& preset) {
+        return saved_name_matches(preset.name, normalized);
+    });
+    if (it != m_impl->filter_presets.end()) {
+        it->name = normalized;
+        it->state = violation_filter_state();
+    } else {
+        m_impl->filter_presets.push_back(SavedFilterPreset{normalized, violation_filter_state()});
+    }
+    save_window_state();
+    refresh_filter_preset_menu();
+    update_action_states();
+    return true;
+}
+
+bool MainWindow::apply_violation_filter_preset(const QString& name)
+{
+    const auto it = std::find_if(m_impl->filter_presets.begin(), m_impl->filter_presets.end(), [&name](const SavedFilterPreset& preset) {
+        return saved_name_matches(preset.name, name);
+    });
+    if (it == m_impl->filter_presets.end()) {
+        return false;
+    }
+    set_violation_filter_state(it->state);
+    return true;
+}
+
+bool MainWindow::rename_violation_filter_preset(const QString& old_name, const QString& new_name)
+{
+    const QString normalized = normalize_saved_name(new_name);
+    if (normalized.isEmpty()) {
+        return false;
+    }
+
+    const auto it = std::find_if(m_impl->filter_presets.begin(), m_impl->filter_presets.end(), [&old_name](const SavedFilterPreset& preset) {
+        return saved_name_matches(preset.name, old_name);
+    });
+    if (it == m_impl->filter_presets.end()) {
+        return false;
+    }
+
+    auto duplicate = std::find_if(m_impl->filter_presets.begin(), m_impl->filter_presets.end(), [&normalized, &it](const SavedFilterPreset& preset) {
+        return &preset != &(*it) && saved_name_matches(preset.name, normalized);
+    });
+    if (duplicate != m_impl->filter_presets.end()) {
+        duplicate->state = it->state;
+        m_impl->filter_presets.erase(it);
+    } else {
+        it->name = normalized;
+    }
+
+    save_window_state();
+    refresh_filter_preset_menu();
+    update_action_states();
+    return true;
+}
+
+bool MainWindow::delete_violation_filter_preset(const QString& name)
+{
+    const auto original_size = m_impl->filter_presets.size();
+    std::erase_if(m_impl->filter_presets, [&name](const SavedFilterPreset& preset) {
+        return saved_name_matches(preset.name, name);
+    });
+    if (m_impl->filter_presets.size() == original_size) {
+        return false;
+    }
+    save_window_state();
+    refresh_filter_preset_menu();
+    update_action_states();
+    return true;
+}
+
+QStringList MainWindow::violation_filter_preset_names() const
+{
+    return saved_entry_names(m_impl->filter_presets);
+}
+
+bool MainWindow::save_workspace_view(const QString& name)
+{
+    const QString normalized = normalize_saved_name(name);
+    if (normalized.isEmpty()) {
+        return false;
+    }
+
+    SavedWorkspaceView snapshot;
+    snapshot.name = normalized;
+    snapshot.dock_state = saveState();
+    snapshot.grid_visible = grid_visible();
+    snapshot.overlays_visible = violation_overlays_visible();
+    snapshot.heatmap_visible = heatmap_visible();
+    snapshot.heatmap_opacity = heatmap_opacity();
+    snapshot.performance_metrics_visible = performance_metrics_visible();
+
+    const auto it = std::find_if(m_impl->workspace_views.begin(), m_impl->workspace_views.end(), [&normalized](const SavedWorkspaceView& view) {
+        return saved_name_matches(view.name, normalized);
+    });
+    if (it != m_impl->workspace_views.end()) {
+        *it = snapshot;
+    } else {
+        m_impl->workspace_views.push_back(std::move(snapshot));
+    }
+    save_window_state();
+    refresh_workspace_view_menu();
+    update_action_states();
+    return true;
+}
+
+bool MainWindow::apply_workspace_view(const QString& name)
+{
+    const auto it = std::find_if(m_impl->workspace_views.begin(), m_impl->workspace_views.end(), [&name](const SavedWorkspaceView& view) {
+        return saved_name_matches(view.name, name);
+    });
+    if (it == m_impl->workspace_views.end()) {
+        return false;
+    }
+
+    if (!it->dock_state.isEmpty()) {
+        restoreState(it->dock_state);
+    }
+    if (m_impl->actions.contains("toggle_grid") && m_impl->actions.at("toggle_grid") != nullptr) {
+        m_impl->actions.at("toggle_grid")->setChecked(it->grid_visible);
+    }
+    if (m_impl->actions.contains("toggle_overlays") && m_impl->actions.at("toggle_overlays") != nullptr) {
+        m_impl->actions.at("toggle_overlays")->setChecked(it->overlays_visible);
+    }
+    set_heatmap_visible(it->heatmap_visible);
+    set_heatmap_opacity(it->heatmap_opacity);
+    set_performance_metrics_visible(it->performance_metrics_visible);
+    update_action_states();
+    return true;
+}
+
+bool MainWindow::rename_workspace_view(const QString& old_name, const QString& new_name)
+{
+    const QString normalized = normalize_saved_name(new_name);
+    if (normalized.isEmpty()) {
+        return false;
+    }
+
+    const auto it = std::find_if(m_impl->workspace_views.begin(), m_impl->workspace_views.end(), [&old_name](const SavedWorkspaceView& view) {
+        return saved_name_matches(view.name, old_name);
+    });
+    if (it == m_impl->workspace_views.end()) {
+        return false;
+    }
+
+    auto duplicate = std::find_if(m_impl->workspace_views.begin(), m_impl->workspace_views.end(), [&normalized, &it](const SavedWorkspaceView& view) {
+        return &view != &(*it) && saved_name_matches(view.name, normalized);
+    });
+    if (duplicate != m_impl->workspace_views.end()) {
+        *duplicate = *it;
+        duplicate->name = normalized;
+        m_impl->workspace_views.erase(it);
+    } else {
+        it->name = normalized;
+    }
+
+    save_window_state();
+    refresh_workspace_view_menu();
+    update_action_states();
+    return true;
+}
+
+bool MainWindow::delete_workspace_view(const QString& name)
+{
+    const auto original_size = m_impl->workspace_views.size();
+    std::erase_if(m_impl->workspace_views, [&name](const SavedWorkspaceView& view) {
+        return saved_name_matches(view.name, name);
+    });
+    if (m_impl->workspace_views.size() == original_size) {
+        return false;
+    }
+    save_window_state();
+    refresh_workspace_view_menu();
+    update_action_states();
+    return true;
+}
+
+QStringList MainWindow::workspace_view_names() const
+{
+    return saved_entry_names(m_impl->workspace_views);
+}
+
 void MainWindow::clear_violation_filters()
 {
     if (m_impl->violation_explorer != nullptr) {
@@ -1523,6 +3896,16 @@ QString MainWindow::violation_details_text() const
 int MainWindow::violation_metadata_row_count() const
 {
     return m_impl->violation_explorer != nullptr ? m_impl->violation_explorer->metadata_row_count() : 0;
+}
+
+bool MainWindow::violation_context_action_enabled(const QString& action_id) const
+{
+    return m_impl->violation_explorer != nullptr && m_impl->violation_explorer->context_action_enabled(action_id);
+}
+
+bool MainWindow::trigger_violation_context_action(const QString& action_id)
+{
+    return m_impl->violation_explorer != nullptr && m_impl->violation_explorer->trigger_context_action(action_id);
 }
 
 QString MainWindow::violation_filter_summary_text() const
@@ -1560,6 +3943,16 @@ bool MainWindow::report_preview_copy_snapshot_enabled() const
     return m_impl->report_preview != nullptr && m_impl->report_preview->copy_snapshot_enabled();
 }
 
+bool MainWindow::report_preview_export_json_enabled() const
+{
+    return m_impl->report_preview != nullptr && m_impl->report_preview->export_json_enabled();
+}
+
+bool MainWindow::report_preview_export_html_enabled() const
+{
+    return m_impl->report_preview != nullptr && m_impl->report_preview->export_html_enabled();
+}
+
 void MainWindow::trigger_report_preview_refresh()
 {
     if (m_impl->report_preview != nullptr) {
@@ -1578,6 +3971,20 @@ void MainWindow::trigger_report_preview_copy_snapshot()
 {
     if (m_impl->report_preview != nullptr) {
         m_impl->report_preview->trigger_copy_snapshot();
+    }
+}
+
+void MainWindow::trigger_report_preview_export_json()
+{
+    if (m_impl->report_preview != nullptr) {
+        m_impl->report_preview->trigger_export_json();
+    }
+}
+
+void MainWindow::trigger_report_preview_export_html()
+{
+    if (m_impl->report_preview != nullptr) {
+        m_impl->report_preview->trigger_export_html();
     }
 }
 
@@ -1758,6 +4165,27 @@ QString MainWindow::documentation_summary_text() const
     return m_impl->documentation_text != nullptr ? m_impl->documentation_text->toPlainText() : QString{};
 }
 
+bool MainWindow::onboarding_visible() const
+{
+    return m_impl->onboarding_panel != nullptr && !m_impl->onboarding_panel->isHidden();
+}
+
+QString MainWindow::onboarding_text() const
+{
+    return m_impl->onboarding_label != nullptr ? m_impl->onboarding_label->text() : QString{};
+}
+
+void MainWindow::dismiss_onboarding()
+{
+    if (m_impl->onboarding_dismissed) {
+        return;
+    }
+    m_impl->onboarding_dismissed = true;
+    refresh_onboarding_panel();
+    save_window_state();
+    publish_ui_notification("Dismissed onboarding guidance for future sessions", ActivityLogSeverity::Info, 3000);
+}
+
 bool MainWindow::is_sample_browser_visible() const
 {
     return m_impl->sample_browser_dialog != nullptr && m_impl->sample_browser_dialog->isVisible();
@@ -1823,9 +4251,100 @@ std::size_t MainWindow::canvas_lod_cache_item_count() const
     return m_impl->canvas != nullptr ? m_impl->canvas->lod_cache_item_count() : 0;
 }
 
+QString MainWindow::job_progress_text() const
+{
+    return m_impl->last_job_progress_text;
+}
+
+bool MainWindow::has_active_job() const
+{
+    return m_impl->active_job_id.has_value();
+}
+
+int MainWindow::job_history_count() const
+{
+    return static_cast<int>(m_impl->job_history.size());
+}
+
+QString MainWindow::job_history_summary_text(int index) const
+{
+    if (index < 0 || index >= static_cast<int>(m_impl->job_history.size())) {
+        return {};
+    }
+    return m_impl->job_history.at(static_cast<std::size_t>(index)).summary;
+}
+
+bool MainWindow::select_job_history_row(int row)
+{
+    if (m_impl->job_history_list == nullptr || row < 0 || row >= m_impl->job_history_list->count()) {
+        return false;
+    }
+    m_impl->job_history_list->setCurrentRow(row);
+    refresh_job_history_panel();
+    return true;
+}
+
+QString MainWindow::job_history_details_text() const
+{
+    return m_impl->job_history_details != nullptr ? m_impl->job_history_details->toPlainText() : QString{};
+}
+
+bool MainWindow::job_history_open_json_enabled() const
+{
+    return m_impl->job_history_open_json_button != nullptr && m_impl->job_history_open_json_button->isEnabled();
+}
+
+bool MainWindow::job_history_open_html_enabled() const
+{
+    return m_impl->job_history_open_html_button != nullptr && m_impl->job_history_open_html_button->isEnabled();
+}
+
+bool MainWindow::trigger_job_history_open_json()
+{
+    if (!job_history_open_json_enabled()) {
+        return false;
+    }
+    m_impl->job_history_open_json_button->click();
+    return true;
+}
+
+bool MainWindow::trigger_job_history_open_html()
+{
+    if (!job_history_open_html_enabled()) {
+        return false;
+    }
+    m_impl->job_history_open_html_button->click();
+    return true;
+}
+
+int MainWindow::job_history_max_entries() const
+{
+    return m_impl->job_history_max_entries;
+}
+
+void MainWindow::set_job_pipeline_artificial_delay_for_tests(int milliseconds)
+{
+    m_impl->job_pipeline_options.artificial_stage_delay = std::chrono::milliseconds(std::max(milliseconds, 0));
+}
+
+void MainWindow::set_report_opener_for_tests(std::function<bool(const QString&)> opener)
+{
+    m_impl->report_opener = std::move(opener);
+}
+
+void MainWindow::set_report_export_path_picker_for_tests(std::function<QString(const QString&)> picker)
+{
+    m_impl->report_export_path_picker = std::move(picker);
+}
+
 bool MainWindow::is_import_dialog_visible() const
 {
     return m_impl->import_review_dialog != nullptr && m_impl->import_review_dialog->isVisible();
+}
+
+void MainWindow::set_import_picker_for_tests(std::function<QStringList(QWidget*)> picker)
+{
+    m_impl->import_picker = std::move(picker);
 }
 
 bool MainWindow::import_project_paths(const QStringList& paths)
@@ -1863,6 +4382,179 @@ bool MainWindow::override_import_artifact_role(const QString& artifact_path, con
 QString MainWindow::import_validation_summary_text() const
 {
     return m_impl->import_review_text != nullptr ? m_impl->import_review_text->toPlainText() : import_summary_text(m_impl->pending_import_package);
+}
+
+int MainWindow::import_artifact_row_count() const
+{
+    return m_impl->import_artifact_table != nullptr ? m_impl->import_artifact_table->rowCount() : 0;
+}
+
+QString MainWindow::import_artifact_role_text(int row) const
+{
+    if (m_impl->import_artifact_table == nullptr || row < 0 || row >= m_impl->import_artifact_table->rowCount()) {
+        return {};
+    }
+    if (auto* combo = qobject_cast<QComboBox*>(m_impl->import_artifact_table->cellWidget(row, 2))) {
+        return combo->currentText();
+    }
+    return {};
+}
+
+QString MainWindow::import_artifact_status_text(int row) const
+{
+    if (m_impl->import_artifact_table == nullptr || row < 0 || row >= m_impl->import_artifact_table->rowCount()) {
+        return {};
+    }
+    if (auto* item = m_impl->import_artifact_table->item(row, 4)) {
+        return item->text();
+    }
+    return {};
+}
+
+bool MainWindow::set_import_artifact_role_from_ui(int row, const QString& role_name)
+{
+    if (m_impl->import_artifact_table == nullptr || row < 0 || row >= m_impl->import_artifact_table->rowCount()) {
+        return false;
+    }
+    if (auto* combo = qobject_cast<QComboBox*>(m_impl->import_artifact_table->cellWidget(row, 2))) {
+        const int index = combo->findText(role_name, Qt::MatchFixedString);
+        if (index < 0) {
+            return false;
+        }
+        combo->setCurrentIndex(index);
+        return true;
+    }
+    return false;
+}
+
+bool MainWindow::select_import_artifact_row(int row)
+{
+    if (m_impl->import_artifact_table == nullptr || row < 0 || row >= m_impl->import_artifact_table->rowCount()) {
+        return false;
+    }
+    m_impl->import_artifact_table->selectRow(row);
+    if (m_impl->import_related_button != nullptr) {
+        m_impl->import_related_button->setEnabled(true);
+    }
+    return true;
+}
+
+QString MainWindow::current_import_artifact_path() const
+{
+    if (m_impl->import_artifact_table == nullptr || m_impl->import_artifact_table->currentRow() < 0) {
+        return {};
+    }
+    if (auto* item = m_impl->import_artifact_table->item(m_impl->import_artifact_table->currentRow(), 0); item != nullptr) {
+        return item->text();
+    }
+    return {};
+}
+
+bool MainWindow::trigger_import_artifact_show_related_violations()
+{
+    if (m_impl->import_related_button == nullptr || !m_impl->import_related_button->isEnabled()) {
+        return false;
+    }
+    m_impl->import_related_button->click();
+    return true;
+}
+
+bool MainWindow::import_load_action_enabled() const
+{
+    return m_impl->import_load_button != nullptr && m_impl->import_load_button->isEnabled();
+}
+
+bool MainWindow::trigger_import_load_action()
+{
+    if (!import_load_action_enabled()) {
+        return false;
+    }
+    m_impl->import_load_button->click();
+    return true;
+}
+
+bool MainWindow::has_loaded_import_package() const
+{
+    return m_impl->has_loaded_import_package;
+}
+
+QString MainWindow::loaded_import_project_name() const
+{
+    if (!m_impl->has_loaded_import_package) {
+        return {};
+    }
+    return QString::fromStdString(m_impl->loaded_import_package.project().name);
+}
+
+QString MainWindow::workspace_summary_text() const
+{
+    return m_impl->last_workspace_summary_text;
+}
+
+int MainWindow::diagnostics_entry_count() const
+{
+    return m_impl->diagnostics_table != nullptr ? m_impl->diagnostics_table->rowCount() : 0;
+}
+
+QString MainWindow::diagnostics_details_text() const
+{
+    return m_impl->diagnostics_details != nullptr ? m_impl->diagnostics_details->toPlainText() : QString{};
+}
+
+bool MainWindow::set_diagnostics_severity_filter(const QString& severity)
+{
+    if (m_impl->diagnostics_severity_filter == nullptr) {
+        return false;
+    }
+    const int index = m_impl->diagnostics_severity_filter->findText(severity, Qt::MatchFixedString);
+    if (index < 0) {
+        return false;
+    }
+    m_impl->diagnostics_severity_filter->setCurrentIndex(index);
+    refresh_diagnostics_panel();
+    return true;
+}
+
+bool MainWindow::select_diagnostics_row(int row)
+{
+    if (m_impl->diagnostics_table == nullptr || row < 0 || row >= m_impl->diagnostics_table->rowCount()) {
+        return false;
+    }
+    m_impl->diagnostics_table->selectRow(row);
+    refresh_diagnostics_panel();
+    return true;
+}
+
+bool MainWindow::trigger_diagnostics_show_related_violations()
+{
+    if (m_impl->diagnostics_related_button == nullptr || !m_impl->diagnostics_related_button->isEnabled()) {
+        return false;
+    }
+    m_impl->diagnostics_related_button->click();
+    return true;
+}
+
+QStringList MainWindow::recent_project_paths() const
+{
+    return m_impl->recent_project_paths;
+}
+
+bool MainWindow::reopen_recent_project(int index)
+{
+    if (index < 0 || index >= m_impl->recent_project_paths.size()) {
+        return false;
+    }
+    return reopen_project_from_path(m_impl->recent_project_paths.at(index), true);
+}
+
+bool MainWindow::reopen_last_session_enabled() const
+{
+    return m_impl->reopen_last_session_enabled;
+}
+
+void MainWindow::set_reopen_last_session_enabled(bool enabled)
+{
+    m_impl->reopen_last_session_enabled = enabled;
 }
 
 QStringList MainWindow::import_detected_roles() const

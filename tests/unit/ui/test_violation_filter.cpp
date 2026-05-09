@@ -9,6 +9,7 @@
 #include "aegis/ui/violation_table_model.hpp"
 
 #include <QApplication>
+#include <QSettings>
 
 using namespace aegis::parsing;
 using namespace aegis::rules;
@@ -26,6 +27,20 @@ struct QtAppGuard {
         if (!QApplication::instance()) {
             app = std::make_unique<QApplication>(argc, argv);
         }
+    }
+};
+
+struct SettingsCleanupGuard {
+    SettingsCleanupGuard()
+    {
+        QSettings settings("AEGIS-PERC", "AEGIS-PERC");
+        settings.remove("mainWindow");
+    }
+
+    ~SettingsCleanupGuard()
+    {
+        QSettings settings("AEGIS-PERC", "AEGIS-PERC");
+        settings.remove("mainWindow");
     }
 };
 
@@ -130,4 +145,33 @@ TEST_CASE("MainWindow filters overlays and reports summary counts", "[ui][P3-008
     REQUIRE(window.violation_explorer_count() == 3);
     REQUIRE(window.visible_violation_overlay_count() == 3);
     REQUIRE(window.violation_filter_summary_text() == "3 / 3 violations");
+}
+
+TEST_CASE("MainWindow saves restores renames and deletes named filter presets", "[ui][P8][P8-013][ViolationFilter]")
+{
+    QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
+
+    MainWindow window;
+    window.set_scene(build_ui_scene(make_ir()));
+    window.set_violations(make_violations());
+
+    ViolationFilterState state;
+    state.severity = Severity::Warning;
+    state.layer = "M1";
+    state.search_text = "Width";
+    window.set_violation_filter_state(state);
+
+    REQUIRE(window.save_violation_filter_preset("Warnings"));
+    REQUIRE(window.violation_filter_preset_names() == QStringList{"Warnings"});
+
+    window.clear_violation_filters();
+    REQUIRE(window.apply_violation_filter_preset("Warnings"));
+    const auto restored = window.violation_filter_state();
+    REQUIRE(restored == state);
+
+    REQUIRE(window.rename_violation_filter_preset("Warnings", "Critical Review"));
+    REQUIRE(window.violation_filter_preset_names() == QStringList{"Critical Review"});
+    REQUIRE(window.delete_violation_filter_preset("Critical Review"));
+    REQUIRE(window.violation_filter_preset_names().isEmpty());
 }

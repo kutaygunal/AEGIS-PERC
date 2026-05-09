@@ -148,3 +148,55 @@ TEST_CASE("aegis-perc-cli report runs from a manifest and exports violation JSON
 
     remove_tree(root);
 }
+
+TEST_CASE("aegis-perc-cli run uses parsed Verilog connectivity for gate-level netlists", "[scripting][P9][P9-003][BatchCLI]")
+{
+    const fs::path root = make_temp_dir();
+    const fs::path out_report = root / "out" / "report.json";
+
+    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(root / "netlist/top.v",
+               "module top(input A, output Y);\n"
+               "  wire dangling;\n"
+               "  BUFX1 u0 (.A(A), .Y(Y));\n"
+               "endmodule\n");
+    write_file(root / "rules/rules.yaml",
+               "rules:\n"
+               "  - id: FLOATING_NET\n"
+               "    type: floating_net\n"
+               "    severity: high\n");
+
+    write_file(root / "manifest.json",
+               "{\n"
+               "  \"manifest_version\": 1,\n"
+               "  \"project\": {\n"
+               "    \"name\": \"FalconCPU\"\n"
+               "  },\n"
+               "  \"artifacts\": {\n"
+               "    \"technology\": [{\"id\": \"tech-1\", \"path\": \"layout/tech.lef\", \"role\": \"lef\"}],\n"
+               "    \"layout\": [{\"id\": \"layout-1\", \"path\": \"layout/top.def\", \"role\": \"def\"}],\n"
+               "    \"netlist\": [{\"id\": \"netlist-1\", \"path\": \"netlist/top.v\", \"role\": \"verilog\"}],\n"
+               "    \"rules\": [{\"id\": \"rules-1\", \"path\": \"rules/rules.yaml\", \"role\": \"aegis_rule_pack\"}],\n"
+               "    \"power\": [],\n"
+               "    \"current\": [],\n"
+               "    \"waivers\": [],\n"
+               "    \"external_reports\": []\n"
+               "  }\n"
+               "}\n");
+
+    const std::string command = shell_wrap(
+        quote(cli_path()) +
+        " run --manifest " + quote(root / "manifest.json") +
+        " --output " + quote(out_report));
+
+    const int exit_code = std::system(command.c_str());
+    REQUIRE(exit_code == 3);
+    REQUIRE(fs::exists(out_report));
+
+    const std::string report = read_file(out_report);
+    REQUIRE(report.find("\"rule_id\": \"FLOATING_NET\"") != std::string::npos);
+    REQUIRE(report.find("dangling") != std::string::npos);
+
+    remove_tree(root);
+}

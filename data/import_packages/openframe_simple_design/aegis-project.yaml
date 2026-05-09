@@ -1,0 +1,36 @@
+manifest_version: 1
+project:
+  name: OpenFrameSimpleDesign
+  description: Curated import-package sample derived from openframe_simple_example/simple_design
+  customer: OpenFrame Example
+  design_stage: place_route
+
+artifacts:
+  technology:
+    - path: layout/technology.lef
+      role: lef
+  layout:
+    - path: layout/top.def
+      role: def
+  netlist:
+    - path: netlist/top.v
+      role: verilog
+  rules:
+    - path: rules/aegis_rules.yaml
+      role: aegis_rule_pack
+  power:
+    - path: power/power_domains.csv
+      role: power_domains_csv
+      optional: true
+  current:
+    - path: reports/current_report.csv
+      role: current_csv
+      optional: true
+  waivers:
+    - path: reports/waivers.csv
+      role: waiver_csv
+      optional: true
+  external_reports:
+    - path: reports/erc_report.rpt
+      role: imported_report
+      optional: true

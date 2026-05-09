@@ -139,6 +139,50 @@ TEST_CASE("LocalJobPipeline executes imported projects through staged progress a
     remove_tree(root);
 }
 
+TEST_CASE("LocalJobPipeline uses parsed Verilog connectivity during imported execution", "[orchestration][P9][P9-003][JobPipeline]")
+{
+    const fs::path root = make_temp_dir();
+    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(root / "netlist/top.v",
+               "module top(input A, output Y);\n"
+               "  wire dangling;\n"
+               "  BUFX1 u0 (.A(A), .Y(Y));\n"
+               "endmodule\n");
+    write_file(root / "rules/rules.yaml",
+               "rules:\n"
+               "  - id: FLOATING_NET\n"
+               "    type: floating_net\n"
+               "    severity: high\n");
+
+    ProjectPackage package;
+    package.project().name = "VerilogConnectivity";
+    package.artifacts().push_back({"tech-1", "layout/tech.lef", ArtifactRole::Lef, ArtifactCategory::Technology, false, "manifest"});
+    package.artifacts().push_back({"layout-1", "layout/top.def", ArtifactRole::Def, ArtifactCategory::Layout, false, "manifest"});
+    package.artifacts().push_back({"netlist-1", "netlist/top.v", ArtifactRole::Verilog, ArtifactCategory::Netlist, false, "manifest"});
+    package.artifacts().push_back({"rules-1", "rules/rules.yaml", ArtifactRole::AegisRulePack, ArtifactCategory::Rules, false, "manifest"});
+    package.rebuild_normalized_view();
+    package.set_validation_status(ValidationStatus::Valid);
+
+    LocalJobPipeline pipeline;
+    JobRequest request;
+    request.package = package;
+    request.base_path = root;
+    request.output_dir = root / "out";
+
+    const JobId job_id = pipeline.submit(std::move(request));
+    REQUIRE(pipeline.wait(job_id, std::chrono::seconds(5)));
+
+    const auto result = pipeline.result(job_id);
+    REQUIRE(result.has_value());
+    REQUIRE(result->state == JobState::Completed);
+    REQUIRE(result->violations.size() == 1);
+    REQUIRE(result->violations.front().rule_id == "FLOATING_NET");
+    REQUIRE(result->violations.front().message.find("dangling") != std::string::npos);
+
+    remove_tree(root);
+}
+
 TEST_CASE("LocalJobPipeline cancellation stops local jobs cleanly and avoids partial result exports", "[orchestration][p6-009][JobPipeline]")
 {
     const fs::path root = make_temp_dir();

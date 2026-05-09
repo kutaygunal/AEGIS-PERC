@@ -55,6 +55,9 @@ TEST_CASE("SampleWorkflow exposes bundled sample choices and browser action", "[
     REQUIRE(sample_ids.contains("inverter"));
     REQUIRE(sample_ids.contains("nand2"));
     REQUIRE(sample_ids.contains("ring_oscillator"));
+    REQUIRE(window.onboarding_visible());
+    REQUIRE(window.onboarding_text().contains("Run Checks"));
+    REQUIRE(window.workspace_action_enabled("documentation"));
 
     REQUIRE(window.trigger_workspace_action("browse_samples"));
     QApplication::processEvents();
@@ -69,6 +72,7 @@ TEST_CASE("SampleWorkflow loads inverter nand2 and ring oscillator samples", "[u
     aegis::ui::MainWindow window;
 
     REQUIRE(window.load_bundled_sample("inverter"));
+    REQUIRE_FALSE(window.onboarding_visible());
     REQUIRE(window.report_preview_summary_text().contains("Design: inverter"));
     REQUIRE(window.last_status_message().contains("Loaded sample: inverter"));
 

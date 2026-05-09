@@ -28,7 +28,7 @@ The system is built for:
 ## Commercial Product Features
 
 ### 1. Layout & Netlist Import Engine
-- **Formats:** DEF, LEF, SPICE netlists, JSON intermediate, extensible custom parser abstraction
+- **Formats:** Native LEF, real DEF, Verilog gate-level netlists, hardened SPICE/CDL netlists, JSON intermediate, extensible parser abstraction
 - **Architecture:** Streaming parser with incremental indexing, background async loading, multi-threaded parsing
 - **Demonstrates:** Memory optimization, large-file handling (>100GB layouts), performance engineering
 
@@ -169,7 +169,7 @@ AEGIS-PERC/
 │   ├── graph/              # ConnectivityGraph, data model, domain tagging
 │   ├── ml/                 # FeatureExtractor placeholder (Sprint 4 target)
 │   ├── orchestration/      # LocalJobPipeline and staged execution primitives
-│   ├── parsing/            # Parser interface, LayoutIR, DEF/SPICE prototypes + CSV import helpers
+│   ├── parsing/            # Parser interface, LayoutIR, native LEF/DEF/Verilog/SPICE-CDL parsers + CSV import helpers
 │   ├── reporting/          # HTML/JSON report generation primitives
 │   ├── rules/              # RuleEngine, electrical rules, violation model, rule-pack loading
 │   ├── scripting/          # PythonApi + headless CLI workflow / aegis-perc-cli
@@ -305,6 +305,46 @@ ctest --preset linux-test
 - ✅ Lightweight notification routing to coordinate status-bar, activity-log, and panel feedback without duplicate trace-request noise
 - ✅ Comprehensive Sprint 7 headless regression coverage via `ctest --test-dir build -C Release --output-on-failure -L P7` and broader `-R Ui`
 
+### Phase 8 — Workflow UX Completion (Sprint 8) 🚧 **IN PROGRESS**
+- ✅ P8-001: Native import entry flow now supports selecting either a project folder or multiple files from the desktop UI, with cancel-safe feedback and testable picker injection seams
+- ✅ P8-002: Import review now presents an interactive artifact table with path/category/role/requirement/status/origin columns, UI role override controls, and diagnostics visible alongside the table
+- ✅ P8-003: Import review now includes a guarded `Load Project` action that commits validated package metadata into the workspace, disables loading while blockers remain, and reports the committed result through status/log feedback
+- ✅ P8-004: Desktop `Run Checks` now switches to imported rule-pack execution when a validated package is loaded, applies optional current/power enrichments onto the execution graph, reports import-vs-default execution mode, and surfaces parser/apply failures through activity-log and status feedback
+- ✅ P8-005: Imported desktop `Run Checks` now executes asynchronously through `LocalJobPipeline`, surfaces stage progress in the workspace, feeds completion/failure results back into existing UI panels, and keeps built-in sample/demo workflows synchronous for deterministic tests
+- [ ] Desktop report export, workspace summary, diagnostics navigation, and workflow polish
+
+### Phase 9 — Real Format Ingestion (Sprint 9) ✅ **COMPLETE**
+- ✅ Native LEF parser for technology/library abstracts with actionable diagnostics and sample-package coverage
+- ✅ Real DEF parser replacing the toy DEF-like prototype, with physical normalization for graph/UI workflows
+- ✅ Verilog gate-level netlist parser and connectivity normalization wired into import preflight, CLI, orchestration, and desktop `Run Checks`
+- ✅ SPICE/CDL parser hardening for customer-import MVP coverage, including include/model/parameter constructs, explicit unsupported diagnostics, and representative CDL device syntax
+
+### Phase 10 — Applied AI/ML and Explainability (Sprint 10)
+- [ ] Violation and graph-context feature extraction
+- [ ] XGBoost / LightGBM training pipeline
+- [ ] ONNX Runtime inference integration
+- [ ] Graph embeddings and FAISS similarity retrieval
+- [ ] SHAP-based explainability and surfaced ML evidence
+- [ ] Ollama-backed LLM copilot with retrieval-augmented summaries
+
+### Phase 11 — Platform, Performance, and Extensibility (Sprint 11)
+- [ ] OpenGL/Vulkan-backed renderer replacing the QPainter-only path
+- [ ] Optional GPU acceleration paths for inference and rendering-heavy workloads
+- [ ] Real pybind11 Python automation API
+- [ ] Durable storage backends (SQLite/PostgreSQL) and analytical exports (Arrow/Parquet)
+- [ ] Dockerized developer/CI flows and optional Conan/vcpkg integration
+- [ ] Implemented distributed host/worker execution stack
+- [ ] Dynamic plugin SDK for third-party rules
+- [ ] Templated HTML/JSON report generation engine
+- [ ] CSR-oriented graph backend and performance benchmarking
+
+### Phase 12 — LEF Signoff-Grade Hardening (Sprint 12)
+- [ ] Expand LEF coverage toward full 5.x grammar compatibility
+- [ ] Add advanced LEF geometry/forms and richer abstract-shape normalization
+- [ ] Implement full LEF technology-rule semantics and typed normalization
+- [ ] Add industrial-scale LEF fuzzing, stress, and performance validation
+- [ ] Integrate LEF normalization into full customer project import/storage workflows
+
 ### Phase 4 — AI/ML Core (Sprint 4)
 - [ ] Feature extraction from violations
 - [ ] XGBoost / LightGBM training pipeline
@@ -329,7 +369,7 @@ ctest --preset linux-test
 - ✅ Local job pipeline with staged progress, cancellation, and JSON/HTML export
 - ✅ Distributed host/worker execution architecture documentation (`docs/design/distributed.md`)
 
-> Current implementation snapshot: deterministic verification, desktop visualization, customer import workflow, headless CLI flow, and local job-pipeline orchestration are implemented. `ml` remains the largest intentionally incomplete subsystem.
+> Current implementation snapshot: deterministic verification, desktop visualization, customer import workflow, headless CLI flow, local job-pipeline orchestration, Sprint 8 workflow UX upgrades, and Sprint 9 real-format ingestion are implemented. Imported customer projects now parse through native LEF, real DEF, Verilog gate-level connectivity normalization, and hardened SPICE/CDL ingestion with preflight diagnostics and execution-path integration. Sprints 10 and 11 remain the largest README-vs-code gaps across AI/ML, explainability, copilot workflows, rendering, storage, scripting, reporting, plugins, and distributed execution. `ml` remains the largest intentionally incomplete subsystem.
 
 ---
 

@@ -8,8 +8,11 @@
 #include "aegis/ui/violation_table_model.hpp"
 
 #include <QApplication>
+#include <QClipboard>
 
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 
 using namespace aegis::parsing;
 using namespace aegis::rules;
@@ -38,8 +41,18 @@ LayoutIR make_ir()
     ir.layers.push_back(Layer{"M2", "metal", 1, "#00FF00"});
     ir.geometries.push_back(Geometry{"M1", Rectangle{0.0, 0.0, 40.0, 20.0}});
     ir.geometries.push_back(Geometry{"M2", Rectangle{100.0, 40.0, 30.0, 30.0}});
+    ir.nets.push_back(Net{"n1", {"IN", "MDRV.gate"}, {}});
+    ir.devices.push_back(Device{"MDRV", "NMOS", {{"gate", "n1"}}, {}});
     ir.ports.push_back(Port{"IN", "INPUT", "n1", std::string{"M1"}, Point{5.0, 5.0}});
     return ir;
+}
+
+aegis::graph::ConnectivityGraph make_graph(const LayoutIR& ir)
+{
+    std::vector<std::string> unresolved;
+    auto graph = aegis::graph::ConnectivityGraph::from_layout_ir(ir, unresolved);
+    REQUIRE(unresolved.empty());
+    return graph;
 }
 
 ViolationCollection make_violations()
@@ -64,6 +77,14 @@ ViolationCollection make_violations()
     violations.add(b);
 
     return violations;
+}
+
+namespace fs = std::filesystem;
+
+std::string read_file(const fs::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 }
 
 } // namespace
@@ -112,4 +133,56 @@ TEST_CASE("Selecting a violation updates details and centers canvas", "[ui][P3-0
     REQUIRE(window.violation_metadata_row_count() == 1);
     REQUIRE(std::abs(window.canvas_view_center().x() - 115.0) < 0.001);
     REQUIRE(std::abs(window.canvas_view_center().y() - 55.0) < 0.001);
+}
+
+TEST_CASE("Violation explorer supports bulk copy export and context actions", "[ui][P8][P8-012][ViolationExplorer]")
+{
+    QtAppGuard guard;
+    MainWindow window;
+    const auto ir = make_ir();
+    auto graph = make_graph(ir);
+    window.set_scene(build_ui_scene(ir));
+    window.set_connectivity_graph(&graph);
+    window.set_violations(make_violations());
+
+    const fs::path out = fs::temp_directory_path() / "aegis_selected_violations.json";
+    std::error_code ec;
+    fs::remove(out, ec);
+    window.select_violation_rows({});
+    REQUIRE(window.selected_violation_count() == 0);
+    REQUIRE_FALSE(window.violation_context_action_enabled("copy_selected"));
+    REQUIRE_FALSE(window.violation_context_action_enabled("export_selected"));
+    window.set_report_export_path_picker_for_tests([&out](const QString& kind) {
+        return kind == "violation_json" ? QString::fromStdString(out.string()) : QString{};
+    });
+
+    window.select_violation_rows({0, 1});
+    REQUIRE(window.selected_violation_count() == 2);
+    REQUIRE(window.violation_context_action_enabled("copy_selected"));
+    REQUIRE(window.violation_context_action_enabled("export_selected"));
+    REQUIRE(window.trigger_violation_context_action("copy_selected"));
+    REQUIRE(QApplication::clipboard()->text().contains("V-001"));
+    REQUIRE(QApplication::clipboard()->text().contains("V-002"));
+    REQUIRE(window.trigger_violation_context_action("export_selected"));
+    REQUIRE(read_file(out).find("V-001") != std::string::npos);
+    REQUIRE(read_file(out).find("V-002") != std::string::npos);
+    int bulk_action_logs = 0;
+    for (const auto& entry : window.activity_log_entries()) {
+        if (entry.contains("Violation bulk action", Qt::CaseInsensitive)) {
+            ++bulk_action_logs;
+        }
+    }
+    REQUIRE(bulk_action_logs == 2);
+
+    window.select_violation_row(0);
+    REQUIRE(window.violation_context_action_enabled("trace"));
+    REQUIRE(window.violation_context_action_enabled("center"));
+    REQUIRE(window.violation_context_action_enabled("copy_id"));
+    REQUIRE(window.violation_context_action_enabled("copy_details"));
+    REQUIRE(window.trigger_violation_context_action("copy_id"));
+    REQUIRE(QApplication::clipboard()->text() == "V-001");
+    REQUIRE(window.trigger_violation_context_action("copy_details"));
+    REQUIRE(QApplication::clipboard()->text().contains("Width issue"));
+    REQUIRE(window.trigger_violation_context_action("trace"));
+    REQUIRE(window.has_active_trace());
 }

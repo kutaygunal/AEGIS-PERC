@@ -1,0 +1,16 @@
+version: 1
+rules:
+  - id: FLOATING_NET
+    type: floating_net
+    severity: high
+    description: Detect nets in the imported OpenFrame sample graph that have no valid driver or power source.
+  - id: EM_CURRENT_LIMIT
+    type: em_current_limit
+    severity: medium
+    description: Flag imported current/activity entries that exceed configured per-layer thresholds.
+    parameters:
+      met1_max_mA: 10
+      met2_max_mA: 15
+      met3_max_mA: 20
+      met4_max_mA: 30
+      met5_max_mA: 40

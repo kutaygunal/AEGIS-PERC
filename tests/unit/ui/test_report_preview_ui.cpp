@@ -8,6 +8,8 @@
 #include <QApplication>
 #include <QSettings>
 
+#include <filesystem>
+#include <fstream>
 #include <memory>
 
 namespace {
@@ -70,6 +72,14 @@ aegis::rules::ViolationCollection make_violations()
     return ViolationCollection{std::move(violations)};
 }
 
+namespace fs = std::filesystem;
+
+std::string read_file(const fs::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
 } // namespace
 
 TEST_CASE("ReportPreviewUi transitions from empty placeholder state to live preview state", "[ui][P7][P7-009][ReportPreviewUi]")
@@ -92,6 +102,8 @@ TEST_CASE("ReportPreviewUi transitions from empty placeholder state to live prev
     REQUIRE(window.report_preview_refresh_enabled());
     REQUIRE(window.report_preview_copy_summary_enabled());
     REQUIRE(window.report_preview_copy_snapshot_enabled());
+    REQUIRE(window.report_preview_export_json_enabled());
+    REQUIRE(window.report_preview_export_html_enabled());
 }
 
 TEST_CASE("ReportPreviewUi updates on filter selection and violation changes and supports copy actions", "[ui][P7][P7-009][ReportPreviewUi]")
@@ -122,6 +134,34 @@ TEST_CASE("ReportPreviewUi updates on filter selection and violation changes and
 
     window.trigger_report_preview_copy_snapshot();
     REQUIRE(window.report_preview_last_action_status_text() == "Copied report snapshot");
+}
+
+TEST_CASE("ReportPreviewUi export actions report output path and success feedback", "[ui][P8][P8-008][ReportPreviewUi]")
+{
+    QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+    window.set_scene(aegis::ui::build_ui_scene(make_ir()));
+    window.set_violations(make_violations());
+
+    const fs::path root = fs::temp_directory_path() / "aegis_report_preview_ui_export";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root);
+
+    window.set_report_export_path_picker_for_tests([&root](const QString& format) {
+        return QString::fromStdString((root / (format == "html" ? "ui_preview.html" : "ui_preview.json")).string());
+    });
+
+    window.trigger_report_preview_export_json();
+    REQUIRE(window.report_preview_last_action_status_text().contains("ui_preview.json"));
+    REQUIRE(window.last_status_message().contains("ui_preview.json"));
+    REQUIRE(read_file(root / "ui_preview.json").find("report_preview_ui") != std::string::npos);
+
+    window.trigger_report_preview_export_html();
+    REQUIRE(window.report_preview_last_action_status_text().contains("ui_preview.html"));
+    REQUIRE(window.last_status_message().contains("ui_preview.html"));
+    REQUIRE(read_file(root / "ui_preview.html").find("Width issue") != std::string::npos);
 }
 
 TEST_CASE("ReportPreviewUi refresh action remains functional after repeated preview updates", "[ui][P7][P7-009][ReportPreviewUi]")

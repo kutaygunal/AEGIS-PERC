@@ -38,9 +38,13 @@ ReportPreviewPanel::ReportPreviewPanel(QWidget* parent)
     m_refresh = new QPushButton("Refresh Snapshot", this);
     m_copy_summary = new QPushButton("Copy Summary", this);
     m_copy_snapshot = new QPushButton("Copy Snapshot", this);
+    m_export_json = new QPushButton("Export JSON", this);
+    m_export_html = new QPushButton("Export HTML", this);
     actions->addWidget(m_refresh);
     actions->addWidget(m_copy_summary);
     actions->addWidget(m_copy_snapshot);
+    actions->addWidget(m_export_json);
+    actions->addWidget(m_export_html);
     actions->addStretch(1);
     layout->addLayout(actions);
 
@@ -61,6 +65,8 @@ ReportPreviewPanel::ReportPreviewPanel(QWidget* parent)
     connect(m_refresh, &QPushButton::clicked, this, &ReportPreviewPanel::trigger_refresh);
     connect(m_copy_summary, &QPushButton::clicked, this, &ReportPreviewPanel::trigger_copy_summary);
     connect(m_copy_snapshot, &QPushButton::clicked, this, &ReportPreviewPanel::trigger_copy_snapshot);
+    connect(m_export_json, &QPushButton::clicked, this, &ReportPreviewPanel::trigger_export_json);
+    connect(m_export_html, &QPushButton::clicked, this, &ReportPreviewPanel::trigger_export_html);
 
     set_snapshot(QPixmap{});
     rebuild_summary();
@@ -144,6 +150,16 @@ bool ReportPreviewPanel::copy_snapshot_enabled() const
     return m_copy_snapshot != nullptr && m_copy_snapshot->isEnabled();
 }
 
+bool ReportPreviewPanel::export_json_enabled() const
+{
+    return m_export_json != nullptr && m_export_json->isEnabled();
+}
+
+bool ReportPreviewPanel::export_html_enabled() const
+{
+    return m_export_html != nullptr && m_export_html->isEnabled();
+}
+
 void ReportPreviewPanel::trigger_refresh()
 {
     if (!refresh_enabled()) {
@@ -178,6 +194,29 @@ void ReportPreviewPanel::trigger_copy_snapshot()
     set_action_status_text("Copied report snapshot");
 }
 
+void ReportPreviewPanel::trigger_export_json()
+{
+    if (!export_json_enabled()) {
+        set_action_status_text("Report preview JSON export is unavailable");
+        return;
+    }
+    emit export_json_requested();
+}
+
+void ReportPreviewPanel::trigger_export_html()
+{
+    if (!export_html_enabled()) {
+        set_action_status_text("Report preview HTML export is unavailable");
+        return;
+    }
+    emit export_html_requested();
+}
+
+void ReportPreviewPanel::set_action_status_for_host(const QString& text)
+{
+    set_action_status_text(text);
+}
+
 void ReportPreviewPanel::rebuild_summary()
 {
     using aegis::rules::Severity;
@@ -209,7 +248,7 @@ void ReportPreviewPanel::rebuild_summary()
     }
 
     lines.append(QString{});
-    lines.append("Export is reserved for P5.");
+    lines.append("Export actions: JSON and HTML available from this panel.");
     m_summary->setPlainText(lines.join('\n'));
     update_action_state();
 }
@@ -228,6 +267,12 @@ void ReportPreviewPanel::update_action_state()
     }
     if (m_copy_snapshot != nullptr) {
         m_copy_snapshot->setEnabled(has_snapshot);
+    }
+    if (m_export_json != nullptr) {
+        m_export_json->setEnabled(has_summary);
+    }
+    if (m_export_html != nullptr) {
+        m_export_html->setEnabled(has_summary);
     }
 }
 

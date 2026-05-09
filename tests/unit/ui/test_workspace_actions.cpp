@@ -9,6 +9,10 @@
 #include <QDockWidget>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPushButton>
+#include <QTableWidget>
+#include <QToolBar>
+#include <QToolButton>
 
 namespace {
 
@@ -140,6 +144,39 @@ TEST_CASE("WorkspaceActions load sample scene and control grid overlays and sele
     REQUIRE(window.violation_overlays_visible());
     REQUIRE(window.trigger_workspace_action("toggle_overlays"));
     REQUIRE(!window.violation_overlays_visible());
+}
+
+TEST_CASE("WorkspaceActions shell widgets expose accessibility metadata and context entry points", "[ui][P8][P8-016][WorkspaceActions]")
+{
+    QtAppGuard guard;
+    aegis::ui::MainWindow window;
+    window.show();
+    QApplication::processEvents();
+
+    auto* toolbar = window.findChild<QToolBar*>("WorkspaceToolbar");
+    REQUIRE(toolbar != nullptr);
+    REQUIRE(toolbar->accessibleName() == "Workspace Toolbar");
+    REQUIRE(!toolbar->toolTip().isEmpty());
+
+    auto* canvas = window.findChild<QWidget*>("LayoutCanvas");
+    REQUIRE(canvas != nullptr);
+    REQUIRE(canvas->accessibleName() == "Layout Canvas");
+    REQUIRE(!canvas->toolTip().isEmpty());
+
+    auto* diagnostics_table = window.findChild<QTableWidget*>("DiagnosticsTable");
+    REQUIRE(diagnostics_table != nullptr);
+    REQUIRE(diagnostics_table->accessibleName() == "Diagnostics Table");
+    REQUIRE(diagnostics_table->contextMenuPolicy() == Qt::CustomContextMenu);
+
+    auto* related_button = window.findChild<QPushButton*>("DiagnosticsRelatedViolationsButton");
+    REQUIRE(related_button != nullptr);
+    REQUIRE(related_button->accessibleName() == "Diagnostics Related Violations");
+    REQUIRE(!related_button->toolTip().isEmpty());
+
+    auto* onboarding_import = window.findChild<QToolButton*>("OnboardingImportButton");
+    REQUIRE(onboarding_import != nullptr);
+    REQUIRE(onboarding_import->accessibleName() == "Import Design Package");
+    REQUIRE(!onboarding_import->toolTip().isEmpty());
 }
 
 TEST_CASE("WorkspaceActions view menu uses real dock toggle actions", "[ui][P3-013][WorkspaceActions]")

@@ -28,12 +28,19 @@ public:
     [[nodiscard]] bool refresh_enabled() const;
     [[nodiscard]] bool copy_summary_enabled() const;
     [[nodiscard]] bool copy_snapshot_enabled() const;
+    [[nodiscard]] bool export_json_enabled() const;
+    [[nodiscard]] bool export_html_enabled() const;
     void trigger_refresh();
     void trigger_copy_summary();
     void trigger_copy_snapshot();
+    void trigger_export_json();
+    void trigger_export_html();
+    void set_action_status_for_host(const QString& text);
 
 signals:
     void refresh_requested();
+    void export_json_requested();
+    void export_html_requested();
 
 private:
     UiScene m_scene;
@@ -46,6 +53,8 @@ private:
     QPushButton* m_refresh = nullptr;
     QPushButton* m_copy_summary = nullptr;
     QPushButton* m_copy_snapshot = nullptr;
+    QPushButton* m_export_json = nullptr;
+    QPushButton* m_export_html = nullptr;
     QString m_last_action_status;
     QPixmap m_snapshot_pixmap;
 

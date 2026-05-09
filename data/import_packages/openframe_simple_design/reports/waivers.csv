@@ -1,0 +1,2 @@
+waiver_id,rule_id,target,reason
+W-001,FLOATING_NET,debug_stub,Known disconnected debug-only stub in sample package

@@ -1,31 +1,33 @@
 # Handoff
 
 ## Last Updated
-2026-05-07
+2026-05-08
 
 ## Current Status
-Repository maintenance completed: documentation drift was partially corrected, an MIT `LICENSE` file was added, and `app/main.cpp` startup text was cleaned up.
+`P8-016` is implemented and marked `review`: the desktop shell now exposes accessible names/tooltips for primary controls, explicit focus order across key panels, and context menus for diagnostics, import review, and job history workflows without regressing shared action behavior.
 
 ## Last Completed Task
-Repository maintenance (docs/license/startup-text cleanup)
+`P8-016` — Polish accessibility and productivity basics across the desktop shell
 
 ## Current Task
 No implementation task in progress
 
 ## Ready Tasks
-- `P4-001`: Feature extraction from violations
-- `P5-001`: Batch analysis CLI
-- `P6-001`: Distributed job execution design doc
+- None in the current trimmed `tasks.yaml`
 
 ## Blocked Tasks
 - None recorded in the current trimmed `tasks.yaml`
 
 ## Important Notes
-- `README.md` now reflects implemented `graph`, `parsing`, and `rules` modules more accurately and notes that `ml`, `reporting`, `scripting`, and `storage` are still lightweight placeholders.
-- `orchestration/README.md` now reflects that the codebase has progressed beyond the original P1-only execution lane.
-- Full regression check passed locally: `ctest --test-dir build -C Release --output-on-failure` → **332/332 tests passed**.
-- `app/main.cpp` startup output now uses neutral current-state messaging instead of historical "stub loaded" text.
-- `aegis-perc` was rebuilt successfully after the startup-text cleanup via `cmake --build build --config Release --target aegis-perc`.
+- Primary shell widgets now publish stable accessible names/tooltips suitable for assistive tooling and headless UI tests.
+- Import review, diagnostics, and job history now expose context menus for related-violation/report actions.
+- Key shell surfaces now define explicit tab order for canvas, violations, diagnostics, import review, onboarding, and jobs.
+- Added curated repo sample package under `data/import_packages/openframe_simple_design` using copied OpenFrame artifacts plus AEGIS-specific rules/current/power examples.
+- Imported-package `Run Checks` is now enabled after `Load Project` even without a preloaded bundled sample graph; manual import no longer dead-ends on an empty workspace.
+- Validation run:
+  - `cmake --build build --config Release` ✅
+  - `ctest --test-dir build -C Release --output-on-failure -R WorkspaceActions` ✅
+  - `ctest --test-dir build -C Release --output-on-failure -R Ui` ✅
 
 ## Next Recommended Action
-Choose one forward backlog task (`P4-001`, `P5-001`, or `P6-001`) and create a focused implementation plan.
+Review and merge `P8-016`, then select the next trimmed backlog item after task list refresh.

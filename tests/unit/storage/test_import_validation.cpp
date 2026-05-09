@@ -96,6 +96,50 @@ TEST_CASE("ImportPreflightValidator scans customer folder and reports mixed know
     remove_tree(root);
 }
 
+TEST_CASE("ImportPreflightValidator scan reports malformed Verilog netlists with artifact diagnostics", "[storage][P9][P9-003][ImportValidation]")
+{
+    const fs::path root = make_temp_dir();
+
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(root / "netlist/top.v", "module top(input A, output Y);\n  BUFX1 u0 (.A(A), .Y(Y);\nendmodule\n");
+    write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: FLOATING_NET\n");
+
+    ImportPreflightValidator validator;
+    const ProjectPackage package = validator.scan_project_folder(root, "BrokenVerilog");
+
+    bool saw_parse_error = false;
+    for (const auto& diagnostic : package.diagnostics()) {
+        saw_parse_error = saw_parse_error || diagnostic.code == "VERILOG_PARSE_FAILED";
+    }
+    REQUIRE(saw_parse_error);
+    REQUIRE(package.validation_status() == ValidationStatus::Invalid);
+
+    remove_tree(root);
+}
+
+TEST_CASE("ImportPreflightValidator scan reports malformed SPICE/CDL netlists with artifact diagnostics", "[storage][P9][P9-004][ImportValidation]")
+{
+    const fs::path root = make_temp_dir();
+
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(root / "netlist/top.sp", ".SUBCKT top a b\n.FOO bad\n.ENDS top\n");
+    write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: FLOATING_NET\n");
+
+    ImportPreflightValidator validator;
+    const ProjectPackage package = validator.scan_project_folder(root, "BrokenSpice");
+
+    bool saw_parse_error = false;
+    for (const auto& diagnostic : package.diagnostics()) {
+        saw_parse_error = saw_parse_error || diagnostic.code == "SPICE_PARSE_FAILED";
+    }
+    REQUIRE(saw_parse_error);
+    REQUIRE(package.validation_status() == ValidationStatus::Invalid);
+
+    remove_tree(root);
+}
+
 TEST_CASE("ImportPreflightValidator validate reports missing required artifacts and duplicate path conflicts", "[storage][p6-003][ImportValidation]")
 {
     ProjectPackage package;

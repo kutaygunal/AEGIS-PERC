@@ -93,13 +93,20 @@ TEST_CASE("UiStates exposes consistent empty-state guidance across major panels"
     aegis::ui::MainWindow window;
 
     REQUIRE(window.canvas_empty_state_text() == "Load a design to inspect layout geometry.");
+    REQUIRE(window.onboarding_visible());
+    REQUIRE(window.onboarding_text().contains("Browse Samples"));
+    REQUIRE(window.onboarding_text().contains("Documentation"));
     REQUIRE(window.properties_summary_text() == "Load a design to inspect item properties.");
     REQUIRE(window.trace_status_text() == "Load a design with connectivity data to trace nets and pins.");
     REQUIRE(window.graph_explorer_status_text() == "Load a design with connectivity data to explore graph nodes.");
     REQUIRE(window.report_preview_summary_text().contains("Load a design to preview report content."));
     REQUIRE_FALSE(window.report_preview_snapshot_status_text().trimmed().isEmpty());
+    REQUIRE(window.trigger_workspace_action("documentation"));
+    QApplication::processEvents();
+    REQUIRE(window.is_documentation_dialog_visible());
     REQUIRE(window.violation_details_text() == "Run checks to populate the violations panel.");
     REQUIRE(window.heatmap_empty_state_text() == "Run checks or clear filters to generate violation heatmap data.");
+    REQUIRE(window.diagnostics_details_text().contains("No diagnostics match the current filters", Qt::CaseInsensitive));
 }
 
 TEST_CASE("UiStates transitions to actionable loaded idle and filtered states deterministically", "[ui][P7][P7-010][UiStates]")
@@ -119,11 +126,34 @@ TEST_CASE("UiStates transitions to actionable loaded idle and filtered states de
     window.set_violations(make_violations());
     window.select_violation_row(-1);
     REQUIRE(window.violation_details_text() == "Select a violation to inspect its details.");
+    REQUIRE(window.diagnostics_entry_count() == 2);
+    REQUIRE(window.set_diagnostics_severity_filter("error"));
+    REQUIRE(window.diagnostics_entry_count() == 1);
+    REQUIRE(window.select_diagnostics_row(0));
+    REQUIRE(window.diagnostics_details_text().contains("Run diagnostic", Qt::CaseInsensitive));
 
     aegis::ui::ViolationFilterState state;
     state.layer = "NO_MATCH";
     window.set_violation_filter_state(state);
     REQUIRE(window.violation_details_text() == "No violations match the current filters. Clear filters or adjust the criteria.");
+}
+
+TEST_CASE("UiStates remembers onboarding dismissal across restart", "[ui][P8][P8-014][UiStates]")
+{
+    QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
+
+    {
+        aegis::ui::MainWindow window;
+        REQUIRE(window.onboarding_visible());
+        window.dismiss_onboarding();
+        REQUIRE_FALSE(window.onboarding_visible());
+    }
+
+    {
+        aegis::ui::MainWindow restored;
+        REQUIRE_FALSE(restored.onboarding_visible());
+    }
 }
 
 TEST_CASE("UiStates reports empty connectivity graph and retains preview guidance after repeated resets", "[ui][P7][P7-010][UiStates]")

@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
+#include <optional>
+#include <string>
 
 namespace fs = std::filesystem;
 using namespace aegis::parsing;
@@ -26,6 +28,23 @@ static fs::path write_temp_spice(const std::string& content) {
 static void remove_temp(const fs::path& p) {
     std::error_code ec;
     fs::remove(p, ec);
+}
+
+static fs::path make_temp_dir() {
+    auto dir = fs::temp_directory_path() / ("aegis_spice_dir_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(dir);
+    return dir;
+}
+
+static void write_file(const fs::path& path, const std::string& content) {
+    fs::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary);
+    out << content;
+}
+
+static void remove_tree(const fs::path& root) {
+    std::error_code ec;
+    fs::remove_all(root, ec);
 }
 
 // ---------------------------------------------------------------------------
@@ -326,7 +345,7 @@ TEST_CASE("SpiceParser rejects unknown statement",
 {
     auto tmp = write_temp_spice(
         ".SUBCKT test a b\n"
-        "D1 a b mydiode\n"  // D not supported in reduced subset
+        "Z1 a b mystery\n"
         ".ENDS test\n");
     SpiceParser parser;
     RecordingCallbacks cb;
@@ -338,7 +357,7 @@ TEST_CASE("SpiceParser rejects unknown statement",
     REQUIRE(!ok);
     bool found = false;
     for (const auto& [msg, line] : cb.errors) {
-        if (msg.find("Unknown") != std::string::npos) {
+        if (msg.find("Unsupported SPICE/CDL element") != std::string::npos) {
             found = true;
             break;
         }
@@ -467,6 +486,93 @@ TEST_CASE("SpiceParser handles no .SUBCKT (flat netlist)",
     REQUIRE(ir.devices.size() == 3);
     REQUIRE(ir.ports.empty());
     REQUIRE(ir.nets.size() == 4); // a, b, c, 0
+}
+
+TEST_CASE("SpiceParser supports include model param and subckt instance constructs", "[parsing][SpiceParser][fast]")
+{
+    const fs::path root = make_temp_dir();
+    write_file(root / "models.inc",
+               ".MODEL NMOS_CORE NMOS LEVEL=1 VTO=0.45\n"
+               ".PARAM core_w=1.2u core_l=0.18u\n"
+               ".SUBCKT inv a y vdd vss\n"
+               "M1 y a vss vss NMOS_CORE w=core_w l=core_l\n"
+               "M2 y a vdd vdd PMOS_CORE w=2.4u l=core_l\n"
+               ".ENDS inv\n"
+               ".MODEL PMOS_CORE PMOS LEVEL=1 VTO=-0.45\n");
+    write_file(root / "top.sp",
+               ".INCLUDE \"models.inc\"\n"
+               ".GLOBAL vdd vss\n"
+               "XU1 in out vdd vss inv strength=2\n"
+               "VDD vdd 0 DC 1.8\n"
+               "VSS vss 0 DC 0.0\n");
+
+    SpiceParser parser;
+    LayoutIR ir = parser.parse_to_layout_ir(root / "top.sp");
+
+    REQUIRE(ir.metadata.at("model.NMOS_CORE.type") == "NMOS");
+    REQUIRE(ir.metadata.at("param.core_w") == "1.2u");
+
+    auto it_x = std::find_if(ir.devices.begin(), ir.devices.end(), [](const Device& d) {
+        return d.name == "U1" && d.type == "SUBCKT_INSTANCE";
+    });
+    REQUIRE(it_x != ir.devices.end());
+    REQUIRE(it_x->properties.at("subckt") == "inv");
+    REQUIRE(it_x->pins.at("a") == "in");
+    REQUIRE(it_x->pins.at("y") == "out");
+    REQUIRE(it_x->pins.at("vdd") == "vdd");
+    REQUIRE(it_x->pins.at("vss") == "vss");
+
+    auto it_vdd = std::find_if(ir.nets.begin(), ir.nets.end(), [](const Net& n) { return n.name == "vdd"; });
+    REQUIRE(it_vdd != ir.nets.end());
+    REQUIRE(it_vdd->properties.at("global") == "true");
+
+    remove_tree(root);
+}
+
+TEST_CASE("SpiceParser supports representative CDL diode and BJT syntax", "[parsing][SpiceParser][fast]")
+{
+    auto tmp = write_temp_spice(
+        ".SUBCKT io_pad pad vss\n"
+        "D1 pad vss DIO area=2 pj=4\n"
+        "Q1 pad ctrl vss PNP area=1 m=2\n"
+        ".ENDS io_pad\n");
+    SpiceParser parser;
+
+    LayoutIR ir = parser.parse_to_layout_ir(tmp);
+    remove_temp(tmp);
+
+    auto diode = std::find_if(ir.devices.begin(), ir.devices.end(), [](const Device& d) { return d.type == "DIODE"; });
+    REQUIRE(diode != ir.devices.end());
+    REQUIRE(diode->pins.at("anode") == "pad");
+    REQUIRE(diode->pins.at("cathode") == "vss");
+    REQUIRE(diode->properties.at("model") == "DIO");
+    REQUIRE(diode->properties.at("area") == "2");
+
+    auto bjt = std::find_if(ir.devices.begin(), ir.devices.end(), [](const Device& d) { return d.type == "BJT"; });
+    REQUIRE(bjt != ir.devices.end());
+    REQUIRE(bjt->pins.at("collector") == "pad");
+    REQUIRE(bjt->pins.at("base") == "ctrl");
+    REQUIRE(bjt->pins.at("emitter") == "vss");
+    REQUIRE(bjt->properties.at("model") == "PNP");
+    REQUIRE(bjt->properties.at("m") == "2");
+}
+
+TEST_CASE("SpiceParser reports explicit unsupported directive diagnostics", "[parsing][SpiceParser][fast]")
+{
+    auto tmp = write_temp_spice(
+        ".SUBCKT bad a b\n"
+        ".FOO bar baz\n"
+        ".ENDS bad\n");
+    SpiceParser parser;
+    RecordingCallbacks cb;
+    NullCancellationToken token;
+
+    const bool ok = parser.parse(tmp, cb, token);
+    remove_temp(tmp);
+
+    REQUIRE_FALSE(ok);
+    REQUIRE_FALSE(cb.errors.empty());
+    REQUIRE(cb.errors.front().first.find("Unsupported SPICE/CDL directive '.FOO'") != std::string::npos);
 }
 
 TEST_CASE("SpiceParser handles 10K-line file acceptably",

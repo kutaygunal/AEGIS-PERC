@@ -54,4 +54,798 @@ tasks:
       - "ctest --test-dir build --output-on-failure --R BatchCLI"
     status: todo
 
+  # ─────────────────────────────────────────────────────────
+  # Sprint 8 — Workflow UX Completion (P8)
+  # Focus: close the gap between implemented backend/workflow pieces
+  # and fully user-drivable desktop functionality.
+  # ─────────────────────────────────────────────────────────
+
+  - id: P8-001
+    phase: P8
+    title: "Replace import placeholder with native file and folder picker"
+    priority: high
+    area: ui
+    risk: low
+    depends_on: []
+    acceptance:
+      - "Triggering `Import Design Package...` opens a real Qt file/folder selection flow."
+      - Users can choose either a project folder or multiple files without relying on drag-and-drop.
+      - Canceling the picker leaves workspace state unchanged and logs a non-error status message.
+      - Headless tests can bypass dialogs through injectable/testable picker seams.
+    implementation_rules:
+      - Keep drag-and-drop support intact.
+      - Do not hardcode absolute paths.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R ImportWizard"
+    status: done
+
+  - id: P8-002
+    phase: P8
+    title: "Upgrade import review dialog into interactive artifact table"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P8-001]
+    acceptance:
+      - Import review shows artifacts in a structured table instead of read-only plain text only.
+      - Each artifact row displays path, detected role, category, optional/required state, and validation status.
+      - Users can override ambiguous roles from the UI.
+      - Diagnostics remain visible alongside the table.
+    implementation_rules:
+      - Preserve the existing textual summary for logs/tests if useful.
+      - "Role override choices must map to `ArtifactRole` safely."
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R ImportWizard"
+    status: done
+
+  - id: P8-003
+    phase: P8
+    title: "Add import apply/load action that commits validated packages into the workspace"
+    priority: high
+    area: ui
+    risk: high
+    depends_on: [P8-002]
+    acceptance:
+      - "Import dialog includes an explicit `Load Project` or equivalent confirmation action."
+      - Successful import populates the workspace with project/package context instead of stopping at review.
+      - Blocking diagnostics disable the final load action until resolved or acknowledged by policy.
+      - Status bar and activity log reflect the committed import result.
+    implementation_rules:
+      - "Reuse `ProjectPackage` normalized state; do not create a second import model."
+      - Keep behavior deterministic for tests.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R ImportWizard"
+    status: done
+
+  - id: P8-004
+    phase: P8
+    title: "Wire imported rule packs and optional enrichments into desktop Run Checks"
+    priority: high
+    area: ui
+    risk: high
+    depends_on: [P8-003]
+    acceptance:
+      - "`Run Checks` uses the currently imported rule pack when available instead of only hardcoded built-in rules."
+      - Optional power-domain and current/activity CSV enrichments influence graph/rule execution in desktop mode.
+      - UI clearly reports whether execution used built-in defaults or imported package content.
+      - Failures surface actionable diagnostics to the user.
+    implementation_rules:
+      - Reuse rule-pack loading and parser logic from scripting/orchestration paths.
+      - Avoid duplicating execution logic between CLI and desktop.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R RunChecks"
+      - "ctest --test-dir build --output-on-failure -R RulePack"
+    status: done
+
+  - id: P8-005
+    phase: P8
+    title: "Execute desktop import/run/report operations through LocalJobPipeline"
+    priority: high
+    area: orchestration
+    risk: high
+    depends_on: [P8-003, P8-004]
+    acceptance:
+      - "Desktop-triggered long-running operations use `LocalJobPipeline` rather than blocking the UI thread."
+      - Progress stages are surfaced in the workspace.
+      - Completion and failure payloads feed existing preview/log panels.
+      - Synchronous sample/demo workflows remain supported for tests where needed.
+    implementation_rules:
+      - Keep UI responsive throughout pipeline execution.
+      - Define a minimal adapter layer between UI and orchestration.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R JobPipeline"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: done
+
+  - id: P8-006
+    phase: P8
+    title: "Add visible progress, cancel, and retry controls for desktop jobs"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P8-005]
+    acceptance:
+      - Users can see active stage, completed stage count, and current operation message.
+      - Users can cancel a running import/run/report job from the UI.
+      - Failed jobs expose a retry path when inputs are still valid.
+      - Cancellation and retry outcomes are logged clearly.
+    implementation_rules:
+      - Reflect actual pipeline state; do not simulate progress.
+      - Prevent duplicate concurrent submissions of the same action unless explicitly allowed.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R JobPipeline"
+      - "ctest --test-dir build --output-on-failure -R UiNotifications"
+    status: done
+
+  - id: P8-007
+    phase: P8
+    title: "Create job monitor/history dock for recent workflow runs"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P8-006]
+    acceptance:
+      - A dock lists recent import/run/report jobs with state, timestamps, and summary results.
+      - Selecting a job reveals its progress history and final diagnostics.
+      - Completed jobs can reopen generated report outputs when present.
+      - History is bounded to avoid unbounded memory growth.
+    implementation_rules:
+      - Reuse activity-log patterns where practical.
+      - Keep the dock useful in both success and failure scenarios.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: done
+
+  - id: P8-008
+    phase: P8
+    title: "Add export actions to Report Preview for HTML and JSON outputs"
+    priority: high
+    area: reporting
+    risk: medium
+    depends_on: [P8-005]
+    acceptance:
+      - "Report Preview no longer ends with `Export is reserved for P5.` for implemented export paths."
+      - Users can export current results as HTML and JSON from the desktop UI.
+      - Exported output includes project summary, violations, and import/runtime diagnostics when available.
+      - UI reports export path and success/failure feedback.
+    implementation_rules:
+      - Reuse report-generation code where possible.
+      - Preserve copy-summary and copy-snapshot workflows.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R ReportPreview"
+      - "ctest --test-dir build --output-on-failure -R Reporting"
+    status: done
+
+  - id: P8-009
+    phase: P8
+    title: "Add workspace summary panel for loaded project, rules, and analysis readiness"
+    priority: medium
+    area: ui
+    risk: low
+    depends_on: [P8-003]
+    acceptance:
+      - Users can see current project name, loaded artifact counts, selected rule source, and readiness state at a glance.
+      - The panel distinguishes sample mode from imported-customer-project mode.
+      - Missing required inputs are surfaced before run-time failure.
+      - Summary updates automatically after import, sample load, and run completion.
+    implementation_rules:
+      - Keep summary read-only and fast to update.
+      - Reuse normalized package metadata.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: done
+
+  - id: P8-010
+    phase: P8
+    title: "Support recent projects and reopen-last-session workflows"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P8-003]
+    acceptance:
+      - Recently imported projects are listed in a reopen menu or launcher surface.
+      - Users can reopen the last successful project/package on startup if enabled.
+      - Missing files are detected gracefully and removed or marked stale.
+      - Persisted entries avoid storing sensitive transient paths beyond intended scope.
+    implementation_rules:
+      - "Build on existing `QSettings` persistence."
+      - Keep persistence schema versioned.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R WorkspacePersistence"
+    status: done
+
+  - id: P8-011
+    phase: P8
+    title: "Add actionable diagnostics panel with filtering and quick navigation"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P8-002]
+    acceptance:
+      - Import and run diagnostics are shown in a dedicated list/table instead of summary text only.
+      - Users can filter by severity and jump from a diagnostic to the related artifact or violation context.
+      - Blocking diagnostics are visually distinct from warnings.
+      - Empty-state guidance explains how to clear blockers.
+    implementation_rules:
+      - Keep terminology consistent with existing activity-log and empty-state text.
+      - Do not lose full diagnostic message fidelity.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R UiStates"
+      - "ctest --test-dir build --output-on-failure -R ImportWizard"
+    status: done
+
+  - id: P8-012
+    phase: P8
+    title: "Add violation bulk actions and context menus"
+    priority: medium
+    area: ui
+    risk: low
+    depends_on: [P8-004]
+    acceptance:
+      - Violation explorer supports bulk copy/export of selected rows.
+      - Context-menu actions allow trace-from-violation, center-on-canvas, and copy ID/details.
+      - Actions enable or disable correctly for empty and multi-selection states.
+      - Activity log records user-triggered bulk actions without spam.
+    implementation_rules:
+      - Reuse existing selection and trace entry points.
+      - Keep action labels consistent with toolbar/menu naming.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R ViolationExplorer"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: done
+
+  - id: P8-013
+    phase: P8
+    title: "Persist named filter presets and saved workspace views"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P8-009]
+    acceptance:
+      - Users can save and restore named violation filter presets.
+      - Users can save at least one workspace view snapshot covering dock layout and key toggles.
+      - Presets survive app restart.
+      - Deleting or renaming presets updates persisted state correctly.
+    implementation_rules:
+      - Extend existing filter/state persistence rather than creating parallel storage.
+      - Keep preset serialization human-inspectable where practical.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R WorkspaceState"
+      - "ctest --test-dir build --output-on-failure -R ViolationFilter"
+    status: review
+
+  - id: P8-014
+    phase: P8
+    title: "Add first-run onboarding and guided empty-state actions"
+    priority: medium
+    area: ui
+    risk: low
+    depends_on: []
+    acceptance:
+      - Fresh users are guided toward sample loading, import, and run-check workflows from the empty workspace.
+      - Key empty states offer direct actions, not only instructional text.
+      - Help/documentation links are reachable from onboarding surfaces.
+      - Onboarding can be dismissed and remembered.
+    implementation_rules:
+      - Reuse current empty-state language where possible.
+      - Keep onboarding non-modal after first dismissal.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R UiStates"
+      - "ctest --test-dir build --output-on-failure -R SampleWorkflow"
+    status: review
+
+  - id: P8-015
+    phase: P8
+    title: "Add cross-probing between import artifacts, graph nodes, and violations"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P8-004, P8-011]
+    acceptance:
+      - Users can navigate from a diagnostic or artifact to impacted violations when relationships exist.
+      - Users can navigate from a violation back to relevant net/device/import metadata.
+      - Cross-probing preserves current filters and selection context where practical.
+      - Unresolved links degrade gracefully with explicit feedback.
+    implementation_rules:
+      - Use stable IDs/metadata, not ad-hoc string matching where avoidable.
+      - Keep navigation one-click from visible panels.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+    status: review
+
+  - id: P8-016
+    phase: P8
+    title: "Polish accessibility and productivity basics across the desktop shell"
+    priority: medium
+    area: ui
+    risk: low
+    depends_on: []
+    acceptance:
+      - Major actions and panels expose sensible keyboard focus order and shortcuts.
+      - Primary controls have accessible names/tooltips suitable for assistive tooling and tests.
+      - High-value context menus are added where keyboard-only workflows currently stall.
+      - No regressions in existing shared action-state logic.
+    implementation_rules:
+      - Keep naming consistent with current action registry.
+      - Favor small reusable helper utilities over per-widget duplication.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R WorkspaceActions"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: review
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 10 — Applied AI/ML and Explainability (P10)
+  # Focus: replace missing ML/XAI/copilot claims with real feature,
+  # model, inference, retrieval, and assistant subsystems.
+  # ─────────────────────────────────────────────────────────
+
+  - id: P10-001
+    phase: P10
+    title: "Implement violation and graph-context feature extraction"
+    priority: high
+    area: ml
+    risk: high
+    depends_on: [P9-004]
+    acceptance:
+      - Feature extraction emits deterministic numerical and categorical features from violations, nets, devices, domains, and available physical context.
+      - Extraction supports both batch workflows and incremental single-violation requests for future interactive explainability.
+      - Output schema/versioning is documented so training, inference, and report layers share the same contract.
+      - Unit tests verify stable output on fixed sample designs and imported packages.
+    implementation_rules:
+      - Keep extraction read-only over graph and violation inputs.
+      - Preserve provenance for feature rows where practical.
+      - Avoid embedding model-specific assumptions into the base extractor.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R FeatureExtraction"
+      - "ctest --test-dir build --output-on-failure -R Ml"
+    status: ready
+
+  - id: P10-002
+    phase: P10
+    title: "Add tabular XGBoost/LightGBM training pipeline for violation classification"
+    priority: high
+    area: ml
+    risk: high
+    depends_on: [P10-001]
+    acceptance:
+      - A reproducible training pipeline consumes extracted features and produces versioned classification artifacts for supported violation classes.
+      - Training/evaluation metrics are emitted for deterministic test datasets and sample corpora.
+      - Model metadata records feature schema version, label mapping, and training provenance.
+      - The repository gains a documented path for refreshing or replacing baseline models.
+    implementation_rules:
+      - Keep training pipelines scriptable/headless and separate from desktop UI code.
+      - Support CPU-only execution first; do not block later GPU acceleration.
+      - Fail clearly when model/schema versions are incompatible.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Ml"
+      - "python scripts/train_violation_model.py --help"
+    status: ready
+
+  - id: P10-003
+    phase: P10
+    title: "Integrate ONNX Runtime inference for desktop and CLI analysis flows"
+    priority: high
+    area: ml
+    risk: high
+    depends_on: [P10-002]
+    acceptance:
+      - Trained tabular models export to ONNX and load through an integrated inference path in C++.
+      - Desktop and CLI workflows can request model scoring without Python-in-the-loop.
+      - Inference outputs include stable class labels, confidence scores, and model/version metadata.
+      - Build and runtime gracefully degrade when ONNX Runtime is unavailable by surfacing actionable diagnostics.
+    implementation_rules:
+      - Keep inference API isolated from any one model family.
+      - Avoid hardcoding absolute model paths; use config/package references.
+      - Preserve deterministic CPU inference as the baseline path.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Ml"
+      - "ctest --test-dir build --output-on-failure -R BatchCLI"
+    status: ready
+
+  - id: P10-004
+    phase: P10
+    title: "Implement graph embeddings and FAISS-based similarity retrieval"
+    priority: high
+    area: ml
+    risk: high
+    depends_on: [P10-001]
+    acceptance:
+      - Structural embeddings can be generated for violations/subgraphs using a documented graph-embedding pipeline.
+      - Similarity search indexes embeddings and returns ranked nearest historical violations with stable metadata.
+      - Retrieval works headlessly for CLI/reporting use and is callable from future desktop/XAI surfaces.
+      - Tests cover deterministic indexing/query behavior on a small seeded corpus.
+    implementation_rules:
+      - Keep embedding generation decoupled from one specific GNN backend.
+      - Persist enough metadata to explain why a match was returned.
+      - Make corpus/index versioning explicit.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Ml"
+      - "ctest --test-dir build --output-on-failure -R Similarity"
+    status: ready
+
+  - id: P10-005
+    phase: P10
+    title: "Add SHAP-based explainability and surfaced ML evidence"
+    priority: high
+    area: ml
+    risk: high
+    depends_on: [P10-003, P10-004]
+    acceptance:
+      - Per-violation explanations expose top contributing features, confidence context, and similar historical matches when available.
+      - Explanation payloads are serializable for reports, CLI, and future desktop panels.
+      - Missing explanation backends degrade gracefully without breaking deterministic rule-check workflows.
+      - Tests cover stable explanation shape and metadata on seeded model outputs.
+    implementation_rules:
+      - Keep XAI outputs auditable and tied to model/version identifiers.
+      - Do not present opaque scores without accompanying evidence labels.
+      - Separate explanation formatting from explanation computation.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Ml"
+      - "ctest --test-dir build --output-on-failure -R Reporting"
+    status: ready
+
+  - id: P10-006
+    phase: P10
+    title: "Implement Ollama-backed LLM copilot with retrieval-augmented violation summaries"
+    priority: medium
+    area: ml
+    risk: high
+    depends_on: [P10-004, P10-005]
+    acceptance:
+      - A local LLM integration can answer project/violation questions using retrieved rule, graph, and historical-context evidence.
+      - Copilot responses cite source objects/violations instead of returning unsupported free-form claims only.
+      - The assistant layer is optional and headless-safe; deterministic analysis remains usable without it.
+      - Prompt, retrieval, and tool-call boundaries are documented and testable.
+    implementation_rules:
+      - Keep the copilot strictly additive; it must not mutate design state directly.
+      - Separate retrieval/tool execution from final response generation.
+      - Provide explicit configuration for local model/provider selection.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Ml"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: ready
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 11 — Platform, Performance, and Extensibility (P11)
+  # Focus: replace remaining platform placeholders across rendering,
+  # storage, scripting, deployment, distributed execution, and plugins.
+  # ─────────────────────────────────────────────────────────
+
+  - id: P11-001
+    phase: P11
+    title: "Upgrade the layout canvas from QPainter raster to OpenGL/Vulkan-backed rendering"
+    priority: high
+    area: ui
+    risk: high
+    depends_on: [P9-002]
+    acceptance:
+      - The desktop renderer uses a GPU-backed path for layout geometry, overlays, and view transforms instead of QWidget/QPainter raster only.
+      - Existing workspace interactions (zoom, pan, selection, overlays, heatmap, trace focus) remain functionally equivalent.
+      - Rendering architecture preserves a fallback path or clear degradation behavior on unsupported systems.
+      - Performance regression coverage includes large imported scenes beyond synthetic samples.
+    implementation_rules:
+      - Preserve the existing `UiScene` boundary so rendering backend swaps do not leak into parsing/rules code.
+      - Introduce backend abstraction incrementally; avoid a flag day rewrite.
+      - Keep headless tests viable through backend seams or fallback mode.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Canvas"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: ready
+
+  - id: P11-002
+    phase: P11
+    title: "Add optional GPU acceleration paths for inference and heavy graph/layout workloads"
+    priority: medium
+    area: ml
+    risk: high
+    depends_on: [P10-003, P11-001]
+    acceptance:
+      - Optional GPU-backed execution paths exist for supported inference or rendering-heavy workloads, with CPU remaining the deterministic baseline.
+      - Build configuration clearly advertises enabled/disabled GPU backends and required dependencies.
+      - Runtime capability detection selects compatible backends without crashing unsupported hosts.
+      - Benchmarks demonstrate measurable benefit on representative workloads.
+    implementation_rules:
+      - Keep GPU support optional and modular.
+      - Do not make CI or core developer workflows depend on CUDA/ROCm being installed.
+      - Use explicit feature flags and diagnostics for backend selection.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Ml"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: ready
+
+  - id: P11-003
+    phase: P11
+    title: "Replace the PythonApi stub with a real pybind11 automation surface"
+    priority: high
+    area: scripting
+    risk: medium
+    depends_on: [P9-004, P10-003]
+    acceptance:
+      - A real Python module exposes session/project loading, analysis execution, explanation access, and report export APIs.
+      - Bindings are built and packaged through the project build system rather than represented by a boolean stub.
+      - Python automation reuses the same core workflow paths as CLI and desktop execution.
+      - Automated tests cover import, run, and report flows from Python.
+    implementation_rules:
+      - Keep binding classes thin over core services.
+      - Version the Python API surface deliberately and document compatibility expectations.
+      - Avoid duplicating business logic in Python wrapper code.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Scripting"
+      - "python -c \"import aegis\""
+    status: ready
+
+  - id: P11-004
+    phase: P11
+    title: "Implement real storage backends for SQLite/PostgreSQL and analytical exports"
+    priority: high
+    area: storage
+    risk: high
+    depends_on: [P10-005]
+    acceptance:
+      - `StorageEngine` moves beyond a boolean stub and supports at least one local durable backend plus an enterprise-oriented backend path.
+      - Analysis sessions, violations, explanations, and historical similarity metadata can be persisted and queried.
+      - Analytical export paths support Arrow/Parquet or a clearly documented equivalent contract for downstream processing.
+      - Storage configuration, migrations, and failure diagnostics are documented and tested.
+    implementation_rules:
+      - Separate persistence contracts from concrete database drivers.
+      - Keep local single-user workflows simple by default.
+      - Version schemas and surface migration failures clearly.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Storage"
+      - "ctest --test-dir build --output-on-failure -R Reporting"
+    status: ready
+
+  - id: P11-005
+    phase: P11
+    title: "Harden developer packaging with Docker and optional Conan/vcpkg integration"
+    priority: medium
+    area: build
+    risk: medium
+    depends_on: []
+    acceptance:
+      - The repository includes reproducible containerized build/test flows for CI and local developer onboarding.
+      - Optional dependency-management integration is documented and usable instead of being README-only.
+      - Container/build recipes cover headless CLI/test workflows and clearly describe UI/runtime caveats.
+      - CI documentation reflects the supported package/dependency paths.
+    implementation_rules:
+      - Keep the default native CMake path working; containers are additive.
+      - Avoid introducing mutually inconsistent dependency stories.
+      - Prefer minimal, auditable build images.
+    test_commands:
+      - "docker build -t aegis-perc ."
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure"
+    status: ready
+
+  - id: P11-006
+    phase: P11
+    title: "Implement the documented distributed execution stack with host/worker transport and durable queueing"
+    priority: high
+    area: orchestration
+    risk: high
+    depends_on: [P8-005, P11-004]
+    acceptance:
+      - The host/worker model documented in `docs/design/distributed.md` is backed by real transport, progress, and durable job-state plumbing.
+      - A localhost multi-process deployment works end-to-end for submit, progress, cancel, retry, and result collection.
+      - Queue/transport choices are explicit in code/build/docs rather than architecture notes only.
+      - Failure-path tests cover worker crash, lost lease, cancellation, and artifact-resolution errors.
+    implementation_rules:
+      - Preserve `ProjectPackage` and `LocalJobPipeline` semantics as the compatibility anchor.
+      - Introduce transport/queue boundaries under orchestration, not UI modules.
+      - Keep single-machine mode first; scale-out can layer on top.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R JobPipeline"
+      - "ctest --test-dir build --output-on-failure -R Orchestration"
+    status: ready
+
+  - id: P11-007
+    phase: P11
+    title: "Replace the static rule registry story with a dynamic plugin SDK"
+    priority: medium
+    area: rules
+    risk: high
+    depends_on: [P11-003]
+    acceptance:
+      - Third-party rule modules can be discovered, loaded, and registered dynamically at runtime.
+      - Plugin packaging, version compatibility, and failure isolation are documented and testable.
+      - Built-in rules continue to work through the same engine contracts.
+      - Rule-pack configuration can target both built-in and plugin-provided rule types.
+    implementation_rules:
+      - Keep ABI/API boundaries explicit and narrow.
+      - Do not let plugin loading failures break unrelated rule execution.
+      - Separate plugin discovery from plugin trust/policy decisions.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R RulePack"
+      - "ctest --test-dir build --output-on-failure -R Rules"
+    status: ready
+
+  - id: P11-008
+    phase: P11
+    title: "Turn report generation into a real templated HTML/JSON reporting engine"
+    priority: medium
+    area: reporting
+    risk: medium
+    depends_on: [P10-005, P11-004]
+    acceptance:
+      - `ReportGenerator` produces structured HTML and JSON outputs instead of being a stub, and desktop/CLI exports reuse it.
+      - Template-driven report variants support executive, engineering, and machine-readable output modes.
+      - Reports can include deterministic checks, ML scores, explanations, similarity matches, and run diagnostics when available.
+      - Regression tests compare stable report structure on seeded inputs.
+    implementation_rules:
+      - Keep presentation templates separate from report data assembly.
+      - Do not duplicate HTML generation logic across CLI and UI.
+      - Preserve deterministic outputs for tests.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Reporting"
+      - "ctest --test-dir build --output-on-failure -R ReportPreview"
+    status: ready
+
+  - id: P11-009
+    phase: P11
+    title: "Add a CSR-oriented graph backend and benchmark it against the current adjacency-list engine"
+    priority: medium
+    area: graph
+    risk: high
+    depends_on: [P9-004]
+    acceptance:
+      - A CSR-oriented graph representation exists for large static connectivity workloads and is benchmarked against the current adjacency-list implementation.
+      - The graph API either abstracts backend choice cleanly or documents where CSR-specific paths are used.
+      - Benchmarks cover memory footprint and traversal performance on representative imported designs.
+      - No regressions in rule-engine correctness occur when switching supported workloads to the new backend.
+    implementation_rules:
+      - Keep the existing adjacency-list engine available during migration.
+      - Avoid premature backend exposure in UI-layer code.
+      - Prefer data-driven backend selection over hardcoded replacement.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Graph"
+      - "ctest --test-dir build --output-on-failure -R Rules"
+    status: ready
+
+  # ─────────────────────────────────────────────────────────
+  # Sprint 12 — LEF Signoff-Grade Hardening (P12)
+  # Focus: advance the new LEF MVP parser toward full commercial-grade
+  # ingestion, semantics, validation, and project-path integration.
+  # ─────────────────────────────────────────────────────────
+
+  - id: P12-001
+    phase: P12
+    title: "Expand LEF coverage toward full 5.x grammar compatibility"
+    priority: high
+    area: parsing
+    risk: high
+    depends_on: [P9-001]
+    acceptance:
+      - LEF parsing supports a substantially broader LEF 5.x grammar surface beyond the current MVP subset.
+      - Common industrial constructs that appear in technology and abstract libraries are parsed or explicitly classified with structured unsupported diagnostics.
+      - Grammar support is documented by statement/block coverage so customers know what is fully supported vs partially supported.
+      - Regression tests include representative LEF 5.x fixtures beyond the single shipped sample.
+    implementation_rules:
+      - Preserve backward compatibility with the current normalized LEF data model where practical.
+      - Prefer explicit parse-state coverage over ad-hoc keyword exceptions.
+      - Unsupported constructs must remain visible through diagnostics rather than being silently skipped.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Lef"
+      - "ctest --test-dir build --output-on-failure -R Parsing"
+    status: ready
+
+  - id: P12-002
+    phase: P12
+    title: "Add advanced LEF geometry/forms and richer abstract-shape normalization"
+    priority: high
+    area: parsing
+    risk: high
+    depends_on: [P12-001]
+    acceptance:
+      - LEF normalization supports advanced geometry/forms beyond the current RECT-centric subset where required by common industrial macro abstracts.
+      - Parsed geometry is preserved with enough fidelity for downstream visualization, obstruction handling, and future rule semantics.
+      - Geometry normalization validates malformed shapes and reports actionable source diagnostics.
+      - Tests cover mixed per-layer shape content in PIN, PORT, OBS, and VIA contexts.
+    implementation_rules:
+      - Keep normalized geometry independent of any one rendering backend.
+      - Preserve source-line provenance for every emitted geometry primitive.
+      - Do not collapse unsupported forms into lossy approximations without explicit metadata.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Lef"
+      - "ctest --test-dir build --output-on-failure -R UiSceneAdapter"
+    status: ready
+
+  - id: P12-003
+    phase: P12
+    title: "Implement full LEF technology-rule semantics and typed normalization"
+    priority: high
+    area: parsing
+    risk: high
+    depends_on: [P12-001, P12-002]
+    acceptance:
+      - Technology-rule semantics from LEF are normalized into typed internal models rather than string-only property bags.
+      - Layer, via, site, macro, pin, and routing-rule data required by downstream analysis are accessible through stable typed APIs.
+      - Semantic validation catches contradictory or incomplete LEF technology definitions with explicit diagnostics.
+      - Downstream consumers can distinguish raw parsed properties from validated technology semantics.
+    implementation_rules:
+      - Separate raw grammar capture from validated semantic normalization.
+      - Avoid coupling LEF semantics directly to UI concerns.
+      - Version new normalized technology models deliberately.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Lef"
+      - "ctest --test-dir build --output-on-failure -R Graph"
+    status: ready
+
+  - id: P12-004
+    phase: P12
+    title: "Add industrial-scale LEF fuzzing, stress, and performance validation"
+    priority: medium
+    area: parsing
+    risk: high
+    depends_on: [P12-003]
+    acceptance:
+      - The LEF parser is exercised against fuzzed, malformed, and oversized inputs without crashes or undefined behavior.
+      - Performance/stress coverage includes large library and abstract datasets representative of industrial-scale usage.
+      - Parser limits, failure modes, and resource expectations are documented.
+      - CI or documented pre-release validation includes repeatable robustness checks.
+    implementation_rules:
+      - Treat parser stability as a product requirement, not a test-only afterthought.
+      - Prefer deterministic corpus-based fuzz regression alongside random fuzzing.
+      - Keep time/memory assertions realistic for developer and CI environments.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Lef"
+      - "ctest --test-dir build --output-on-failure -R Slow"
+    status: ready
+
+  - id: P12-005
+    phase: P12
+    title: "Integrate LEF normalization into full customer project import/storage workflows"
+    priority: high
+    area: storage
+    risk: high
+    depends_on: [P12-003, P9-002]
+    acceptance:
+      - Parsed LEF technology/library data is committed into the normalized customer project model instead of existing only as parser output.
+      - Import, validation, orchestration, and downstream execution flows can consume LEF-derived normalized data through stable project/storage interfaces.
+      - Provenance from source LEF files is preserved into stored project state.
+      - End-to-end tests demonstrate LEF data surviving import, load, run, and report workflows.
+    implementation_rules:
+      - Reuse `ProjectPackage` and normalized project boundaries rather than creating a separate LEF side path.
+      - Keep parser results serializable and versionable for future persisted caches.
+      - Avoid duplicating normalization logic between desktop and CLI workflows.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R ImportValidation"
+      - "ctest --test-dir build --output-on-failure -R RunChecks"
+      - "ctest --test-dir build --output-on-failure -R Storage"
+    status: ready
+
 

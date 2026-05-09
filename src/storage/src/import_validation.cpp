@@ -1,5 +1,8 @@
 #include "aegis/storage/import_validation.hpp"
 
+#include "aegis/parsing/spice_parser.hpp"
+#include "aegis/parsing/verilog_parser.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -226,6 +229,29 @@ ProjectPackage ImportPreflightValidator::scan_project_folder(const std::filesyst
                          "AMBIGUOUS_ROLE",
                          "Multiple role candidates detected for '" + relative.generic_string() + "'; selected '" + to_string(best->role) + "'",
                          artifact.id);
+        }
+
+        if (best->role == ArtifactRole::Verilog || best->role == ArtifactRole::SystemVerilog) {
+            try {
+                aegis::parsing::VerilogParser parser;
+                (void)parser.parse_to_layout_ir(it->path());
+            } catch (const std::exception& ex) {
+                push_error(package.diagnostics(),
+                           "VERILOG_PARSE_FAILED",
+                           "Failed to parse Verilog netlist '" + relative.generic_string() + "': " + ex.what(),
+                           artifact.id);
+            }
+        }
+        if (best->role == ArtifactRole::Spice || best->role == ArtifactRole::Spi || best->role == ArtifactRole::Cdl) {
+            try {
+                aegis::parsing::SpiceParser parser;
+                (void)parser.parse_to_layout_ir(it->path());
+            } catch (const std::exception& ex) {
+                push_error(package.diagnostics(),
+                           "SPICE_PARSE_FAILED",
+                           "Failed to parse SPICE/CDL netlist '" + relative.generic_string() + "': " + ex.what(),
+                           artifact.id);
+            }
         }
     }
 

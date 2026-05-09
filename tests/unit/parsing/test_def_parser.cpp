@@ -517,6 +517,44 @@ TEST_CASE("DefParser rejects malformed POLY",
     REQUIRE(!cb.errors.empty());
 }
 
+TEST_CASE("DefParser parses the shipped real DEF sample",
+          "[parsing][DefParser][fast]")
+{
+    const fs::path sample = fs::path(AEGIS_SOURCE_DIR) /
+        "data/import_packages/openframe_simple_design/layout/top.def";
+
+    DefParser parser;
+    NullCancellationToken token;
+
+    LayoutIR ir = parser.parse_to_layout_ir(sample, token);
+
+    REQUIRE(ir.design_name == "simple_design");
+    REQUIRE(ir.metadata.at("def_version") == "5.8");
+    REQUIRE(ir.metadata.at("units") == "1000");
+    REQUIRE(ir.metadata.at("component_count_declared") == "25666");
+    REQUIRE(ir.metadata.at("pin_count_declared") == "7");
+    REQUIRE(ir.metadata.at("specialnet_count_declared") == "2");
+    REQUIRE(ir.metadata.at("net_count_declared") == "12");
+    REQUIRE(ir.devices.size() == 25666);
+    REQUIRE(ir.ports.size() == 7);
+    REQUIRE(ir.nets.size() >= 14);
+    REQUIRE(!ir.layers.empty());
+    REQUIRE(!ir.geometries.empty());
+
+    const auto port_it = std::find_if(ir.ports.begin(), ir.ports.end(), [](const Port& port) {
+        return port.name == "clk";
+    });
+    REQUIRE(port_it != ir.ports.end());
+    REQUIRE(port_it->direction == "INPUT");
+    REQUIRE(port_it->layer.has_value());
+
+    const auto net_it = std::find_if(ir.nets.begin(), ir.nets.end(), [](const Net& net) {
+        return net.name == "out";
+    });
+    REQUIRE(net_it != ir.nets.end());
+    REQUIRE(!net_it->pin_names.empty());
+}
+
 TEST_CASE("DefParser handles 10K-line file acceptably",
           "[parsing][DefParser][slow]")
 {

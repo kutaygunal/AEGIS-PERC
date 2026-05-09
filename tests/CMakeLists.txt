@@ -57,6 +57,8 @@ add_executable(aegis_unit_tests
     unit/parsing/test_layout_ir.cpp
     unit/parsing/test_def_parser.cpp
     unit/parsing/test_spice_parser.cpp
+    unit/parsing/test_verilog_parser.cpp
+    unit/parsing/test_lef_parser.cpp
     unit/parsing/test_power_intent.cpp
     unit/parsing/test_current_activity.cpp
     unit/reporting/test_reporting_minimal.cpp

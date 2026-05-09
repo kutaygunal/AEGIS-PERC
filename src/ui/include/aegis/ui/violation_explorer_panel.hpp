@@ -5,6 +5,7 @@
 
 #include <QWidget>
 
+class QAction;
 class QCheckBox;
 class QComboBox;
 class QLineEdit;
@@ -40,6 +41,15 @@ public:
     [[nodiscard]] QString current_violation_id() const;
     [[nodiscard]] QString details_summary_text() const;
     [[nodiscard]] int metadata_row_count() const;
+    [[nodiscard]] int selected_violation_count() const;
+    void select_rows(const std::vector<int>& rows);
+    int select_violation_ids(const QStringList& ids);
+    QString selected_violations_text() const;
+    QString selected_violations_json_text() const;
+    QString current_violation_details_for_copy() const;
+    QString current_violation_id_for_copy() const;
+    bool context_action_enabled(const QString& action_id) const;
+    bool trigger_context_action(const QString& action_id);
     void set_heatmap_visible(bool visible);
     void set_heatmap_opacity(double opacity);
     [[nodiscard]] bool heatmap_visible() const;
@@ -49,6 +59,13 @@ signals:
     void current_violation_changed();
     void filtered_violations_changed(aegis::rules::ViolationCollection violations);
     void heatmap_settings_changed(bool visible, double opacity);
+    void trace_current_violation_requested();
+    void center_current_violation_requested();
+    void copy_current_violation_id_requested();
+    void copy_current_violation_details_requested();
+    void copy_selected_violations_requested();
+    void export_selected_violations_requested();
+    void navigate_current_violation_requested();
 
 private:
     aegis::rules::ViolationCollection m_violations;
@@ -61,6 +78,13 @@ private:
     QLineEdit* m_net_filter = nullptr;
     QLineEdit* m_search_filter = nullptr;
     QLabel* m_filter_summary = nullptr;
+    QAction* m_trace_action = nullptr;
+    QAction* m_center_action = nullptr;
+    QAction* m_copy_id_action = nullptr;
+    QAction* m_copy_details_action = nullptr;
+    QAction* m_navigate_related_action = nullptr;
+    QAction* m_copy_selected_action = nullptr;
+    QAction* m_export_selected_action = nullptr;
     QCheckBox* m_heatmap_visible = nullptr;
     QSlider* m_heatmap_opacity = nullptr;
     QLineEdit* m_violation_id = nullptr;
@@ -71,6 +95,7 @@ private:
     void apply_filters_from_widgets();
     void update_filter_summary();
     void update_details();
+    void update_context_action_state();
 };
 
 } // namespace aegis::ui

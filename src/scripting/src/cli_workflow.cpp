@@ -5,6 +5,8 @@
 #include "aegis/graph/power_intent_application.hpp"
 #include "aegis/parsing/current_activity.hpp"
 #include "aegis/parsing/power_intent.hpp"
+#include "aegis/parsing/spice_parser.hpp"
+#include "aegis/parsing/verilog_parser.hpp"
 #include "aegis/rules/rule_engine.hpp"
 #include "aegis/rules/rule_pack.hpp"
 #include "aegis/storage/import_validation.hpp"
@@ -22,6 +24,9 @@ using aegis::graph::ConnectivityGraph;
 using aegis::graph::EdgeType;
 using aegis::graph::NetNode;
 using aegis::graph::PinNode;
+using aegis::parsing::LayoutIR;
+using aegis::parsing::SpiceParser;
+using aegis::parsing::VerilogParser;
 using aegis::rules::RuleContext;
 using aegis::rules::RuleEngine;
 using aegis::rules::RulePackLoader;
@@ -155,6 +160,43 @@ json power_diagnostic_to_json(const aegis::parsing::PowerIntentDiagnostic& diagn
     return item;
 }
 
+LayoutIR append_ir(LayoutIR combined, const LayoutIR& next)
+{
+    if (combined.design_name.empty()) {
+        combined.design_name = next.design_name;
+    }
+    combined.layers.insert(combined.layers.end(), next.layers.begin(), next.layers.end());
+    combined.geometries.insert(combined.geometries.end(), next.geometries.begin(), next.geometries.end());
+    combined.nets.insert(combined.nets.end(), next.nets.begin(), next.nets.end());
+    combined.devices.insert(combined.devices.end(), next.devices.begin(), next.devices.end());
+    combined.ports.insert(combined.ports.end(), next.ports.begin(), next.ports.end());
+    combined.annotations.insert(combined.annotations.end(), next.annotations.begin(), next.annotations.end());
+    for (const auto& [key, value] : next.metadata) {
+        combined.metadata.emplace(key, value);
+    }
+    return combined;
+}
+
+LayoutIR parse_netlist_artifact(const std::filesystem::path& path,
+                                ArtifactRole role)
+{
+    switch (role) {
+    case ArtifactRole::Verilog:
+    case ArtifactRole::SystemVerilog: {
+        VerilogParser parser;
+        return parser.parse_to_layout_ir(path);
+    }
+    case ArtifactRole::Spice:
+    case ArtifactRole::Spi:
+    case ArtifactRole::Cdl: {
+        SpiceParser parser;
+        return parser.parse_to_layout_ir(path);
+    }
+    default:
+        throw std::runtime_error("Unsupported netlist role for execution: '" + aegis::storage::to_string(role) + "'");
+    }
+}
+
 json build_package_json(const ProjectPackage& package)
 {
     json artifacts = json::array();
@@ -190,6 +232,25 @@ struct PreparedExecution {
 PreparedExecution prepare_execution(const ProjectPackage& package, const CliProjectInput& input)
 {
     PreparedExecution prepared;
+
+    LayoutIR combined_ir;
+    for (const auto& artifact_id : package.normalized().netlist_artifact_ids) {
+        const auto* artifact = package.find_artifact_by_id(artifact_id);
+        if (!artifact) {
+            continue;
+        }
+        combined_ir = append_ir(std::move(combined_ir),
+                                parse_netlist_artifact(resolve_artifact_path(input, *artifact), artifact->role));
+    }
+    std::vector<std::string> unresolved;
+    prepared.graph = ConnectivityGraph::from_layout_ir(combined_ir, unresolved);
+    for (const auto& reference : unresolved) {
+        prepared.runtime_diagnostics.push_back({
+            {"severity", "warning"},
+            {"code", "GRAPH_UNRESOLVED_REFERENCE"},
+            {"message", "Resolved missing connectivity reference during graph build: " + reference}
+        });
+    }
 
     const auto* rules_artifact = package.normalized().rule_artifact_ids.empty()
         ? nullptr

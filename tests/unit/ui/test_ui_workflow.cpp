@@ -7,9 +7,18 @@
 #include "aegis/ui/violation_filter.hpp"
 
 #include <QApplication>
+#include <QListWidget>
+#include <QPlainTextEdit>
+#include <QPushButton>
 #include <QSettings>
+#include <QTableWidget>
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <functional>
 #include <memory>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -73,6 +82,58 @@ aegis::rules::ViolationCollection make_workflow_violations()
     return ViolationCollection{std::move(violations)};
 }
 
+aegis::parsing::LayoutIR make_cross_probe_ir()
+{
+    using namespace aegis::parsing;
+    LayoutIR ir;
+    ir.design_name = "cross_probe_test";
+    ir.layers.push_back(Layer{"M1", "metal", 0, "#FF0000"});
+    ir.layers.push_back(Layer{"M2", "metal", 1, "#00FF00"});
+    ir.geometries.push_back(Geometry{"M1", Rectangle{0.0, 0.0, 80.0, 30.0}});
+    ir.nets.push_back(Net{"n1", {"A", "M1.gate"}, {}});
+    ir.nets.push_back(Net{"n2", {"Y", "M1.drain"}, {}});
+    ir.nets.push_back(Net{"GND", {"M1.source"}, {}});
+    ir.devices.push_back(Device{"M1", "NMOS", {{"gate", "n1"}, {"drain", "n2"}, {"source", "GND"}}, {}});
+    ir.ports.push_back(Port{"A", "INPUT", "n1", std::string{"M1"}, Point{10.0, 10.0}});
+    ir.ports.push_back(Port{"Y", "OUTPUT", "n2", std::string{"M2"}, Point{55.0, 10.0}});
+    return ir;
+}
+
+namespace fs = std::filesystem;
+
+fs::path make_temp_dir()
+{
+    return fs::temp_directory_path() /
+           ("aegis_ui_workflow_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+}
+
+void write_file(const fs::path& path, const std::string& content)
+{
+    fs::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary);
+    out << content;
+}
+
+void remove_tree(const fs::path& root)
+{
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+bool wait_until(const std::function<bool()>& predicate, int timeout_ms = 3000)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (std::chrono::steady_clock::now() < deadline) {
+        QApplication::processEvents();
+        if (predicate()) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    QApplication::processEvents();
+    return predicate();
+}
+
 } // namespace
 
 TEST_CASE("UiWorkflow main window smoke path loads bundled sample data", "[ui][P3-015][UiWorkflow]")
@@ -85,6 +146,7 @@ TEST_CASE("UiWorkflow main window smoke path loads bundled sample data", "[ui][P
     REQUIRE(window.dock_widget_titles().contains("Layers"));
     REQUIRE(window.dock_widget_titles().contains("Violations"));
     REQUIRE(window.dock_widget_titles().contains("Report Preview"));
+    REQUIRE(window.dock_widget_titles().contains("Jobs"));
 
     REQUIRE(window.trigger_workspace_action("open_sample"));
     REQUIRE(window.layer_panel_count() > 0);
@@ -119,6 +181,254 @@ TEST_CASE("UiWorkflow verifies layer toggles selection updates and violation fil
     REQUIRE(window.visible_violation_overlay_count() == 1);
     REQUIRE(window.violation_filter_summary_text().contains("1 / 2 violations"));
     REQUIRE(window.report_preview_summary_text().contains("Violations: 1"));
+}
+
+TEST_CASE("UiWorkflow job monitor tracks recent workflow runs with progress history and report reopen actions", "[ui][P8][P8-007][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+    window.set_job_pipeline_artificial_delay_for_tests(50);
+
+    QString opened_report_path;
+    window.set_report_opener_for_tests([&opened_report_path](const QString& path) {
+        opened_report_path = path;
+        return true;
+    });
+
+    const fs::path root = make_temp_dir();
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
+    write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
+    write_file(root / "reports/current_report.csv", "net_name,current_mA,voltage_domain,layer\nvdd,52.4,CORE_0V8,metal_1\n");
+
+    REQUIRE(window.load_bundled_sample("inverter"));
+    REQUIRE(window.import_project_paths({QString::fromStdString(root.string())}));
+    QApplication::processEvents();
+    REQUIRE(window.trigger_import_load_action());
+    QApplication::processEvents();
+
+    REQUIRE(window.trigger_workspace_action("run_checks"));
+    REQUIRE(wait_until([&window]() { return window.job_history_count() >= 1; }));
+    REQUIRE(wait_until([&window]() {
+        return window.last_status_message().contains("Run Checks completed", Qt::CaseInsensitive);
+    }, 5000));
+
+    REQUIRE(window.select_job_history_row(window.job_history_count() - 1));
+    REQUIRE(window.job_history_summary_text(window.job_history_count() - 1).contains("Completed", Qt::CaseInsensitive));
+    REQUIRE(window.job_history_details_text().contains("Progress history", Qt::CaseInsensitive));
+    REQUIRE(window.job_history_details_text().contains("report_export", Qt::CaseInsensitive));
+    REQUIRE(window.job_history_open_json_enabled());
+    REQUIRE(window.job_history_open_html_enabled());
+    REQUIRE(window.trigger_job_history_open_json());
+    REQUIRE(opened_report_path.endsWith("report.json"));
+
+    remove_tree(root);
+}
+
+TEST_CASE("UiWorkflow job monitor keeps bounded history for recent workflow runs", "[ui][P8][P8-007][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+
+    QString opened_report_path;
+    window.set_report_opener_for_tests([&opened_report_path](const QString& path) {
+        opened_report_path = path;
+        return true;
+    });
+
+    const int runs = window.job_history_max_entries() + 2;
+    for (int i = 0; i < runs; ++i) {
+        const fs::path root = make_temp_dir();
+        write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+        write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+        write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
+        write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
+        write_file(root / "reports/current_report.csv", "net_name,current_mA,voltage_domain,layer\nvdd,52.4,CORE_0V8,metal_1\n");
+
+        REQUIRE(window.load_bundled_sample("inverter"));
+        REQUIRE(window.import_project_paths({QString::fromStdString(root.string())}));
+        QApplication::processEvents();
+        REQUIRE(window.trigger_import_load_action());
+        QApplication::processEvents();
+        REQUIRE(window.trigger_workspace_action("run_checks"));
+        REQUIRE(wait_until([&window]() {
+            return window.last_status_message().contains("Run Checks completed", Qt::CaseInsensitive);
+        }, 5000));
+        remove_tree(root);
+    }
+
+    REQUIRE(window.job_history_count() == window.job_history_max_entries());
+    REQUIRE(window.select_job_history_row(window.job_history_count() - 1));
+    REQUIRE(window.job_history_open_html_enabled());
+    REQUIRE(window.trigger_job_history_open_html());
+    REQUIRE(opened_report_path.endsWith("report.html"));
+}
+
+TEST_CASE("UiWorkflow workspace summary distinguishes sample and imported project readiness", "[ui][P8][P8-009][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+
+    REQUIRE(window.dock_widget_titles().contains("Workspace Summary"));
+    REQUIRE(window.workspace_summary_text().contains("empty workspace", Qt::CaseInsensitive));
+
+    REQUIRE(window.load_bundled_sample("inverter"));
+    REQUIRE(window.workspace_summary_text().contains("sample mode", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("Ready to run bundled sample", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("built-in desktop defaults", Qt::CaseInsensitive));
+}
+
+TEST_CASE("UiWorkflow workspace summary updates after import load and run completion", "[ui][P8][P8-009][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+
+    const fs::path root = make_temp_dir();
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
+    write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
+    write_file(root / "reports/current_report.csv", "net_name,current_mA,voltage_domain,layer\nvdd,52.4,CORE_0V8,metal_1\n");
+
+    REQUIRE(window.load_bundled_sample("inverter"));
+    REQUIRE(window.import_project_paths({QString::fromStdString(root.string())}));
+    QApplication::processEvents();
+    REQUIRE(window.trigger_import_load_action());
+    QApplication::processEvents();
+
+    REQUIRE(window.workspace_summary_text().contains("imported customer project", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("Artifacts: 5", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("imported rule pack", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("Ready to run with imported package content", Qt::CaseInsensitive));
+
+    REQUIRE(window.trigger_workspace_action("run_checks"));
+    REQUIRE(wait_until([&window]() {
+        return window.last_status_message().contains("Run Checks completed", Qt::CaseInsensitive);
+    }, 5000));
+    REQUIRE(window.workspace_summary_text().contains("Violations: 1", Qt::CaseInsensitive));
+
+    remove_tree(root);
+}
+
+TEST_CASE("UiWorkflow import review and jobs expose accessible metadata and context menus", "[ui][P8][P8-016][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+
+    const fs::path root = make_temp_dir();
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
+    write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n");
+
+    REQUIRE(window.import_project_paths({QString::fromStdString(root.string())}));
+    QApplication::processEvents();
+    REQUIRE(window.is_import_dialog_visible());
+
+    auto* artifact_table = window.findChild<QTableWidget*>("ImportArtifactTable");
+    REQUIRE(artifact_table != nullptr);
+    REQUIRE(artifact_table->accessibleName() == "Detected Import Artifacts");
+    REQUIRE(artifact_table->contextMenuPolicy() == Qt::CustomContextMenu);
+    REQUIRE(!artifact_table->toolTip().isEmpty());
+
+    auto* diagnostics_text = window.findChild<QPlainTextEdit*>("ImportDiagnosticsText");
+    REQUIRE(diagnostics_text != nullptr);
+    REQUIRE(diagnostics_text->accessibleName() == "Import Validation Diagnostics");
+    REQUIRE(!diagnostics_text->toolTip().isEmpty());
+
+    auto* validate_button = window.findChild<QPushButton*>("ImportValidateButton");
+    auto* load_button = window.findChild<QPushButton*>("ImportLoadProjectButton");
+    REQUIRE(validate_button != nullptr);
+    REQUIRE(load_button != nullptr);
+    REQUIRE(validate_button->accessibleName() == "Validate Import Files");
+    REQUIRE(load_button->accessibleName() == "Load Imported Project");
+
+    auto* job_history_list = window.findChild<QListWidget*>("JobHistoryList");
+    REQUIRE(job_history_list != nullptr);
+    REQUIRE(job_history_list->accessibleName() == "Job History");
+    REQUIRE(job_history_list->contextMenuPolicy() == Qt::CustomContextMenu);
+
+    remove_tree(root);
+}
+
+TEST_CASE("UiWorkflow cross-probes between diagnostics artifacts graph nodes and violations", "[ui][P8][P8-015][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+
+    const auto ir = make_cross_probe_ir();
+    std::vector<std::string> unresolved;
+    auto graph = aegis::graph::ConnectivityGraph::from_layout_ir(ir, unresolved);
+    REQUIRE(unresolved.empty());
+    window.set_scene(aegis::ui::build_ui_scene(ir));
+    window.set_connectivity_graph(&graph);
+
+    const fs::path root = make_temp_dir();
+    const fs::path lef = root / "tech.lef";
+    const fs::path def = root / "top.def";
+    const fs::path netlist = root / "top.v";
+    const fs::path rules = root / "aegis_rules.yaml";
+    write_file(lef, "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(def, "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(netlist, "module top(input A, output Y); endmodule\n");
+    write_file(rules, "rules:\n  - id: FLOATING_NET\n");
+
+    REQUIRE(window.import_project_paths({QString::fromStdString(lef.string()),
+                                         QString::fromStdString(def.string()),
+                                         QString::fromStdString(netlist.string()),
+                                         QString::fromStdString(rules.string())}));
+    QApplication::processEvents();
+
+    aegis::rules::Violation linked{"R_LINK", aegis::rules::Severity::Error, "Linked violation"};
+    linked.id = "VX";
+    linked.location.net_name = "n1";
+    linked.location.device_name = "M1";
+    linked.metadata = linked.metadata.with("artifact_id", std::string{"artifact-1"});
+    linked.metadata = linked.metadata.with("artifact_path", lef.string());
+    aegis::rules::ViolationCollection violations;
+    violations.add(linked);
+    window.set_violations(violations);
+
+    REQUIRE(window.select_diagnostics_row(0));
+    REQUIRE(window.trigger_diagnostics_show_related_violations());
+    REQUIRE(window.current_violation_id() == "VX");
+
+    REQUIRE(window.select_import_artifact_row(0));
+    REQUIRE(window.trigger_import_artifact_show_related_violations());
+    REQUIRE(window.selected_violation_count() == 1);
+    REQUIRE(window.current_violation_id() == "VX");
+
+    REQUIRE(window.violation_context_action_enabled("navigate_related"));
+    REQUIRE(window.trigger_violation_context_action("navigate_related"));
+    REQUIRE(window.current_graph_node_name() == "n1");
+    REQUIRE(window.current_import_artifact_path().contains("tech.lef", Qt::CaseInsensitive));
+
+    remove_tree(root);
+}
+
+TEST_CASE("UiWorkflow cross-probing degrades gracefully when links are unresolved", "[ui][P8][P8-015][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+    window.set_scene(aegis::ui::build_ui_scene(make_workflow_ir()));
+
+    aegis::rules::Violation unlinked{"R_NONE", aegis::rules::Severity::Warning, "No links"};
+    unlinked.id = "V-unlinked";
+    aegis::rules::ViolationCollection violations;
+    violations.add(unlinked);
+    window.set_violations(violations);
+    window.select_violation_row(0);
+
+    REQUIRE(window.trigger_violation_context_action("navigate_related"));
+    REQUIRE(window.last_status_message().contains("No related graph or import metadata", Qt::CaseInsensitive));
 }
 
 TEST_CASE("UiWorkflow existing app shell state persistence path remains valid", "[ui][P3-015][UiWorkflow][UiAppShell]")
