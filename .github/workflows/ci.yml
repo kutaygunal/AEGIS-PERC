@@ -56,7 +56,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ lcov gcovr
+          sudo apt-get install -y cmake ninja-build g++ lcov gcovr xvfb
           sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev
 
       - name: Configure
@@ -66,7 +66,7 @@ jobs:
         run: cmake --build --preset linux-release --parallel
 
       - name: Test
-        run: ctest --preset linux-test
+        run: xvfb-run --auto-servernum ctest --preset linux-test
 
       - name: Package
         run: cpack -C Release --preset linux-release
@@ -79,7 +79,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ lcov gcovr
+          sudo apt-get install -y cmake ninja-build g++ lcov gcovr xvfb
           sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev
 
       - name: Configure (Coverage)
@@ -89,7 +89,7 @@ jobs:
         run: cmake --build --preset linux-coverage --parallel
 
       - name: Test
-        run: ctest --preset linux-coverage-test
+        run: xvfb-run --auto-servernum ctest --preset linux-coverage-test
 
       - name: Capture coverage baseline
         run: |
@@ -115,7 +115,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ clang
+          sudo apt-get install -y cmake ninja-build g++ clang xvfb
           sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev
 
       - name: Configure (ASan+UBSan)
@@ -125,7 +125,7 @@ jobs:
         run: cmake --build --preset linux-asan-debug --parallel
 
       - name: Test
-        run: ctest --preset linux-asan-test
+        run: xvfb-run --auto-servernum ctest --preset linux-asan-test
         env:
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
           ASAN_OPTIONS: detect_leaks=1
