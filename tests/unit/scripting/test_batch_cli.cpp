@@ -6,6 +6,10 @@
 #include <fstream>
 #include <string>
 
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -68,7 +72,7 @@ TEST_CASE("aegis-perc-cli import writes a manifest from explicit file arguments"
     const fs::path root = make_temp_dir();
     const fs::path out_manifest = root / "out" / "manifest.json";
 
-    write_file(root / "tech.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "tech.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules.yaml", "rules:\n  - id: FLOATING_NET\n    type: floating_net\n    severity: high\n");
@@ -82,7 +86,11 @@ TEST_CASE("aegis-perc-cli import writes a manifest from explicit file arguments"
         " --rules " + quote(root / "rules.yaml") +
         " --output " + quote(out_manifest));
 
-    const int exit_code = std::system(command.c_str());
+    const int exit_code = std::system(command.c_str())
+#ifndef _WIN32
+                          >> 8
+#endif
+                          ;
     REQUIRE(exit_code == 0);
     REQUIRE(fs::exists(out_manifest));
 
@@ -90,6 +98,9 @@ TEST_CASE("aegis-perc-cli import writes a manifest from explicit file arguments"
     REQUIRE(manifest.find("\"name\": \"FalconCPU\"") != std::string::npos);
     REQUIRE(manifest.find("\"role\": \"lef\"") != std::string::npos);
     REQUIRE(manifest.find("\"validation_status\": \"valid\"") != std::string::npos);
+    REQUIRE(manifest.find("\"lef_libraries\"") != std::string::npos);
+    REQUIRE(manifest.find("\"source_path\":") != std::string::npos);
+    REQUIRE(manifest.find("tech.lef") != std::string::npos);
 
     remove_tree(root);
 }
@@ -99,7 +110,7 @@ TEST_CASE("aegis-perc-cli report runs from a manifest and exports violation JSON
     const fs::path root = make_temp_dir();
     const fs::path out_report = root / "out" / "report.json";
 
-    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/rules.yaml",
@@ -136,7 +147,11 @@ TEST_CASE("aegis-perc-cli report runs from a manifest and exports violation JSON
         " report --manifest " + quote(root / "manifest.json") +
         " --output " + quote(out_report));
 
-    const int exit_code = std::system(command.c_str());
+    const int exit_code = std::system(command.c_str())
+#ifndef _WIN32
+                          >> 8
+#endif
+                          ;
     REQUIRE(exit_code == 3);
     REQUIRE(fs::exists(out_report));
 
@@ -154,7 +169,7 @@ TEST_CASE("aegis-perc-cli run uses parsed Verilog connectivity for gate-level ne
     const fs::path root = make_temp_dir();
     const fs::path out_report = root / "out" / "report.json";
 
-    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v",
                "module top(input A, output Y);\n"
@@ -190,7 +205,11 @@ TEST_CASE("aegis-perc-cli run uses parsed Verilog connectivity for gate-level ne
         " run --manifest " + quote(root / "manifest.json") +
         " --output " + quote(out_report));
 
-    const int exit_code = std::system(command.c_str());
+    const int exit_code = std::system(command.c_str())
+#ifndef _WIN32
+                          >> 8
+#endif
+                          ;
     REQUIRE(exit_code == 3);
     REQUIRE(fs::exists(out_report));
 
