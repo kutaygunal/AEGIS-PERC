@@ -4,6 +4,7 @@
 #include "aegis/graph/current_activity_application.hpp"
 #include "aegis/graph/power_intent_application.hpp"
 #include "aegis/parsing/current_activity.hpp"
+#include "aegis/parsing/lef_parser.hpp"
 #include "aegis/parsing/power_intent.hpp"
 #include "aegis/parsing/spice_parser.hpp"
 #include "aegis/parsing/verilog_parser.hpp"
@@ -25,6 +26,7 @@ using aegis::graph::EdgeType;
 using aegis::graph::NetNode;
 using aegis::graph::PinNode;
 using aegis::parsing::LayoutIR;
+using aegis::parsing::LefParser;
 using aegis::parsing::SpiceParser;
 using aegis::parsing::VerilogParser;
 using aegis::rules::RuleContext;
@@ -69,6 +71,57 @@ bool file_exists(const std::filesystem::path& path)
 {
     std::error_code ec;
     return std::filesystem::exists(path, ec) && std::filesystem::is_regular_file(path, ec);
+}
+
+void attach_lef_summary(ProjectPackage& package,
+                        const SourceArtifact& artifact,
+                        const std::filesystem::path& resolved_path)
+{
+    LefParser parser;
+    const auto lef = parser.parse_file(resolved_path);
+
+    aegis::storage::LefTechnologyData summary;
+    summary.artifact_id = artifact.id;
+    summary.source_path = artifact.path;
+    summary.version = lef.version;
+    summary.site_count = lef.sites.size();
+    summary.layer_count = lef.layers.size();
+    summary.via_count = lef.vias.size();
+    summary.macro_count = lef.macros.size();
+    summary.diagnostic_count = lef.diagnostics.size();
+    summary.has_errors = lef.has_errors();
+    for (const auto& layer : lef.layers) {
+        summary.layers.push_back({layer.name,
+                                  layer.type,
+                                  layer.width_value,
+                                  layer.pitch.has_value() ? std::optional<double>(layer.pitch->x) : std::nullopt,
+                                  layer.pitch.has_value() ? std::optional<double>(layer.pitch->y) : std::nullopt,
+                                  layer.routing_direction == aegis::parsing::LefRoutingDirection::Unknown
+                                      ? std::nullopt
+                                      : std::optional<std::string>(aegis::parsing::to_string(layer.routing_direction))});
+    }
+    for (const auto& macro : lef.macros) {
+        summary.macros.push_back({macro.name,
+                                  macro.macro_class,
+                                  macro.width,
+                                  macro.height,
+                                  macro.pins.size(),
+                                  macro.obstruction.has_value()});
+    }
+    package.normalized().lef_libraries.push_back(std::move(summary));
+
+    for (const auto& diagnostic : lef.diagnostics) {
+        const auto severity = diagnostic.severity == aegis::parsing::LefDiagnostic::Severity::Error
+            ? DiagnosticSeverity::Error
+            : (diagnostic.severity == aegis::parsing::LefDiagnostic::Severity::Warning
+                ? DiagnosticSeverity::Warning
+                : DiagnosticSeverity::Info);
+        push_diagnostic(package,
+                        severity,
+                        diagnostic.code,
+                        "LEF '" + artifact.path.generic_string() + "': " + diagnostic.message,
+                        artifact.id);
+    }
 }
 
 std::filesystem::path package_base_path(const CliProjectInput& input)
@@ -209,18 +262,60 @@ json build_package_json(const ProjectPackage& package)
         diagnostics.push_back(import_diagnostic_to_json(diagnostic));
     }
 
-    return json{
-        {"project", {
-            {"name", package.project().name},
-            {"description", package.project().description},
-            {"customer", package.project().customer},
-            {"design_stage", package.project().design_stage}
-        }},
-        {"manifest_version", package.manifest_version()},
-        {"validation_status", aegis::storage::to_string(package.validation_status())},
-        {"artifacts", artifacts},
-        {"diagnostics", diagnostics}
+    json lef_libraries = json::array();
+    for (const auto& library : package.normalized().lef_libraries) {
+        json layers = json::array();
+        for (const auto& layer : library.layers) {
+            json item;
+            item["name"] = layer.name;
+            item["type"] = layer.type;
+            if (layer.width.has_value()) item["width"] = *layer.width;
+            if (layer.pitch_x.has_value()) item["pitch_x"] = *layer.pitch_x;
+            if (layer.pitch_y.has_value()) item["pitch_y"] = *layer.pitch_y;
+            if (layer.direction.has_value()) item["direction"] = *layer.direction;
+            layers.push_back(std::move(item));
+        }
+
+        json macros = json::array();
+        for (const auto& macro : library.macros) {
+            json m;
+            m["name"] = macro.name;
+            m["macro_class"] = macro.macro_class;
+            m["width"] = macro.width;
+            m["height"] = macro.height;
+            m["pin_count"] = macro.pin_count;
+            m["has_obstruction"] = macro.has_obstruction;
+            macros.push_back(std::move(m));
+        }
+
+        json lib;
+        lib["artifact_id"] = library.artifact_id;
+        lib["source_path"] = library.source_path.generic_string();
+        lib["version"] = library.version;
+        lib["site_count"] = library.site_count;
+        lib["layer_count"] = library.layer_count;
+        lib["via_count"] = library.via_count;
+        lib["macro_count"] = library.macro_count;
+        lib["diagnostic_count"] = library.diagnostic_count;
+        lib["has_errors"] = library.has_errors;
+        lib["layers"] = std::move(layers);
+        lib["macros"] = std::move(macros);
+        lef_libraries.push_back(std::move(lib));
+    }
+
+    json result;
+    result["project"] = json{
+        {"name", package.project().name},
+        {"description", package.project().description},
+        {"customer", package.project().customer},
+        {"design_stage", package.project().design_stage}
     };
+    result["manifest_version"] = package.manifest_version();
+    result["validation_status"] = aegis::storage::to_string(package.validation_status());
+    result["artifacts"] = std::move(artifacts);
+    result["normalized"]["lef_libraries"] = std::move(lef_libraries);
+    result["diagnostics"] = std::move(diagnostics);
+    return result;
 }
 
 struct PreparedExecution {
@@ -485,6 +580,18 @@ ProjectPackage CliWorkflow::build_package(const CliProjectInput& input) const
                             "ARTIFACT_FILE_MISSING",
                             "Artifact file does not exist: '" + resolved.generic_string() + "'",
                             artifact.id);
+            continue;
+        }
+        if (artifact.role == ArtifactRole::Lef && package.find_lef_technology_by_artifact_id(artifact.id) == nullptr) {
+            try {
+                attach_lef_summary(package, artifact, resolved);
+            } catch (const std::exception& ex) {
+                push_diagnostic(package,
+                                DiagnosticSeverity::Error,
+                                "LEF_PARSE_FAILED",
+                                "Failed to parse LEF technology/library artifact '" + resolved.generic_string() + "': " + ex.what(),
+                                artifact.id);
+            }
         }
     }
 
