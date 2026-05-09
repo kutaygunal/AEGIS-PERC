@@ -26,7 +26,7 @@ static std::vector<std::string> list_zip_entries(const fs::path& zip_path) {
     if (!zip) return names;
     ssize_t n = zip_entries_total(zip);
     for (ssize_t i = 0; i < n; ++i) {
-        if (zip_entry_openbyindex(zip, i) == 0) {
+        if (zip_entry_openbyindex(zip, static_cast<size_t>(i)) == 0) {
             const char* name = zip_entry_name(zip);
             if (name) names.emplace_back(name);
             zip_entry_close(zip);

@@ -239,7 +239,7 @@ TEST_CASE("RuleEngine run_all passes graph context",
     ConnectivityGraph graph;
     graph.add_device(DeviceNode{"D1", "NMOS", {}});
     graph.add_device(DeviceNode{"D2", "NMOS", {}});
-    graph.add_net(NetNode{"nA"});
+    graph.add_net(NetNode{"nA", {}});
     auto v_warn = engine.run_all(make_context(graph));
     REQUIRE(v_warn.size() == 1);
     REQUIRE(v_warn[0].severity == Severity::Warning);

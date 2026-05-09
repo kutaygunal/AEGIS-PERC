@@ -56,11 +56,6 @@ constexpr double kMinVisiblePixels = 0.75;
     return 10.0 * base;
 }
 
-[[nodiscard]] QRectF point_pick_rect(const QPointF& center, double radius)
-{
-    return QRectF(center.x() - radius, center.y() - radius, radius * 2.0, radius * 2.0);
-}
-
 [[nodiscard]] bool item_matches_violation_location(const SceneItem& item,
                                                    const aegis::rules::ViolationLocation& location)
 {

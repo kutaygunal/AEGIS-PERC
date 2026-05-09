@@ -542,10 +542,11 @@ TEST_CASE("LefParser Slow deterministic mutation fuzz corpus does not throw on m
 
     for (std::uint32_t seed = 1; seed <= 24; ++seed) {
         const std::string mutated = mutate_text_deterministically(seed_text, seed);
-        REQUIRE_NOTHROW([&]() {
-            const LefLibraryData data = parser.parse_string(mutated, "mutated_" + std::to_string(seed) + ".lef");
-            REQUIRE(data.diagnostics.size() < 20000);
+        LefLibraryData data;
+        REQUIRE_NOTHROW([&data, &parser, &mutated, &seed] {
+            data = parser.parse_string(mutated, "mutated_" + std::to_string(seed) + ".lef");
         }());
+        REQUIRE(data.diagnostics.size() < 20000);
     }
 }
 

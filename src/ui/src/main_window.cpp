@@ -537,62 +537,10 @@ QString import_diagnostics_text(const aegis::storage::ProjectPackage& package)
     return lines.join('\n');
 }
 
-QString current_diagnostic_summary(const aegis::parsing::CurrentActivityDiagnostic& diagnostic)
-{
-    return QString("[%1] %2")
-        .arg(diagnostic.severity == aegis::parsing::CurrentActivityDiagnostic::Severity::Error ? "error" : "warning")
-        .arg(QString::fromStdString(diagnostic.message));
-}
-
-QString power_diagnostic_summary(const aegis::parsing::PowerIntentDiagnostic& diagnostic)
-{
-    return QString("[%1] %2")
-        .arg(diagnostic.severity == aegis::parsing::PowerIntentDiagnostic::Severity::Error ? "error" : "warning")
-        .arg(QString::fromStdString(diagnostic.message));
-}
-
 std::filesystem::path resolve_import_artifact_path(const std::filesystem::path& base_path,
                                                    const aegis::storage::SourceArtifact& artifact)
 {
     return artifact.path.is_absolute() ? artifact.path : (base_path / artifact.path);
-}
-
-std::unique_ptr<aegis::graph::ConnectivityGraph> clone_graph(const aegis::graph::ConnectivityGraph& source)
-{
-    using namespace aegis::graph;
-
-    auto cloned = std::make_unique<ConnectivityGraph>();
-    std::map<NodeId, NodeId> id_map;
-
-    for (const auto type : {NodeType::Device, NodeType::Net, NodeType::Pin}) {
-        for (const auto source_id : source.nodes_of_type(type)) {
-            const auto& data = source.node_data(source_id);
-            NodeId cloned_id = INVALID_NODE;
-            if (type == NodeType::Device) {
-                cloned_id = cloned->add_device(std::get<DeviceNode>(data));
-            } else if (type == NodeType::Net) {
-                cloned_id = cloned->add_net(std::get<NetNode>(data));
-            } else {
-                cloned_id = cloned->add_pin(std::get<PinNode>(data));
-            }
-            id_map[source_id] = cloned_id;
-        }
-    }
-
-    for (const auto type : {NodeType::Device, NodeType::Net, NodeType::Pin}) {
-        for (const auto source_id : source.nodes_of_type(type)) {
-            for (const auto edge_id : source.outgoing_edges(source_id)) {
-                const auto from_it = id_map.find(source.edge_from(edge_id));
-                const auto to_it = id_map.find(source.edge_to(edge_id));
-                if (from_it == id_map.end() || to_it == id_map.end()) {
-                    continue;
-                }
-                cloned->add_edge(from_it->second, to_it->second, source.edge_data(edge_id));
-            }
-        }
-    }
-
-    return cloned;
 }
 
 std::vector<aegis::storage::ArtifactRole> supported_import_roles()
@@ -1667,8 +1615,9 @@ bool MainWindow::start_imported_run_checks(bool is_retry)
                                    std::nullopt,
                                    std::nullopt});
     if (static_cast<int>(m_impl->job_history.size()) > m_impl->job_history_max_entries) {
+        const auto excess = static_cast<int>(m_impl->job_history.size()) - m_impl->job_history_max_entries;
         m_impl->job_history.erase(m_impl->job_history.begin(),
-                                  m_impl->job_history.begin() + (m_impl->job_history.size() - m_impl->job_history_max_entries));
+                                  m_impl->job_history.begin() + excess);
     }
     update_job_progress_ui({job_id,
                             aegis::orchestration::JobState::Queued,
@@ -1677,7 +1626,9 @@ bool MainWindow::start_imported_run_checks(bool is_retry)
                             5,
                             false,
                             m_impl->loaded_import_package.project().name,
-                            "Queued imported Run Checks job"});
+                            "Queued imported Run Checks job",
+                            std::nullopt,
+                            std::nullopt});
     if (m_impl->job_poll_timer == nullptr) {
         m_impl->job_poll_timer = new QTimer(this);
         m_impl->job_poll_timer->setInterval(25);
@@ -2719,7 +2670,7 @@ void MainWindow::setup_dock_panels()
         connect(m_impl->selection_model, &SelectionModel::selection_changed,
                 this, [this](const QStringList& ids) {
                     if (m_impl->report_preview != nullptr) {
-                        m_impl->report_preview->set_selected_item_count(ids.size());
+                        m_impl->report_preview->set_selected_item_count(static_cast<int>(ids.size()));
                         if (m_impl->canvas != nullptr) {
                             m_impl->report_preview->set_snapshot(m_impl->canvas->grab());
                         }

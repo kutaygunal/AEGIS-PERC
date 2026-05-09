@@ -366,7 +366,7 @@ int ViolationExplorerPanel::metadata_row_count() const
 int ViolationExplorerPanel::selected_violation_count() const
 {
     return m_table != nullptr && m_table->selectionModel() != nullptr
-        ? m_table->selectionModel()->selectedRows().size()
+        ? static_cast<int>(m_table->selectionModel()->selectedRows().size())
         : 0;
 }
 
