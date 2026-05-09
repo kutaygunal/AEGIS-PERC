@@ -336,12 +336,12 @@ ctest --preset linux-test
 - [ ] Templated HTML/JSON report generation engine
 - [ ] CSR-oriented graph backend and performance benchmarking
 
-### Phase 12 — LEF Signoff-Grade Hardening (Sprint 12)
-- [x] Expand LEF coverage toward full 5.x grammar compatibility (`docs/design/lef-coverage.md`)
-- [x] Add advanced LEF geometry/forms and richer abstract-shape normalization (`docs/design/lef-coverage.md`)
-- [x] Implement full LEF technology-rule semantics and typed normalization (`docs/design/lef-coverage.md`)
-- [x] Add industrial-scale LEF fuzzing, stress, and performance validation (`docs/design/lef-coverage.md`)
-- [x] Integrate LEF normalization into full customer project import/storage workflows
+### Phase 12 — LEF Signoff-Grade Hardening (Sprint 12) ✅ **COMPLETE**
+- ✅ Expanded LEF coverage toward broad 5.x grammar compatibility (`docs/design/lef-coverage.md`)
+- ✅ Added advanced LEF geometry/forms and richer abstract-shape normalization (`docs/design/lef-coverage.md`)
+- ✅ Implemented typed LEF technology-rule semantics and semantic validation (`docs/design/lef-coverage.md`)
+- ✅ Added deterministic LEF fuzzing, stress, and performance validation (`docs/design/lef-coverage.md`)
+- ✅ Integrated LEF normalization into import, storage, CLI, and desktop workflow paths
 
 ### Phase 4 — AI/ML Core (Sprint 4)
 - [ ] Feature extraction from violations

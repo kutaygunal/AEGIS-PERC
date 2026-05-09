@@ -95,6 +95,12 @@ FetchContent_Declare(
 set(ZIP_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(zip)
 
+if(AEGIS_ENABLE_SANITIZERS AND NOT WIN32)
+    if(TARGET zip)
+        target_compile_options(zip PRIVATE -fno-sanitize=shift)
+    endif()
+endif()
+
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
