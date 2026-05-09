@@ -1,6 +1,10 @@
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(Qt6 6.4 REQUIRED COMPONENTS Core Widgets)
+else()
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
+endif()
 
 add_library(aegis_ui STATIC
     include/aegis/ui/main_window.hpp

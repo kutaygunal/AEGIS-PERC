@@ -141,7 +141,7 @@
             "execution": {
                 "noTestsAction": "error",
                 "stopOnFailure": false,
-                "jobs": 0
+                "jobs": 1
             }
         },
         {

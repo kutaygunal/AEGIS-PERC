@@ -1,7 +1,11 @@
 include(FetchContent)
 include(CTest)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(Qt6 6.4 REQUIRED COMPONENTS Test)
+else()
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
+endif()
 
 FetchContent_Declare(
     Catch2

@@ -10,6 +10,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QPushButton>
+#include <QSettings>
 #include <QTableWidget>
 #include <QToolBar>
 #include <QToolButton>
@@ -26,6 +27,17 @@ struct QtAppGuard {
         if (!QApplication::instance()) {
             app = std::make_unique<QApplication>(argc, argv);
         }
+    }
+};
+
+struct SettingsCleanupGuard {
+    SettingsCleanupGuard() {
+        QSettings settings("AEGIS-PERC", "AEGIS-PERC");
+        settings.remove("mainWindow");
+    }
+    ~SettingsCleanupGuard() {
+        QSettings settings("AEGIS-PERC", "AEGIS-PERC");
+        settings.remove("mainWindow");
     }
 };
 
@@ -76,6 +88,7 @@ QMenu* find_view_menu(aegis::ui::MainWindow& window)
 TEST_CASE("WorkspaceActions shared actions are discoverable and stateful", "[ui][P3-013][WorkspaceActions]")
 {
     QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
     aegis::ui::MainWindow window;
 
     const auto ids = window.workspace_action_ids();
@@ -113,6 +126,7 @@ TEST_CASE("WorkspaceActions shared actions are discoverable and stateful", "[ui]
 TEST_CASE("WorkspaceActions load sample scene and control grid overlays and selection", "[ui][P3-013][WorkspaceActions]")
 {
     QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
     aegis::ui::MainWindow window;
 
     REQUIRE(window.trigger_workspace_action("open_sample"));
@@ -149,6 +163,7 @@ TEST_CASE("WorkspaceActions load sample scene and control grid overlays and sele
 TEST_CASE("WorkspaceActions shell widgets expose accessibility metadata and context entry points", "[ui][P8][P8-016][WorkspaceActions]")
 {
     QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
     aegis::ui::MainWindow window;
     window.show();
     QApplication::processEvents();
@@ -182,6 +197,7 @@ TEST_CASE("WorkspaceActions shell widgets expose accessibility metadata and cont
 TEST_CASE("WorkspaceActions view menu uses real dock toggle actions", "[ui][P3-013][WorkspaceActions]")
 {
     QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
     aegis::ui::MainWindow window;
     window.show();
     QApplication::processEvents();
