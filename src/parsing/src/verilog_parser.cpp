@@ -243,34 +243,6 @@ std::vector<std::string> split_top_level(std::string_view text, char delimiter)
     return parts;
 }
 
-std::vector<std::string> tokenize(std::string_view text)
-{
-    std::vector<std::string> tokens;
-    std::string current;
-
-    auto flush = [&]() {
-        if (!current.empty()) {
-            tokens.push_back(current);
-            current.clear();
-        }
-    };
-
-    for (char c : text) {
-        if (is_space(c)) {
-            flush();
-            continue;
-        }
-        if (c == '(' || c == ')' || c == '[' || c == ']' || c == ',' || c == ':' || c == '=' || c == '.' || c == '#' || c == '{' || c == '}') {
-            flush();
-            tokens.emplace_back(1, c);
-            continue;
-        }
-        current.push_back(c);
-    }
-    flush();
-    return tokens;
-}
-
 std::optional<std::string> extract_leading_range(std::string_view& text)
 {
     text = trim_view(text);
