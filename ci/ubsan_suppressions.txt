@@ -1,0 +1,4 @@
+# Suppress known third-party undefined behavior
+# zip library (kuba--/zip v0.3.4) has a signed left-shift overflow in zip_entry_fwrite
+[shift]
+src:*zip.c
