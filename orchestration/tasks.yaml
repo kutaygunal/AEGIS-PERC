@@ -757,7 +757,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R Lef"
       - "ctest --test-dir build --output-on-failure -R Parsing"
-    status: ready
+    status: review
 
   - id: P12-002
     phase: P12
@@ -779,7 +779,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R Lef"
       - "ctest --test-dir build --output-on-failure -R UiSceneAdapter"
-    status: ready
+    status: review
 
   - id: P12-003
     phase: P12
@@ -801,7 +801,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R Lef"
       - "ctest --test-dir build --output-on-failure -R Graph"
-    status: ready
+    status: review
 
   - id: P12-004
     phase: P12
@@ -823,7 +823,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R Lef"
       - "ctest --test-dir build --output-on-failure -R Slow"
-    status: ready
+    status: review
 
   - id: P12-005
     phase: P12
