@@ -368,7 +368,7 @@ std::vector<ImportDiagnostic> ImportPreflightValidator::validate(const ProjectPa
         if (artifact.role == ArtifactRole::Lef) {
             const auto* lef = package.find_lef_technology_by_artifact_id(artifact.id);
             if (lef == nullptr) {
-                push_error(diagnostics,
+                push_warning(diagnostics,
                            "LEF_NORMALIZATION_MISSING",
                            "Technology artifact '" + path_key + "' is not present in normalized LEF project data",
                            artifact.id);
