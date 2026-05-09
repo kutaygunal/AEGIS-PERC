@@ -70,6 +70,48 @@ json artifact_bucket_json(const std::vector<SourceArtifact>& artifacts, Artifact
     return bucket;
 }
 
+json lef_layer_summary_json(const LefLayerSummary& layer)
+{
+    json item{{"name", layer.name}, {"type", layer.type}};
+    if (layer.width.has_value()) item["width"] = *layer.width;
+    if (layer.pitch_x.has_value()) item["pitch_x"] = *layer.pitch_x;
+    if (layer.pitch_y.has_value()) item["pitch_y"] = *layer.pitch_y;
+    if (layer.direction.has_value()) item["direction"] = *layer.direction;
+    return item;
+}
+
+json lef_macro_summary_json(const LefMacroSummary& macro)
+{
+    return json{{"name", macro.name},
+                {"macro_class", macro.macro_class},
+                {"width", macro.width},
+                {"height", macro.height},
+                {"pin_count", macro.pin_count},
+                {"has_obstruction", macro.has_obstruction}};
+}
+
+json lef_library_summary_json(const LefTechnologyData& library)
+{
+    json item{{"artifact_id", library.artifact_id},
+              {"source_path", library.source_path.generic_string()},
+              {"version", library.version},
+              {"site_count", library.site_count},
+              {"layer_count", library.layer_count},
+              {"via_count", library.via_count},
+              {"macro_count", library.macro_count},
+              {"diagnostic_count", library.diagnostic_count},
+              {"has_errors", library.has_errors},
+              {"layers", json::array()},
+              {"macros", json::array()}};
+    for (const auto& layer : library.layers) {
+        item["layers"].push_back(lef_layer_summary_json(layer));
+    }
+    for (const auto& macro : library.macros) {
+        item["macros"].push_back(lef_macro_summary_json(macro));
+    }
+    return item;
+}
+
 } // namespace
 
 std::string to_string(ArtifactRole role)
@@ -241,6 +283,49 @@ ProjectPackage ProjectPackage::from_manifest_json(const std::string& json_text)
         }
     }
 
+    if (root.contains("normalized") && root.at("normalized").is_object()) {
+        const auto& normalized = root.at("normalized");
+        if (normalized.contains("lef_libraries") && normalized.at("lef_libraries").is_array()) {
+            for (const auto& item : normalized.at("lef_libraries")) {
+                LefTechnologyData library;
+                library.artifact_id = item.value("artifact_id", "");
+                library.source_path = item.value("source_path", "");
+                library.version = item.value("version", "");
+                library.site_count = item.value("site_count", std::size_t{0});
+                library.layer_count = item.value("layer_count", std::size_t{0});
+                library.via_count = item.value("via_count", std::size_t{0});
+                library.macro_count = item.value("macro_count", std::size_t{0});
+                library.diagnostic_count = item.value("diagnostic_count", std::size_t{0});
+                library.has_errors = item.value("has_errors", false);
+                if (item.contains("layers") && item.at("layers").is_array()) {
+                    for (const auto& layer_item : item.at("layers")) {
+                        LefLayerSummary layer;
+                        layer.name = layer_item.value("name", "");
+                        layer.type = layer_item.value("type", "");
+                        if (layer_item.contains("width")) layer.width = layer_item.at("width").get<double>();
+                        if (layer_item.contains("pitch_x")) layer.pitch_x = layer_item.at("pitch_x").get<double>();
+                        if (layer_item.contains("pitch_y")) layer.pitch_y = layer_item.at("pitch_y").get<double>();
+                        if (layer_item.contains("direction")) layer.direction = layer_item.at("direction").get<std::string>();
+                        library.layers.push_back(std::move(layer));
+                    }
+                }
+                if (item.contains("macros") && item.at("macros").is_array()) {
+                    for (const auto& macro_item : item.at("macros")) {
+                        LefMacroSummary macro;
+                        macro.name = macro_item.value("name", "");
+                        macro.macro_class = macro_item.value("macro_class", "");
+                        macro.width = macro_item.value("width", 0.0);
+                        macro.height = macro_item.value("height", 0.0);
+                        macro.pin_count = macro_item.value("pin_count", std::size_t{0});
+                        macro.has_obstruction = macro_item.value("has_obstruction", false);
+                        library.macros.push_back(std::move(macro));
+                    }
+                }
+                pkg.m_normalized.lef_libraries.push_back(std::move(library));
+            }
+        }
+    }
+
     if (root.contains("diagnostics") && root.at("diagnostics").is_array()) {
         for (const auto& item : root.at("diagnostics")) {
             ImportDiagnostic diagnostic;
@@ -297,8 +382,12 @@ std::string ProjectPackage::to_manifest_json(int indent) const
         {"power_artifact_ids", m_normalized.power_artifact_ids},
         {"current_artifact_ids", m_normalized.current_artifact_ids},
         {"waiver_artifact_ids", m_normalized.waiver_artifact_ids},
-        {"external_report_artifact_ids", m_normalized.external_report_artifact_ids}
+        {"external_report_artifact_ids", m_normalized.external_report_artifact_ids},
+        {"lef_libraries", json::array()}
     };
+    for (const auto& library : m_normalized.lef_libraries) {
+        root["normalized"]["lef_libraries"].push_back(lef_library_summary_json(library));
+    }
 
     root["diagnostics"] = json::array();
     for (const auto& diagnostic : m_diagnostics) {
@@ -378,7 +467,9 @@ void ProjectPackage::set_validation_status(ValidationStatus status) noexcept
 
 void ProjectPackage::rebuild_normalized_view()
 {
+    const auto existing_lef_libraries = m_normalized.lef_libraries;
     m_normalized = {};
+    m_normalized.lef_libraries = existing_lef_libraries;
     for (const auto& artifact : m_artifacts) {
         push_artifact_ids_for_category(m_normalized.technology_artifact_ids,
                                        ArtifactCategory::Technology,
@@ -412,6 +503,16 @@ const SourceArtifact* ProjectPackage::find_artifact_by_id(const std::string& id)
     for (const auto& artifact : m_artifacts) {
         if (artifact.id == id) {
             return &artifact;
+        }
+    }
+    return nullptr;
+}
+
+const LefTechnologyData* ProjectPackage::find_lef_technology_by_artifact_id(const std::string& id) const
+{
+    for (const auto& library : m_normalized.lef_libraries) {
+        if (library.artifact_id == id) {
+            return &library;
         }
     }
     return nullptr;

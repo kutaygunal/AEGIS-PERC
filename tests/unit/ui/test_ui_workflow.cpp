@@ -197,7 +197,7 @@ TEST_CASE("UiWorkflow job monitor tracks recent workflow runs with progress hist
     });
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
@@ -242,7 +242,7 @@ TEST_CASE("UiWorkflow job monitor keeps bounded history for recent workflow runs
     const int runs = window.job_history_max_entries() + 2;
     for (int i = 0; i < runs; ++i) {
         const fs::path root = make_temp_dir();
-        write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+        write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
         write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
         write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
         write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
@@ -289,7 +289,7 @@ TEST_CASE("UiWorkflow workspace summary updates after import load and run comple
     aegis::ui::MainWindow window;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
@@ -322,7 +322,7 @@ TEST_CASE("UiWorkflow import review and jobs expose accessible metadata and cont
     aegis::ui::MainWindow window;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n");
@@ -375,7 +375,7 @@ TEST_CASE("UiWorkflow cross-probes between diagnostics artifacts graph nodes and
     const fs::path def = root / "top.def";
     const fs::path netlist = root / "top.v";
     const fs::path rules = root / "aegis_rules.yaml";
-    write_file(lef, "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(lef, "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(def, "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(netlist, "module top(input A, output Y); endmodule\n");
     write_file(rules, "rules:\n  - id: FLOATING_NET\n");

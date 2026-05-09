@@ -71,7 +71,7 @@ TEST_CASE("ImportWizard exposes import action and opens review dialog from picke
 
     const fs::path root = make_temp_dir();
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: FLOATING_NET\n");
 
@@ -116,7 +116,7 @@ TEST_CASE("ImportWizard validates incomplete package then allows correction by o
     const fs::path netlist = root / "top.v";
     const fs::path rules = root / "rules.txt";
 
-    write_file(lef, "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(lef, "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(def, "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(netlist, "module top(input A, output Y); endmodule\n");
     write_file(rules, "rules:\n  - id: FLOATING_NET\n");
@@ -152,7 +152,7 @@ TEST_CASE("ImportWizard accepts customer project folder and shows optional enric
     aegis::ui::MainWindow window;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: FLOATING_NET\n");
@@ -183,7 +183,7 @@ TEST_CASE("ImportWizard presents an interactive artifact table with diagnostics 
     aegis::ui::MainWindow window;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/rules.txt", "rules:\n  - id: FLOATING_NET\n");
@@ -232,7 +232,7 @@ TEST_CASE("ImportWizard load action commits validated package into workspace and
     aegis::ui::MainWindow window;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: FLOATING_NET\n");

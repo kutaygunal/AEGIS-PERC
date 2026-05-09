@@ -179,7 +179,7 @@ TEST_CASE("RunChecks uses imported rule packs and current enrichment in desktop 
     aegis::ui::MainWindow window;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
@@ -227,7 +227,7 @@ TEST_CASE("RunChecks uses local job pipeline progress for imported desktop execu
     REQUIRE(window.last_status_message().contains("built-in desktop defaults", Qt::CaseInsensitive));
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
@@ -256,7 +256,7 @@ TEST_CASE("RunChecks surfaces imported package parsing failures with actionable 
     aegis::ui::MainWindow window;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
@@ -286,7 +286,7 @@ TEST_CASE("RunChecks exposes visible progress and cancel controls for imported d
     window.set_job_pipeline_artificial_delay_for_tests(80);
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");
@@ -323,7 +323,7 @@ TEST_CASE("RunChecks exposes retry after imported local job failure when inputs 
     aegis::ui::MainWindow window;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");

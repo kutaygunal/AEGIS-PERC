@@ -1,5 +1,6 @@
 #include "aegis/storage/import_validation.hpp"
 
+#include "aegis/parsing/lef_parser.hpp"
 #include "aegis/parsing/spice_parser.hpp"
 #include "aegis/parsing/verilog_parser.hpp"
 
@@ -79,6 +80,41 @@ void push_warning(std::vector<ImportDiagnostic>& diagnostics,
                   std::optional<std::string> artifact_id = std::nullopt)
 {
     diagnostics.push_back({DiagnosticSeverity::Warning, std::move(code), std::move(message), std::move(artifact_id)});
+}
+
+LefTechnologyData summarize_lef(const std::string& artifact_id,
+                                const std::filesystem::path& relative_path,
+                                const aegis::parsing::LefLibraryData& lef)
+{
+    LefTechnologyData summary;
+    summary.artifact_id = artifact_id;
+    summary.source_path = relative_path;
+    summary.version = lef.version;
+    summary.site_count = lef.sites.size();
+    summary.layer_count = lef.layers.size();
+    summary.via_count = lef.vias.size();
+    summary.macro_count = lef.macros.size();
+    summary.diagnostic_count = lef.diagnostics.size();
+    summary.has_errors = lef.has_errors();
+    for (const auto& layer : lef.layers) {
+        summary.layers.push_back({layer.name,
+                                  layer.type,
+                                  layer.width_value,
+                                  layer.pitch.has_value() ? std::optional<double>(layer.pitch->x) : std::nullopt,
+                                  layer.pitch.has_value() ? std::optional<double>(layer.pitch->y) : std::nullopt,
+                                  layer.routing_direction == aegis::parsing::LefRoutingDirection::Unknown
+                                      ? std::nullopt
+                                      : std::optional<std::string>(aegis::parsing::to_string(layer.routing_direction))});
+    }
+    for (const auto& macro : lef.macros) {
+        summary.macros.push_back({macro.name,
+                                  macro.macro_class,
+                                  macro.width,
+                                  macro.height,
+                                  macro.pins.size(),
+                                  macro.obstruction.has_value()});
+    }
+    return summary;
 }
 
 } // namespace
@@ -231,6 +267,30 @@ ProjectPackage ImportPreflightValidator::scan_project_folder(const std::filesyst
                          artifact.id);
         }
 
+        if (best->role == ArtifactRole::Lef) {
+            try {
+                aegis::parsing::LefParser parser;
+                const auto lef = parser.parse_file(it->path());
+                package.normalized().lef_libraries.push_back(summarize_lef(artifact.id, relative, lef));
+                for (const auto& diagnostic : lef.diagnostics) {
+                    const auto severity = diagnostic.severity == aegis::parsing::LefDiagnostic::Severity::Error
+                        ? DiagnosticSeverity::Error
+                        : (diagnostic.severity == aegis::parsing::LefDiagnostic::Severity::Warning
+                            ? DiagnosticSeverity::Warning
+                            : DiagnosticSeverity::Info);
+                    package.diagnostics().push_back({severity,
+                                                     diagnostic.code,
+                                                     "LEF '" + relative.generic_string() + "': " + diagnostic.message,
+                                                     artifact.id});
+                }
+            } catch (const std::exception& ex) {
+                push_error(package.diagnostics(),
+                           "LEF_PARSE_FAILED",
+                           "Failed to parse LEF technology/library artifact '" + relative.generic_string() + "': " + ex.what(),
+                           artifact.id);
+            }
+        }
+
         if (best->role == ArtifactRole::Verilog || best->role == ArtifactRole::SystemVerilog) {
             try {
                 aegis::parsing::VerilogParser parser;
@@ -304,6 +364,20 @@ std::vector<ImportDiagnostic> ImportPreflightValidator::validate(const ProjectPa
                          "UNKNOWN_ROLE_ASSIGNMENT",
                          "Artifact '" + path_key + "' has unknown role/category assignment",
                          artifact.id);
+        }
+        if (artifact.role == ArtifactRole::Lef) {
+            const auto* lef = package.find_lef_technology_by_artifact_id(artifact.id);
+            if (lef == nullptr) {
+                push_error(diagnostics,
+                           "LEF_NORMALIZATION_MISSING",
+                           "Technology artifact '" + path_key + "' is not present in normalized LEF project data",
+                           artifact.id);
+            } else if (lef->has_errors) {
+                push_error(diagnostics,
+                           "LEF_NORMALIZATION_INVALID",
+                           "Technology artifact '" + path_key + "' produced blocking LEF normalization diagnostics",
+                           artifact.id);
+            }
         }
     }
 

@@ -201,7 +201,7 @@ TEST_CASE("WorkspacePersistence persists recent imported projects and reopen-las
     SettingsCleanupGuard settings_guard;
 
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3 ;\n");
+    write_file(root / "layout/technology.lef", "VERSION 5.8 ;\nLAYER M3\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M3\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/aegis_rules.yaml", "rules:\n  - id: EM_CURRENT_LIMIT\n    type: em_current_limit\n    severity: medium\n    parameters:\n      metal_1_max_mA: 20\n");

@@ -242,11 +242,15 @@ TEST_CASE("PinModel equality and inequality", "[graph][DataModel][fast]")
 TEST_CASE("PinModel can be hashed and used in unordered_set",
           "[graph][DataModel][fast]")
 {
+#if defined(__GNUC__) && !defined(_MSC_VER)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
     PinModel a{.name = "A", .direction = Direction::Input, .net_name = "nA"};
     PinModel b{.name = "B", .direction = Direction::Output, .net_name = "nB"};
+#if defined(__GNUC__) && !defined(_MSC_VER)
 #pragma GCC diagnostic pop
+#endif
 
     std::unordered_set<std::size_t> hashes;
     hashes.insert(hash_value(a));
@@ -411,12 +415,16 @@ TEST_CASE("PortModel stores external port attributes",
 
 TEST_CASE("PortModel equality", "[graph][DataModel][fast]")
 {
+#if defined(__GNUC__) && !defined(_MSC_VER)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
     PortModel a{.name = "A", .direction = Direction::Input, .net_name = "nA"};
     PortModel b{.name = "A", .direction = Direction::Input, .net_name = "nA"};
     PortModel c{.name = "A", .direction = Direction::Output, .net_name = "nA"};
+#if defined(__GNUC__) && !defined(_MSC_VER)
 #pragma GCC diagnostic pop
+#endif
 
     REQUIRE(a == b);
     REQUIRE(a != c);

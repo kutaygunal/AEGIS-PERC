@@ -73,6 +73,38 @@ struct ImportDiagnostic {
     std::optional<std::string> artifact_id;
 };
 
+struct LefLayerSummary {
+    std::string name;
+    std::string type;
+    std::optional<double> width;
+    std::optional<double> pitch_x;
+    std::optional<double> pitch_y;
+    std::optional<std::string> direction;
+};
+
+struct LefMacroSummary {
+    std::string name;
+    std::string macro_class;
+    double width = 0.0;
+    double height = 0.0;
+    std::size_t pin_count = 0;
+    bool has_obstruction = false;
+};
+
+struct LefTechnologyData {
+    std::string artifact_id;
+    std::filesystem::path source_path;
+    std::string version;
+    std::size_t site_count = 0;
+    std::size_t layer_count = 0;
+    std::size_t via_count = 0;
+    std::size_t macro_count = 0;
+    std::size_t diagnostic_count = 0;
+    bool has_errors = false;
+    std::vector<LefLayerSummary> layers;
+    std::vector<LefMacroSummary> macros;
+};
+
 struct NormalizedProjectData {
     std::vector<std::string> technology_artifact_ids;
     std::vector<std::string> layout_artifact_ids;
@@ -82,6 +114,7 @@ struct NormalizedProjectData {
     std::vector<std::string> current_artifact_ids;
     std::vector<std::string> waiver_artifact_ids;
     std::vector<std::string> external_report_artifact_ids;
+    std::vector<LefTechnologyData> lef_libraries;
 };
 
 class ProjectPackage {
@@ -111,6 +144,7 @@ public:
 
     void rebuild_normalized_view();
     const SourceArtifact* find_artifact_by_id(const std::string& id) const;
+    const LefTechnologyData* find_lef_technology_by_artifact_id(const std::string& id) const;
 
 private:
     int m_manifest_version = 1;

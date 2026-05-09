@@ -341,7 +341,7 @@ ctest --preset linux-test
 - [x] Add advanced LEF geometry/forms and richer abstract-shape normalization (`docs/design/lef-coverage.md`)
 - [x] Implement full LEF technology-rule semantics and typed normalization (`docs/design/lef-coverage.md`)
 - [x] Add industrial-scale LEF fuzzing, stress, and performance validation (`docs/design/lef-coverage.md`)
-- [ ] Integrate LEF normalization into full customer project import/storage workflows
+- [x] Integrate LEF normalization into full customer project import/storage workflows
 
 ### Phase 4 — AI/ML Core (Sprint 4)
 - [ ] Feature extraction from violations

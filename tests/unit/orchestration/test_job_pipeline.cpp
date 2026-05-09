@@ -43,7 +43,7 @@ std::string read_file(const fs::path& path)
 
 ProjectPackage make_manifest_package(const fs::path& root)
 {
-    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v", "module top(input A, output Y); endmodule\n");
     write_file(root / "rules/rules.yaml",
@@ -142,7 +142,7 @@ TEST_CASE("LocalJobPipeline executes imported projects through staged progress a
 TEST_CASE("LocalJobPipeline uses parsed Verilog connectivity during imported execution", "[orchestration][P9][P9-003][JobPipeline]")
 {
     const fs::path root = make_temp_dir();
-    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1 ;\n");
+    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
     write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
     write_file(root / "netlist/top.v",
                "module top(input A, output Y);\n"

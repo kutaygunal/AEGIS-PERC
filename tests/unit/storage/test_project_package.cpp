@@ -42,6 +42,25 @@ TEST_CASE("ProjectPackage loads manifest JSON and builds normalized references",
         "validation": {
             "status": "warning"
         },
+        "normalized": {
+            "lef_libraries": [
+                {
+                    "artifact_id": "tech-1",
+                    "source_path": "layout/technology.lef",
+                    "version": "5.8",
+                    "site_count": 1,
+                    "layer_count": 1,
+                    "via_count": 0,
+                    "macro_count": 0,
+                    "diagnostic_count": 0,
+                    "has_errors": false,
+                    "layers": [
+                        {"name": "M1", "type": "ROUTING", "width": 0.14, "pitch_x": 0.2, "pitch_y": 0.2, "direction": "horizontal"}
+                    ],
+                    "macros": []
+                }
+            ]
+        },
         "diagnostics": [
             {"severity": "warning", "code": "MULTI_NETLIST_CANDIDATE", "message": "More than one netlist found", "artifact_id": "netlist-1"}
         ]
@@ -56,6 +75,10 @@ TEST_CASE("ProjectPackage loads manifest JSON and builds normalized references",
     REQUIRE(pkg.artifacts().size() == 8);
 
     REQUIRE(pkg.normalized().technology_artifact_ids == std::vector<std::string>{"tech-1"});
+    REQUIRE(pkg.normalized().lef_libraries.size() == 1);
+    REQUIRE(pkg.normalized().lef_libraries.front().artifact_id == "tech-1");
+    REQUIRE(pkg.normalized().lef_libraries.front().source_path == "layout/technology.lef");
+    REQUIRE(pkg.normalized().lef_libraries.front().layer_count == 1);
     REQUIRE(pkg.normalized().layout_artifact_ids == std::vector<std::string>{"layout-1"});
     REQUIRE(pkg.normalized().netlist_artifact_ids == std::vector<std::string>{"netlist-1"});
     REQUIRE(pkg.normalized().rule_artifact_ids == std::vector<std::string>{"rules-1"});
@@ -85,6 +108,9 @@ TEST_CASE("ProjectPackage serialization round-trip is deterministic for manifest
     pkg.artifacts().push_back({"netlist-1", "netlist/top.v", ArtifactRole::Verilog, ArtifactCategory::Netlist, false, "manifest"});
     pkg.artifacts().push_back({"rules-1", "rules/aegis_rules.yaml", ArtifactRole::AegisRulePack, ArtifactCategory::Rules, false, "manifest"});
     pkg.artifacts().push_back({"power-1", "power/power_domains.csv", ArtifactRole::PowerDomainsCsv, ArtifactCategory::Power, true, "manifest"});
+    pkg.normalized().lef_libraries.push_back({"tech-1", "layout/technology.lef", "5.8", 1, 1, 0, 0, 0, false,
+                                              {{"M1", "ROUTING", 0.14, 0.2, 0.2, "horizontal"}},
+                                              {}});
     pkg.diagnostics().push_back({DiagnosticSeverity::Info, "IMPORT_READY", "Package is ready for validation", std::nullopt});
     pkg.rebuild_normalized_view();
 
@@ -96,4 +122,6 @@ TEST_CASE("ProjectPackage serialization round-trip is deterministic for manifest
     REQUIRE(reparsed.project().name == "FalconCPU");
     REQUIRE(reparsed.validation_status() == ValidationStatus::Valid);
     REQUIRE(reparsed.normalized().power_artifact_ids == std::vector<std::string>{"power-1"});
+    REQUIRE(reparsed.find_lef_technology_by_artifact_id("tech-1") != nullptr);
+    REQUIRE(reparsed.find_lef_technology_by_artifact_id("tech-1")->layers.size() == 1);
 }
