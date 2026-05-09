@@ -6,11 +6,9 @@
 
 ---
 
-## Target Alignment
+## Product Vision
 
-**Role:** Principal Software Engineer — EDA Verification & AI/ML Integration
-
-This project is architected as a production-caliber EDA verification platform. It demonstrates system design maturity, performance engineering at scale, classical EDA workflows, and modern AI/ML integration — the intersection of physical design verification and intelligent systems engineering.
+AEGIS-PERC is being developed as a commercial-grade EDA verification platform for semiconductor electrical reliability analysis. The focus is on production-quality architecture, scalable data ingestion, deterministic verification workflows, and extensible AI-assisted analysis for real customer design environments.
 
 ---
 
@@ -30,7 +28,7 @@ The system is built for:
 ### 1. Layout & Netlist Import Engine
 - **Formats:** Native LEF, real DEF, Verilog gate-level netlists, hardened SPICE/CDL netlists, JSON intermediate, extensible parser abstraction
 - **Architecture:** Streaming parser with incremental indexing, background async loading, multi-threaded parsing
-- **Demonstrates:** Memory optimization, large-file handling (>100GB layouts), performance engineering
+- **Goals:** Memory optimization, large-file handling (>100GB layouts), and sustained performance under production workloads
 
 ### 2. Connectivity Graph Engine
 - Sparse graph representations of net relationships, power domains, signal propagation, and dependency chains
@@ -375,10 +373,8 @@ ctest --preset linux-test
 
 ## License
 
-MIT License — Portfolio demonstration project.
-
-*This is an independent educational and portfolio project.*
+MIT License.
 
 ---
 
-**Built to demonstrate principal-engineer thinking: architecture ownership, production infrastructure, and the intersection of classical EDA workflows with modern AI/ML systems.**
+**AEGIS-PERC is intended to evolve into a commercial-grade platform for electrical rule verification, workflow automation, and AI-assisted reliability analysis.**
