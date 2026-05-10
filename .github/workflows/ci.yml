@@ -98,7 +98,7 @@ jobs:
           mkdir -p coverage
           lcov --capture --directory build/linux-coverage --output-file coverage/lcov.info --ignore-errors negative 2>/dev/null || true
           lcov --remove coverage/lcov.info '/usr/*' '*/_deps/*' '*/catch2/*' --output-file coverage/lcov.info 2>/dev/null || true
-          gcovr --root . --xml-pretty --output coverage/coverage.xml build/linux-coverage
+          gcovr --root . --xml-pretty --output coverage/coverage.xml build/linux-coverage --exclude-directories _deps --gcov-ignore-errors no_working_dir_found
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
