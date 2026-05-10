@@ -253,6 +253,8 @@ TEST_CASE("ImportWizard load action commits validated package into workspace and
     REQUIRE(window.loaded_import_design_session_summary_text().contains("Rule packs:", Qt::CaseInsensitive));
     REQUIRE(window.workspace_summary_text().contains("scene and graph loaded", Qt::CaseInsensitive));
     REQUIRE(window.layer_panel_count() > 0);
+    REQUIRE(window.hierarchy_browser_count() > 0);
+    REQUIRE(window.is_hierarchy_browser_visible());
     REQUIRE(window.report_preview_summary_text().contains(root.filename().string().c_str(), Qt::CaseInsensitive));
     REQUIRE(window.last_status_message().contains("Loaded imported project package", Qt::CaseInsensitive));
 

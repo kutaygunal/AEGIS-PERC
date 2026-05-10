@@ -60,6 +60,12 @@ public:
     int violation_explorer_count() const;
     int selected_violation_count() const;
     int graph_explorer_count() const;
+    int hierarchy_browser_count() const;
+    QString hierarchy_browser_status_text() const;
+    bool search_hierarchy_browser(const QString& text);
+    bool select_hierarchy_browser_by_stable_id(const QString& stable_id);
+    QString current_hierarchy_browser_id() const;
+    bool is_hierarchy_browser_visible() const;
     void select_violation_row(int row);
     void select_violation_rows(const std::vector<int>& rows);
     bool search_graph_node(const QString& text);

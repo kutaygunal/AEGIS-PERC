@@ -59,6 +59,21 @@ inline QString graph_enter_search()
     return "Enter a graph node name to search.";
 }
 
+inline QString hierarchy_no_session()
+{
+    return "Load an imported design to browse instances, nets, ports, and layers.";
+}
+
+inline QString hierarchy_empty()
+{
+    return "No imported design objects found.";
+}
+
+inline QString hierarchy_enter_search()
+{
+    return "Enter an object name to search.";
+}
+
 inline QString report_summary_empty()
 {
     return "Load a design to preview report content.";

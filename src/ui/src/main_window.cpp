@@ -3,6 +3,7 @@
 #include "aegis/ui/layer_panel.hpp"
 #include "aegis/ui/connectivity_trace.hpp"
 #include "aegis/ui/graph_explorer_panel.hpp"
+#include "aegis/ui/hierarchy_browser_panel.hpp"
 #include "aegis/ui/layout_canvas.hpp"
 #include "aegis/ui/properties_panel.hpp"
 #include "aegis/ui/report_preview_panel.hpp"
@@ -654,6 +655,7 @@ struct MainWindow::Impl {
     ViolationExplorerPanel* violation_explorer = nullptr;
     ReportPreviewPanel* report_preview = nullptr;
     GraphExplorerPanel* graph_explorer = nullptr;
+    HierarchyBrowserPanel* hierarchy_browser = nullptr;
     TracePanel* trace_panel = nullptr;
     ActivityLogPanel* activity_log = nullptr;
     QLabel* workspace_summary_label = nullptr;
@@ -671,6 +673,7 @@ struct MainWindow::Impl {
     const aegis::graph::ConnectivityGraph* current_graph = nullptr;
     ConnectivityTraceAdapter trace_adapter;
     QDockWidget* graph_dock = nullptr;
+    QDockWidget* hierarchy_dock = nullptr;
     QList<QDockWidget*> docks;
     QMenuBar* menu_bar = nullptr;
     QMenu* view_menu = nullptr;
@@ -2098,6 +2101,10 @@ void MainWindow::apply_import_package()
     set_connectivity_graph(&m_impl->loaded_import_session->graph());
     set_violations({});
 
+    if (m_impl->hierarchy_browser != nullptr) {
+        m_impl->hierarchy_browser->set_session(m_impl->loaded_import_session.get());
+    }
+
     const QString project_name = QString::fromStdString(m_impl->loaded_import_package.project().name.empty()
         ? std::string{"ImportedProject"}
         : m_impl->loaded_import_package.project().name);
@@ -2722,6 +2729,13 @@ void MainWindow::setup_dock_panels()
                 m_impl->properties_panel, &PropertiesPanel::set_selected_ids);
         connect(m_impl->selection_model, &SelectionModel::selection_changed,
                 this, [this](const QStringList& ids) {
+                    if (m_impl->hierarchy_browser != nullptr) {
+                        if (ids.isEmpty()) {
+                            m_impl->hierarchy_browser->clear_selection();
+                        } else {
+                            m_impl->hierarchy_browser->select_by_stable_id(ids.first());
+                        }
+                    }
                     if (m_impl->report_preview != nullptr) {
                         m_impl->report_preview->set_selected_item_count(static_cast<int>(ids.size()));
                         if (m_impl->canvas != nullptr) {
@@ -2890,6 +2904,16 @@ void MainWindow::setup_dock_panels()
             });
     m_impl->graph_dock = make_dock("Graph Explorer", Qt::LeftDockWidgetArea, m_impl->graph_explorer);
 
+    m_impl->hierarchy_browser = new HierarchyBrowserPanel(this);
+    connect(m_impl->hierarchy_browser, &HierarchyBrowserPanel::object_selected, this,
+            [this](const QString& stable_id) {
+                if (m_impl->canvas == nullptr) {
+                    return;
+                }
+                select_scene_item_by_id(stable_id);
+            });
+    m_impl->hierarchy_dock = make_dock("Hierarchy", Qt::LeftDockWidgetArea, m_impl->hierarchy_browser);
+
     m_impl->trace_panel = new TracePanel(this);
     connect(m_impl->trace_panel, &TracePanel::trace_requested, this,
             [this](const QString& stable_name) {
@@ -2985,6 +3009,9 @@ void MainWindow::setup_dock_panels()
         m_impl->view_menu->addAction(report_dock->toggleViewAction());
         if (m_impl->graph_dock != nullptr) {
             m_impl->view_menu->addAction(m_impl->graph_dock->toggleViewAction());
+        }
+        if (m_impl->hierarchy_dock != nullptr) {
+            m_impl->view_menu->addAction(m_impl->hierarchy_dock->toggleViewAction());
         }
         m_impl->view_menu->addAction(trace_dock->toggleViewAction());
         m_impl->view_menu->addAction(job_history_dock->toggleViewAction());
@@ -3358,6 +3385,9 @@ bool MainWindow::load_bundled_sample(const QString& sample_id)
         m_impl->owned_graph = std::make_unique<aegis::graph::ConnectivityGraph>(std::move(graph));
         set_connectivity_graph(m_impl->owned_graph.get());
         set_violations({});
+        if (m_impl->hierarchy_browser != nullptr) {
+            m_impl->hierarchy_browser->set_session(nullptr);
+        }
         refresh_workspace_summary();
         const QString message = QString("Loaded sample: %1").arg(QString::fromStdString(ir->design_name));
         publish_ui_notification(message, ActivityLogSeverity::Info);
@@ -3531,6 +3561,40 @@ int MainWindow::selected_violation_count() const
 int MainWindow::graph_explorer_count() const
 {
     return m_impl->graph_explorer != nullptr ? m_impl->graph_explorer->visible_item_count() : 0;
+}
+
+int MainWindow::hierarchy_browser_count() const
+{
+    return m_impl->hierarchy_browser != nullptr ? m_impl->hierarchy_browser->visible_item_count() : 0;
+}
+
+QString MainWindow::hierarchy_browser_status_text() const
+{
+    return m_impl->hierarchy_browser != nullptr ? m_impl->hierarchy_browser->status_text() : QString{};
+}
+
+bool MainWindow::search_hierarchy_browser(const QString& text)
+{
+    return m_impl->hierarchy_browser != nullptr && m_impl->hierarchy_browser->search_and_select(text);
+}
+
+bool MainWindow::select_hierarchy_browser_by_stable_id(const QString& stable_id)
+{
+    if (m_impl->hierarchy_browser != nullptr) {
+        m_impl->hierarchy_browser->select_by_stable_id(stable_id);
+        return m_impl->hierarchy_browser->current_stable_id() == stable_id;
+    }
+    return false;
+}
+
+QString MainWindow::current_hierarchy_browser_id() const
+{
+    return m_impl->hierarchy_browser != nullptr ? m_impl->hierarchy_browser->current_stable_id() : QString{};
+}
+
+bool MainWindow::is_hierarchy_browser_visible() const
+{
+    return m_impl->hierarchy_dock != nullptr && !m_impl->hierarchy_dock->isHidden();
 }
 
 void MainWindow::select_violation_row(int row)

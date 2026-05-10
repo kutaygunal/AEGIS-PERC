@@ -35,6 +35,7 @@ add_executable(aegis_unit_tests
     unit/ui/test_connectivity_trace.cpp
     unit/ui/test_graph_explorer.cpp
     unit/ui/test_graph_explorer_ui.cpp
+    unit/ui/test_hierarchy_browser.cpp
     unit/ui/test_violation_heatmap.cpp
     unit/ui/test_report_preview.cpp
     unit/ui/test_report_preview_ui.cpp

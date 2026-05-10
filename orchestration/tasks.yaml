@@ -619,7 +619,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R GraphExplorer"
       - "ctest --test-dir build --output-on-failure -R Ui"
-    status: todo
+    status: review
 
   - id: P13-004
     phase: P13

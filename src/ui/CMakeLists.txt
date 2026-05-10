@@ -19,6 +19,8 @@ add_library(aegis_ui STATIC
     src/connectivity_trace.cpp
     include/aegis/ui/graph_explorer_panel.hpp
     src/graph_explorer_panel.cpp
+    include/aegis/ui/hierarchy_browser_panel.hpp
+    src/hierarchy_browser_panel.cpp
     include/aegis/ui/properties_panel.hpp
     src/properties_panel.cpp
     include/aegis/ui/report_preview_panel.hpp

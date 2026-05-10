@@ -4,16 +4,16 @@
 2026-05-10
 
 ## Current Status
-`P13-001` and `P13-002` are done. `P13-003` is the next ready task: the imported design workspace now owns a unified session model and a fully realized 2D design scene; the next step is exposing the object inventory in a hierarchy browser.
+`P13-003` is implemented and marked `review`: a docked Hierarchy Browser panel now lists imported design objects grouped by category (Instances, Nets, Ports, Layers, Technology Macros, Devices) with real-time search/filter, selection synchronization with the canvas, and explicit empty-state guidance.
 
 ## Last Completed Task
-`P13-002` — Materialize imported DEF/LEF content into a full interactive 2D design scene
+`P13-003` — Add imported-design hierarchy and object browser for instances, nets, ports, and layers
 
 ## Current Task
 No implementation task in progress
 
 ## Ready Tasks
-- `P13-003` — Add imported-design hierarchy and object browser for instances, nets, ports, and layers
+- `P13-004` — Expose commercial-grade imported object properties and provenance inspection
 
 ## Blocked Tasks
 - None recorded in the current trimmed `tasks.yaml`
