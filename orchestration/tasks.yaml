@@ -4,31 +4,6 @@
 
 tasks:
   # ─────────────────────────────────────────────────────────
-  # Sprint 4 — AI/ML Core (P4) — early tasks
-  # ─────────────────────────────────────────────────────────
-
-  - id: P4-001
-    phase: P4
-    title: "Feature extraction from violations"
-    priority: high
-    area: ml
-    risk: high
-    depends_on: []
-    acceptance:
-      - A pipeline extracts numerical and categorical features from violation contexts.
-      - Features are graph-local (adjacent devices, net properties, geometry counts).
-      - Output is a normalized feature vector.
-      - No inference logic yet; only extraction.
-      - Unit tests verify deterministic output on fixed inputs.
-    implementation_rules:
-      - Keep extraction read-only; do not modify violations or graph.
-      - Support incremental extraction for future interactive updates.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure --R FeatureExtraction"
-    status: todo
-
-  # ─────────────────────────────────────────────────────────
   # Sprint 5 — Automation & Extensibility (P5) — early tasks
   # ─────────────────────────────────────────────────────────
 
@@ -390,144 +365,6 @@ tasks:
     status: review
 
   # ─────────────────────────────────────────────────────────
-  # Sprint 10 — Applied AI/ML and Explainability (P10)
-  # Focus: replace missing ML/XAI/copilot claims with real feature,
-  # model, inference, retrieval, and assistant subsystems.
-  # ─────────────────────────────────────────────────────────
-
-  - id: P10-001
-    phase: P10
-    title: "Implement violation and graph-context feature extraction"
-    priority: high
-    area: ml
-    risk: high
-    depends_on: [P9-004]
-    acceptance:
-      - Feature extraction emits deterministic numerical and categorical features from violations, nets, devices, domains, and available physical context.
-      - Extraction supports both batch workflows and incremental single-violation requests for future interactive explainability.
-      - Output schema/versioning is documented so training, inference, and report layers share the same contract.
-      - Unit tests verify stable output on fixed sample designs and imported packages.
-    implementation_rules:
-      - Keep extraction read-only over graph and violation inputs.
-      - Preserve provenance for feature rows where practical.
-      - Avoid embedding model-specific assumptions into the base extractor.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R FeatureExtraction"
-      - "ctest --test-dir build --output-on-failure -R Ml"
-    status: ready
-
-  - id: P10-002
-    phase: P10
-    title: "Add tabular XGBoost/LightGBM training pipeline for violation classification"
-    priority: high
-    area: ml
-    risk: high
-    depends_on: [P10-001]
-    acceptance:
-      - A reproducible training pipeline consumes extracted features and produces versioned classification artifacts for supported violation classes.
-      - Training/evaluation metrics are emitted for deterministic test datasets and sample corpora.
-      - Model metadata records feature schema version, label mapping, and training provenance.
-      - The repository gains a documented path for refreshing or replacing baseline models.
-    implementation_rules:
-      - Keep training pipelines scriptable/headless and separate from desktop UI code.
-      - Support CPU-only execution first; do not block later GPU acceleration.
-      - Fail clearly when model/schema versions are incompatible.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Ml"
-      - "python scripts/train_violation_model.py --help"
-    status: ready
-
-  - id: P10-003
-    phase: P10
-    title: "Integrate ONNX Runtime inference for desktop and CLI analysis flows"
-    priority: high
-    area: ml
-    risk: high
-    depends_on: [P10-002]
-    acceptance:
-      - Trained tabular models export to ONNX and load through an integrated inference path in C++.
-      - Desktop and CLI workflows can request model scoring without Python-in-the-loop.
-      - Inference outputs include stable class labels, confidence scores, and model/version metadata.
-      - Build and runtime gracefully degrade when ONNX Runtime is unavailable by surfacing actionable diagnostics.
-    implementation_rules:
-      - Keep inference API isolated from any one model family.
-      - Avoid hardcoding absolute model paths; use config/package references.
-      - Preserve deterministic CPU inference as the baseline path.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Ml"
-      - "ctest --test-dir build --output-on-failure -R BatchCLI"
-    status: ready
-
-  - id: P10-004
-    phase: P10
-    title: "Implement graph embeddings and FAISS-based similarity retrieval"
-    priority: high
-    area: ml
-    risk: high
-    depends_on: [P10-001]
-    acceptance:
-      - Structural embeddings can be generated for violations/subgraphs using a documented graph-embedding pipeline.
-      - Similarity search indexes embeddings and returns ranked nearest historical violations with stable metadata.
-      - Retrieval works headlessly for CLI/reporting use and is callable from future desktop/XAI surfaces.
-      - Tests cover deterministic indexing/query behavior on a small seeded corpus.
-    implementation_rules:
-      - Keep embedding generation decoupled from one specific GNN backend.
-      - Persist enough metadata to explain why a match was returned.
-      - Make corpus/index versioning explicit.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Ml"
-      - "ctest --test-dir build --output-on-failure -R Similarity"
-    status: ready
-
-  - id: P10-005
-    phase: P10
-    title: "Add SHAP-based explainability and surfaced ML evidence"
-    priority: high
-    area: ml
-    risk: high
-    depends_on: [P10-003, P10-004]
-    acceptance:
-      - Per-violation explanations expose top contributing features, confidence context, and similar historical matches when available.
-      - Explanation payloads are serializable for reports, CLI, and future desktop panels.
-      - Missing explanation backends degrade gracefully without breaking deterministic rule-check workflows.
-      - Tests cover stable explanation shape and metadata on seeded model outputs.
-    implementation_rules:
-      - Keep XAI outputs auditable and tied to model/version identifiers.
-      - Do not present opaque scores without accompanying evidence labels.
-      - Separate explanation formatting from explanation computation.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Ml"
-      - "ctest --test-dir build --output-on-failure -R Reporting"
-    status: ready
-
-  - id: P10-006
-    phase: P10
-    title: "Implement Ollama-backed LLM copilot with retrieval-augmented violation summaries"
-    priority: medium
-    area: ml
-    risk: high
-    depends_on: [P10-004, P10-005]
-    acceptance:
-      - A local LLM integration can answer project/violation questions using retrieved rule, graph, and historical-context evidence.
-      - Copilot responses cite source objects/violations instead of returning unsupported free-form claims only.
-      - The assistant layer is optional and headless-safe; deterministic analysis remains usable without it.
-      - Prompt, retrieval, and tool-call boundaries are documented and testable.
-    implementation_rules:
-      - Keep the copilot strictly additive; it must not mutate design state directly.
-      - Separate retrieval/tool execution from final response generation.
-      - Provide explicit configuration for local model/provider selection.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Ml"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: ready
-
-  # ─────────────────────────────────────────────────────────
   # Sprint 11 — Platform, Performance, and Extensibility (P11)
   # Focus: replace remaining platform placeholders across rendering,
   # storage, scripting, deployment, distributed execution, and plugins.
@@ -539,7 +376,7 @@ tasks:
     priority: high
     area: ui
     risk: high
-    depends_on: [P9-002]
+    depends_on: []
     acceptance:
       - The desktop renderer uses a GPU-backed path for layout geometry, overlays, and view transforms instead of QWidget/QPainter raster only.
       - Existing workspace interactions (zoom, pan, selection, overlays, heatmap, trace focus) remain functionally equivalent.
@@ -555,37 +392,15 @@ tasks:
       - "ctest --test-dir build --output-on-failure -R Ui"
     status: ready
 
-  - id: P11-002
-    phase: P11
-    title: "Add optional GPU acceleration paths for inference and heavy graph/layout workloads"
-    priority: medium
-    area: ml
-    risk: high
-    depends_on: [P10-003, P11-001]
-    acceptance:
-      - Optional GPU-backed execution paths exist for supported inference or rendering-heavy workloads, with CPU remaining the deterministic baseline.
-      - Build configuration clearly advertises enabled/disabled GPU backends and required dependencies.
-      - Runtime capability detection selects compatible backends without crashing unsupported hosts.
-      - Benchmarks demonstrate measurable benefit on representative workloads.
-    implementation_rules:
-      - Keep GPU support optional and modular.
-      - Do not make CI or core developer workflows depend on CUDA/ROCm being installed.
-      - Use explicit feature flags and diagnostics for backend selection.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Ml"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: ready
-
   - id: P11-003
     phase: P11
     title: "Replace the PythonApi stub with a real pybind11 automation surface"
     priority: high
     area: scripting
     risk: medium
-    depends_on: [P9-004, P10-003]
+    depends_on: []
     acceptance:
-      - A real Python module exposes session/project loading, analysis execution, explanation access, and report export APIs.
+      - A real Python module exposes session/project loading, analysis execution, and report export APIs.
       - Bindings are built and packaged through the project build system rather than represented by a boolean stub.
       - Python automation reuses the same core workflow paths as CLI and desktop execution.
       - Automated tests cover import, run, and report flows from Python.
@@ -601,15 +416,15 @@ tasks:
 
   - id: P11-004
     phase: P11
-    title: "Implement real storage backends for SQLite/PostgreSQL and analytical exports"
+    title: "Implement real storage backends for SQLite and analytical exports"
     priority: high
     area: storage
     risk: high
-    depends_on: [P10-005]
+    depends_on: []
     acceptance:
       - `StorageEngine` moves beyond a boolean stub and supports at least one local durable backend plus an enterprise-oriented backend path.
-      - Analysis sessions, violations, explanations, and historical similarity metadata can be persisted and queried.
-      - Analytical export paths support Arrow/Parquet or a clearly documented equivalent contract for downstream processing.
+      - Analysis sessions, violations, and run metadata can be persisted and queried.
+      - Analytical export paths support a clearly documented contract for downstream processing.
       - Storage configuration, migrations, and failure diagnostics are documented and tested.
     implementation_rules:
       - Separate persistence contracts from concrete database drivers.
@@ -693,11 +508,11 @@ tasks:
     priority: medium
     area: reporting
     risk: medium
-    depends_on: [P10-005, P11-004]
+    depends_on: [P11-004]
     acceptance:
       - `ReportGenerator` produces structured HTML and JSON outputs instead of being a stub, and desktop/CLI exports reuse it.
       - Template-driven report variants support executive, engineering, and machine-readable output modes.
-      - Reports can include deterministic checks, ML scores, explanations, similarity matches, and run diagnostics when available.
+      - Reports can include deterministic checks, run diagnostics, and analysis metadata.
       - Regression tests compare stable report structure on seeded inputs.
     implementation_rules:
       - Keep presentation templates separate from report data assembly.
@@ -715,7 +530,7 @@ tasks:
     priority: medium
     area: graph
     risk: high
-    depends_on: [P9-004]
+    depends_on: []
     acceptance:
       - A CSR-oriented graph representation exists for large static connectivity workloads and is benchmarked against the current adjacency-list implementation.
       - The graph API either abstracts backend choice cleanly or documents where CSR-specific paths are used.
@@ -1005,5 +820,3 @@ tasks:
     status: todo
 
   # ─────────────────────────────────────────────────────────
-
-

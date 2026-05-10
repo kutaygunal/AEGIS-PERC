@@ -1,7 +1,7 @@
 roadmap:
   name: "AEGIS-PERC"
   version: "1.0.0"
-  description: "AI-assisted electrical rule verification and root-cause analysis platform"
+  description: "Electrical rule verification and root-cause analysis platform"
 
   phases:
     - id: P1
@@ -68,27 +68,6 @@ roadmap:
         - "Details and report preview update from selection/filter models, not direct model ownership"
         - "Graph exploration, tracing, and visualization workflow smoke tests pass"
 
-    - id: P4
-      name: "Phase 4 — AI/ML Core"
-      goal: "Integrate optional ML-assisted classification, clustering, confidence scoring, and explainable root-cause recommendations."
-      deliverables:
-        - Feature extraction pipeline
-        - Violation embedding model interface
-        - Clustering engine
-        - Similar violation search
-        - ML inference abstraction
-        - ONNX Runtime integration
-        - Confidence scoring
-        - Explainability model
-        - Root-cause recommendation interface
-        - Local AI assistant integration placeholder
-      exit_criteria:
-        - "ML pipeline initializes only when enabled"
-        - "Feature extraction runs without blocking UI"
-        - "Inference output includes confidence scores"
-        - "Explainability hooks are consumable by UI and reporting"
-        - "Core verification remains fully deterministic without ML"
-
     - id: P5
       name: "Phase 5 — Automation & Extensibility"
       goal: "Add Python scripting, batch CLI, plugin SDK, reporting, and local persistence."
@@ -99,14 +78,14 @@ roadmap:
         - Rule plugin interface
         - Parser plugin interface
         - Report generation
-        - HTML/PDF export
+        - HTML/JSON export
         - Local database persistence
         - Project/session save-load
       exit_criteria:
         - "Python scripts can load a layout and trigger rule checks"
         - "CLI runs a batch job end-to-end with JSON report output"
         - "Plugins load dynamically with host version checks"
-        - "Reports export to HTML and PDF with embedded diagrams"
+        - "Reports export to HTML and JSON with embedded diagrams"
         - "Sessions save and restore workspace state and analysis results"
 
     - id: P6
@@ -182,8 +161,7 @@ roadmap:
   dependencies:
     - P2 depends_on: [P1]
     - P3 depends_on: [P1, P2]
-    - P4 depends_on: [P1, P2]
-    - P5 depends_on: [P1, P2, P3, P4]
-    - P6 depends_on: [P1, P2, P3, P4, P5]
+    - P5 depends_on: [P1, P2, P3]
+    - P6 depends_on: [P1, P2, P3, P5]
     - P7 depends_on: [P1, P2, P3]
     - P13 depends_on: [P6, P7]

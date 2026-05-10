@@ -1,23 +1,23 @@
 # AEGIS-PERC
 
-**AI-Assisted Electrical Rule Verification & Root Cause Analysis Platform**
+**Electrical Rule Verification & Root Cause Analysis Platform**
 
-> A commercial-grade desktop and distributed platform for semiconductor electrical reliability verification, combining high-performance C++ graph analytics, machine learning classification, explainable AI, and interactive multi-layer visualization into a unified engineering workflow.
+> A commercial-grade desktop and distributed platform for semiconductor electrical reliability verification, combining high-performance C++ graph analytics and interactive multi-layer visualization into a unified engineering workflow.
 
 ---
 
 ## Product Vision
 
-AEGIS-PERC is being developed as a commercial-grade EDA verification platform for semiconductor electrical reliability analysis. The focus is on production-quality architecture, scalable data ingestion, deterministic verification workflows, and extensible AI-assisted analysis for real customer design environments.
+AEGIS-PERC is being developed as a commercial-grade EDA verification platform for semiconductor electrical reliability analysis. The focus is on production-quality architecture, scalable data ingestion, and deterministic verification workflows for real customer design environments.
 
 ---
 
 ## Elevator Pitch
 
-AEGIS-PERC analyzes semiconductor layout and connectivity data, detects electrical reliability violations (floating nets, electromigration risks, power domain mismatches), clusters failure patterns using ML, and delivers **explainable root-cause recommendations** with interactive visualization and an agentic verification copilot.
+AEGIS-PERC analyzes semiconductor layout and connectivity data, detects electrical reliability violations (floating nets, electromigration risks, power domain mismatches), and presents results through an interactive desktop visualization environment.
 
 The system is built for:
-- **Chip designers** who need rapid, explainable feedback on rule violations
+- **Chip designers** who need rapid feedback on rule violations
 - **Verification leads** who manage large distributed regression runs
 - **Methodology teams** who automate checks via Python scripting APIs
 
@@ -36,39 +36,18 @@ The system is built for:
 - Fast path tracing, domain traversal, and subgraph extraction
 - **Tech:** Custom graph engine with Boost.Graph extensions
 
-### 3. AI/ML Violation Classification
-- **Rule targets:** Floating nets, electromigration risks, power domain mismatch, suspicious routing structures, timing-risk clusters, anomalous pattern detection
-- **Models:** XGBoost / LightGBM for tabular violation features; Graph Neural Networks (GNN) embeddings for structural pattern recognition; FAISS similarity search for historical pattern matching
-- **Inference:** ONNX Runtime for high-throughput desktop inference; optional GPU batch processing
-
-### 4. Explainable AI (XAI) Engine
-Instead of "Violation detected," the system produces:
-- **SHAP-based** feature attribution per violation
-- Confidence scores and contributing physical features
-- Similar historical pattern retrieval
-- Remediation suggestions ranked by past fix success
-
-### 5. Interactive Visualization Engine
+### 3. Interactive Visualization Engine
 - **Qt 6** desktop shell with dockable workspace and plugin-based tool panels
 - **OpenGL/Vulkan** multi-layer layout renderer with zoom/pan, violation highlighting, connectivity tracing
 - Heatmaps, failure propagation animation, interactive graph exploration
 - Multi-view synchronization (layout ↔ schematic ↔ graph)
 
-### 6. Agentic AI Verification Copilot
-- Natural language interface powered by local LLM (Ollama) with RAG over violation databases
-- **Example workflows:**
-  - "Show the highest-risk power domains in this block."
-  - "Why did violation V-2047 occur and what is the confidence?"
-  - "Find violations structurally similar to V-1042."
-  - "Generate a remediation plan for the top 20 EM risks."
-  - "Summarize reliability concerns for the executive report."
-
-### 7. Distributed Job Execution
+### 4. Distributed Job Execution
 - **Enterprise architecture:** Job scheduler, worker node pool, incremental processing, remote rule execution
 - **Communication:** gRPC + FlatBuffers for efficient structured data; ZeroMQ for streaming; Redis-backed job queue
 - Supports local single-user mode and multi-node enterprise cluster mode
 
-### 8. Embedded Python Automation API
+### 5. Embedded Python Automation API
 ```python
 import aegis
 
@@ -77,8 +56,7 @@ session.load_layout("chip.def", tech_file="65nm.lef")
 session.load_constraints("perc_rules.xml")
 violations = session.run_analysis(targets=["floating_net", "em_risk"])
 
-# Explain and export
-session.explain(violations[0])
+# Export
 session.export_report("executive_report.html", format="html", template="corporate_style")
 ```
 
@@ -89,22 +67,22 @@ session.export_report("executive_report.html", format="html", template="corporat
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DESKTOP FRONTEND (Qt 6)                       │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────────┐  │
-│  │ Layout   │ │ Graph    │ │ Copilot  │ │ Dockable Workspace │  │
-│  │ Viewer   │ │ Explorer │ │ Chat UI  │ │ & Plugin Tools     │  │
-│  └──────────┘ └──────────┘ └──────────┘ └────────────────────┘  │
+│  ┌──────────┐ ┌──────────┐ ┌────────────────────┐              │
+│  │ Layout   │ │ Graph    │ │ Dockable Workspace │              │
+│  │ Viewer   │ │ Explorer │ │ & Plugin Tools     │              │
+│  └──────────┘ └──────────┘ └────────────────────┘              │
 └────────────────────┬────────────────────────────────────────────┘
                      │ C++20 / IPC
 ┌────────────────────▼────────────────────────────────────────────┐
 │                      CORE ENGINE                                 │
-│  ┌────────────┐ ┌───────────┐ ┌──────────┐ ┌────────────────┐  │
-│  │ Parser     │ │ Graph     │ │ Rule     │ │ ML Inference   │  │
-│  │ Engine     │ │ Engine    │ │ Engine   │ │ Engine (ONNX)  │  │
-│  └────────────┘ └───────────┘ └──────────┘ └────────────────┘  │
-│  ┌────────────┐ ┌───────────┐ ┌──────────┐ ┌────────────────┐  │
-│  │ XAI        │ │ Visual    │ │ Report   │ │ AI Assistant   │  │
-│  │ Engine     │ │ Engine    │ │ Engine   │ │ Engine (RAG)   │  │
-│  └────────────┘ └───────────┘ └──────────┘ └────────────────┘  │
+│  ┌────────────┐ ┌───────────┐ ┌──────────┐                    │
+│  │ Parser     │ │ Graph     │ │ Rule     │                    │
+│  │ Engine     │ │ Engine    │ │ Engine   │                    │
+│  └────────────┘ └───────────┘ └──────────┘                    │
+│  ┌────────────┐ ┌───────────┐ ┌──────────┐                    │
+│  │ Visual    │ │ Report   │ │ Python   │                    │
+│  │ Engine    │ │ Engine   │ │ API      │                    │
+│  └────────────┘ └───────────┘ └──────────┘                    │
 │                                                                  │
 │  • Event-driven architecture    • Async task scheduling         │
 │  • Service registry / DI        • Thread pool orchestration     │
@@ -114,13 +92,9 @@ session.export_report("executive_report.html", format="html", template="corporat
                      │ gRPC / REST / WebSocket
 ┌────────────────────▼────────────────────────────────────────────┐
 │                   BACKEND SERVICES                               │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌──────────────┐  │
-│  │ Job        │ │ Embedding  │ │ Inference  │ │ Vector       │  │
-│  │ Scheduler  │ │ Service    │ │ Service    │ │ Search (FAISS)│  │
-│  └────────────┘ └────────────┘ └────────────┘ └──────────────┘  │
 │  ┌────────────┐ ┌────────────┐                                  │
-│  │ Report     │ │ Streaming  │                                  │
-│  │ Generator  │ │ Gateway    │                                  │
+│  │ Job        │ │ Report     │                                  │
+│  │ Scheduler  │ │ Generator  │                                  │
 │  └────────────┘ └────────────┘                                  │
 │  (Distributed host/worker execution is currently documented,    │
 │   with local job-pipeline execution implemented in code.)       │
@@ -128,7 +102,7 @@ session.export_report("executive_report.html", format="html", template="corporat
                      │
 ┌────────────────────▼────────────────────────────────────────────┐
 │                      DATA LAYER                                  │
-│  SQLite (local)  /  PostgreSQL (enterprise)  /  Parquet/Arrow  │
+│  PostgreSQL (enterprise)  /  Parquet/Arrow  /  SQLite (local)  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -140,8 +114,7 @@ session.export_report("executive_report.html", format="html", template="corporat
 |-------|------------|
 | **Frontend** | Qt 6, C++20, QML (optional), OpenGL/Vulkan |
 | **Core Engine** | C++20, Boost, pybind11, thread pools, async I/O |
-| **Graph Analytics** | Custom CSR engine, Boost.Graph, future GNN integration |
-| **ML / AI** | Python, PyTorch, ONNX Runtime, XGBoost, FAISS, Ollama |
+| **Graph Analytics** | Custom CSR engine, Boost.Graph |
 | **Distributed** | gRPC, ZeroMQ, Redis, FlatBuffers/Protobuf |
 | **Data** | SQLite, PostgreSQL, Apache Arrow, Parquet |
 | **Build** | CMake, vcpkg, Conan (optional), Docker |
@@ -165,7 +138,7 @@ AEGIS-PERC/
 ├── src/
 │   ├── core/               # ServiceRegistry, Logger, Config, ConfigMigrator, DiagnosticBundle
 │   ├── graph/              # ConnectivityGraph, data model, domain tagging
-│   ├── ml/                 # FeatureExtractor placeholder (Sprint 4 target)
+│   ├── ml/                 # FeatureExtractor placeholder (future expansion)
 │   ├── orchestration/      # LocalJobPipeline and staged execution primitives
 │   ├── parsing/            # Parser interface, LayoutIR, native LEF/DEF/Verilog/SPICE-CDL parsers + CSV import helpers
 │   ├── reporting/          # HTML/JSON report generation primitives
@@ -230,17 +203,14 @@ ctest --preset linux-test
 |------------|-------------------|
 | Modern C++ architecture at scale | Custom graph engine, memory-optimized parsers, async I/O |
 | Commercial desktop software | Qt 6, dockable UI, plugin architecture, professional UX |
-| AI/ML integration | ONNX inference, XGBoost, GNN embeddings, similarity search |
 | Large-scale graph processing | CSR representations, IC-scale connectivity analysis |
 | Engineering workflows | EDA-style rule checking, report generation, regression runs |
 | Data pipelines | Streaming parsers, Arrow/Parquet, distributed job queues |
 | Interactive visualization | OpenGL multi-layer rendering, heatmaps, propagation animation |
-| Performance optimization | Multi-threaded parsing, thread pools, GPU inference batching |
-| GPU acceleration | Vulkan renderer, CUDA/ROCm inference path (planned) |
+| Performance optimization | Multi-threaded parsing, thread pools |
+| GPU acceleration | Vulkan renderer (planned) |
 | Qt expertise | Complex desktop shell, custom widgets, OpenGL integration |
 | Python scripting | Embedded automation API mirroring commercial EDA tools |
-| Agentic AI workflows | LLM copilot with RAG, tool use, explainable outputs |
-| Explainable AI | SHAP attribution, feature importance, historical pattern linking |
 | Plugin architecture | Tool registry, dynamic panel loading, extensible rule engine |
 | Distributed processing | gRPC microservices, worker pools, incremental job execution |
 | System design maturity | Event-driven core, DI container, service registry, clean boundaries |
@@ -317,17 +287,8 @@ ctest --preset linux-test
 - ✅ Verilog gate-level netlist parser and connectivity normalization wired into import preflight, CLI, orchestration, and desktop `Run Checks`
 - ✅ SPICE/CDL parser hardening for customer-import MVP coverage, including include/model/parameter constructs, explicit unsupported diagnostics, and representative CDL device syntax
 
-### Phase 10 — Applied AI/ML and Explainability (Sprint 10)
-- [ ] Violation and graph-context feature extraction
-- [ ] XGBoost / LightGBM training pipeline
-- [ ] ONNX Runtime inference integration
-- [ ] Graph embeddings and FAISS similarity retrieval
-- [ ] SHAP-based explainability and surfaced ML evidence
-- [ ] Ollama-backed LLM copilot with retrieval-augmented summaries
-
 ### Phase 11 — Platform, Performance, and Extensibility (Sprint 11)
 - [ ] OpenGL/Vulkan-backed renderer replacing the QPainter-only path
-- [ ] Optional GPU acceleration paths for inference and rendering-heavy workloads
 - [ ] Real pybind11 Python automation API
 - [ ] Durable storage backends (SQLite/PostgreSQL) and analytical exports (Arrow/Parquet)
 - [ ] Dockerized developer/CI flows and optional Conan/vcpkg integration
@@ -342,12 +303,6 @@ ctest --preset linux-test
 - ✅ Implemented typed LEF technology-rule semantics and semantic validation (`docs/design/lef-coverage.md`)
 - ✅ Added deterministic LEF fuzzing, stress, and performance validation (`docs/design/lef-coverage.md`)
 - ✅ Integrated LEF normalization into import, storage, CLI, and desktop workflow paths
-
-### Phase 4 — AI/ML Core (Sprint 4)
-- [ ] Feature extraction from violations
-- [ ] XGBoost / LightGBM training pipeline
-- [ ] ONNX Runtime inference integration
-- [ ] SHAP explainability engine
 
 ### Phase 5 — Automation & Extensibility (Sprint 5)
 - [ ] Batch analysis CLI polishing beyond Sprint 6 customer-workflow scope
@@ -367,7 +322,7 @@ ctest --preset linux-test
 - ✅ Local job pipeline with staged progress, cancellation, and JSON/HTML export
 - ✅ Distributed host/worker execution architecture documentation (`docs/design/distributed.md`)
 
-> Current implementation snapshot: deterministic verification, desktop visualization, customer import workflow, headless CLI flow, local job-pipeline orchestration, Sprint 8 workflow UX upgrades, and Sprint 9 real-format ingestion are implemented. Imported customer projects now parse through native LEF, real DEF, Verilog gate-level connectivity normalization, and hardened SPICE/CDL ingestion with preflight diagnostics and execution-path integration. Sprints 10 and 11 remain the largest README-vs-code gaps across AI/ML, explainability, copilot workflows, rendering, storage, scripting, reporting, plugins, and distributed execution. `ml` remains the largest intentionally incomplete subsystem.
+> Current implementation snapshot: deterministic verification, desktop visualization, customer import workflow, headless CLI flow, local job-pipeline orchestration, Sprint 8 workflow UX upgrades, and Sprint 9 real-format ingestion are implemented. Imported customer projects now parse through native LEF, real DEF, Verilog gate-level connectivity normalization, and hardened SPICE/CDL ingestion with preflight diagnostics and execution-path integration. Remaining gaps span rendering, storage, scripting, reporting, plugins, and distributed execution.
 
 ---
 
@@ -377,4 +332,4 @@ MIT License.
 
 ---
 
-**AEGIS-PERC is intended to evolve into a commercial-grade platform for electrical rule verification, workflow automation, and AI-assisted reliability analysis.**
+**AEGIS-PERC is intended to evolve into a commercial-grade platform for electrical rule verification and workflow automation.**
