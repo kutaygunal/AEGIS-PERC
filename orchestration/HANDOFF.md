@@ -1,33 +1,34 @@
 # Handoff
 
 ## Last Updated
-2026-05-08
+2026-05-09
 
 ## Current Status
-`P8-016` is implemented and marked `review`: the desktop shell now exposes accessible names/tooltips for primary controls, explicit focus order across key panels, and context menus for diagnostics, import review, and job history workflows without regressing shared action behavior.
+`P13-002` is implemented and marked `review`: imported project commit now materializes a visible 2D design workspace immediately after `Load Project`, using DEF geometry plus synthesized instance placement rectangles, stable imported object IDs, and explicit scene-realization diagnostics when LEF/DEF coverage is partial.
 
 ## Last Completed Task
-`P8-016` — Polish accessibility and productivity basics across the desktop shell
+`P13-002` — Materialize imported DEF/LEF content into a full interactive 2D design scene
 
 ## Current Task
 No implementation task in progress
 
 ## Ready Tasks
-- None in the current trimmed `tasks.yaml`
+- `P13-003` — Add imported-design hierarchy and object browser for instances, nets, ports, and layers
 
 ## Blocked Tasks
 - None recorded in the current trimmed `tasks.yaml`
 
 ## Important Notes
-- Primary shell widgets now publish stable accessible names/tooltips suitable for assistive tooling and headless UI tests.
-- Import review, diagnostics, and job history now expose context menus for related-violation/report actions.
-- Key shell surfaces now define explicit tab order for canvas, violations, diagnostics, import review, onboarding, and jobs.
-- Added curated repo sample package under `data/import_packages/openframe_simple_design` using copied OpenFrame artifacts plus AEGIS-specific rules/current/power examples.
-- Imported-package `Run Checks` is now enabled after `Load Project` even without a preloaded bundled sample graph; manual import no longer dead-ends on an empty workspace.
+- Imported package commit now stores `loaded_import_session`, installs an imported `UiScene`, and binds the session graph into the desktop shell immediately after `Load Project`.
+- `build_imported_design_scene()` is the compatibility seam for imported 2D realization; future P13 UI surfaces should consume scene/session metadata from there rather than reparsing DEF/LEF directly.
+- Instance placement rectangles now render from DEF placement coordinates. When LEF macro dimensions are missing, the scene builder falls back to deterministic marker sizes and logs explicit diagnostics instead of leaving the scene blank.
+- Stable imported object IDs now flow onto scene layers, ports, and synthesized instance items, creating the anchor for upcoming hierarchy/properties/cross-probing tasks.
 - Validation run:
   - `cmake --build build --config Release` ✅
-  - `ctest --test-dir build -C Release --output-on-failure -R WorkspaceActions` ✅
-  - `ctest --test-dir build -C Release --output-on-failure -R Ui` ✅
+  - `ctest --test-dir build -C Release --output-on-failure -R Scene` ✅
+  - `ctest --test-dir build -C Release --output-on-failure -R Import` ✅
+  - `ctest --test-dir build -C Release --output-on-failure -R UiWorkflow` ✅
+  - `ctest --test-dir build -C Release --output-on-failure -R RunChecks` ✅
 
 ## Next Recommended Action
-Review and merge `P8-016`, then select the next trimmed backlog item after task list refresh.
+Start `P13-003` by exposing the imported session/object inventory in a hierarchy browser that reuses the new stable scene/object IDs for synchronized selection.

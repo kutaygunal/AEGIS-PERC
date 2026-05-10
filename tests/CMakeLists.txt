@@ -77,6 +77,7 @@ add_executable(aegis_unit_tests
     unit/storage/test_storage_minimal.cpp
     unit/storage/test_project_package.cpp
     unit/storage/test_import_validation.cpp
+    unit/storage/test_imported_design_session.cpp
 )
 
 target_compile_definitions(aegis_unit_tests PRIVATE

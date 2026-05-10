@@ -15,6 +15,8 @@ AEGIS-PERC is a Qt6/C++20 commercial-grade AI-assisted semiconductor verificatio
 - CMake-based modular structure.
 - Qt6 desktop application.
 - Core engine intended to be independent from widgets.
+- Imported customer packages now build into a UI-agnostic `ImportedDesignSession` that links package metadata, parsed LEF/DEF/netlist data, connectivity graph state, rule-pack references, and optional power/current enrichments.
+- Imported package commit now also materializes a 2D `UiScene` immediately from the session, including DEF-derived geometry plus synthesized placement rectangles for instances and fallback markers when LEF macro sizes are missing.
 - Future modules: parser, graph, rule engine, ML, reporting, storage, scripting, plugins.
 
 ## Important Constraints

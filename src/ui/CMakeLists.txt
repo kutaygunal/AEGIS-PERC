@@ -58,9 +58,9 @@ target_link_libraries(aegis_ui
         aegis_graph
         aegis_parsing
         aegis_rules
+        aegis_storage
     PRIVATE
         aegis_core
-        aegis_storage
         aegis_orchestration
         aegis_warnings
 )

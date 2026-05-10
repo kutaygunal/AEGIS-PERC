@@ -1,6 +1,7 @@
 #pragma once
 
 #include "aegis/parsing/layout_ir.hpp"
+#include "aegis/storage/imported_design_session.hpp"
 
 #include <cstddef>
 #include <map>
@@ -85,6 +86,13 @@ struct UiScene {
     [[nodiscard]] const SceneItem* find_item_by_id(const std::string& id) const;
 };
 
+struct ImportedSceneBuildResult {
+    UiScene scene;
+    std::vector<std::string> diagnostics;
+};
+
 [[nodiscard]] UiScene build_ui_scene(const aegis::parsing::LayoutIR& ir);
+[[nodiscard]] ImportedSceneBuildResult build_imported_design_scene(const aegis::storage::ImportedDesignSession& session);
+
 
 } // namespace aegis::ui

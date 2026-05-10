@@ -22,6 +22,7 @@
 #include "aegis/rules/rule_engine.hpp"
 #include "aegis/rules/rule_pack.hpp"
 #include "aegis/storage/import_validation.hpp"
+#include "aegis/storage/imported_design_session.hpp"
 #include "aegis/storage/project_package.hpp"
 
 #include <QAction>
@@ -434,6 +435,35 @@ QString import_summary_text(const aegis::storage::ProjectPackage& package)
     return lines.join('\n');
 }
 
+QString imported_design_session_summary_text(const aegis::storage::ImportedDesignSession* session)
+{
+    if (session == nullptr) {
+        return QString("Imported design session: unavailable");
+    }
+
+    return QString("Imported design session\n"
+                   "Status: %1\n"
+                   "Technology libraries: %2\n"
+                   "Design layers: %3\n"
+                   "Instances: %4\n"
+                   "Ports: %5\n"
+                   "Nets: %6\n"
+                   "Devices: %7\n"
+                   "Rule packs: %8\n"
+                   "Graph nodes: %9\n"
+                   "Session diagnostics: %10")
+        .arg(QString::fromStdString(aegis::storage::to_string(session->status())))
+        .arg(session->technology_libraries().size())
+        .arg(session->object_count(aegis::storage::ImportedDesignObjectKind::Layer))
+        .arg(session->object_count(aegis::storage::ImportedDesignObjectKind::Instance))
+        .arg(session->object_count(aegis::storage::ImportedDesignObjectKind::Port))
+        .arg(session->object_count(aegis::storage::ImportedDesignObjectKind::Net))
+        .arg(session->object_count(aegis::storage::ImportedDesignObjectKind::Device))
+        .arg(session->rule_artifact_ids().size())
+        .arg(session->graph().node_count())
+        .arg(session->diagnostics().size());
+}
+
 QStringList choose_import_paths(QWidget* parent)
 {
     QDialog dialog(parent);
@@ -665,6 +695,7 @@ struct MainWindow::Impl {
     std::filesystem::path pending_import_base_path;
     aegis::storage::ProjectPackage loaded_import_package;
     std::filesystem::path loaded_import_base_path;
+    std::unique_ptr<aegis::storage::ImportedDesignSession> loaded_import_session;
     bool has_loaded_import_package = false;
     bool sample_mode_active = false;
     aegis::orchestration::LocalJobPipeline job_pipeline;
@@ -2058,13 +2089,28 @@ void MainWindow::apply_import_package()
     m_impl->has_loaded_import_package = true;
     m_impl->sample_mode_active = false;
 
+    aegis::storage::ImportedDesignSessionBuilder session_builder;
+    m_impl->loaded_import_session = std::make_unique<aegis::storage::ImportedDesignSession>(
+        session_builder.build(m_impl->loaded_import_package, m_impl->loaded_import_base_path));
+
+    const auto imported_scene = build_imported_design_scene(*m_impl->loaded_import_session);
+    set_scene(imported_scene.scene);
+    set_connectivity_graph(&m_impl->loaded_import_session->graph());
+    set_violations({});
+
     const QString project_name = QString::fromStdString(m_impl->loaded_import_package.project().name.empty()
         ? std::string{"ImportedProject"}
         : m_impl->loaded_import_package.project().name);
-    const QString message = QString("Loaded imported project package metadata: %1 (%2 artifact(s))")
+    const QString message = QString("Loaded imported project package metadata: %1 (%2 artifact(s), session %3 with %4 diagnostics, %5 scene item(s))")
                                 .arg(project_name)
-                                .arg(m_impl->loaded_import_package.artifacts().size());
+                                .arg(m_impl->loaded_import_package.artifacts().size())
+                                .arg(QString::fromStdString(aegis::storage::to_string(m_impl->loaded_import_session->status())))
+                                .arg(m_impl->loaded_import_session->diagnostics().size())
+                                .arg(imported_scene.scene.items.size());
     publish_ui_notification(message, ActivityLogSeverity::Info, 5000);
+    for (const auto& diagnostic : imported_scene.diagnostics) {
+        append_activity_log(QString::fromStdString(diagnostic), ActivityLogSeverity::Warning);
+    }
     if (!m_impl->loaded_import_base_path.empty() && std::filesystem::exists(m_impl->loaded_import_base_path)) {
         const QString recent_path = QString::fromStdString(m_impl->loaded_import_base_path.string());
         m_impl->recent_project_paths.removeAll(recent_path);
@@ -2183,10 +2229,17 @@ void MainWindow::refresh_workspace_summary()
             readiness = "Imported package inputs missing on disk";
         } else if (m_impl->loaded_import_package.validation_status() == aegis::storage::ValidationStatus::Invalid) {
             readiness = "Import package has blocking diagnostics";
+        } else if (m_impl->loaded_import_session == nullptr) {
+            readiness = "Imported package loaded but imported design session is unavailable";
+        } else if (m_impl->loaded_import_session->status() == aegis::storage::SessionBuildStatus::Error) {
+            readiness = QString("Imported package loaded with session errors (%1 diagnostics); local job pipeline remains available")
+                            .arg(m_impl->loaded_import_session->diagnostics().size());
         } else if (m_impl->current_graph == nullptr) {
-            readiness = "Ready to run imported package via local job pipeline (no scene/graph loaded yet)";
+            readiness = QString("Ready to run imported package via local job pipeline (session %1, no scene/graph loaded yet)")
+                            .arg(QString::fromStdString(aegis::storage::to_string(m_impl->loaded_import_session->status())));
         } else {
-            readiness = "Ready to run with imported package content";
+            readiness = QString("Imported design scene and graph loaded; ready to run via local job pipeline (session %1)")
+                            .arg(QString::fromStdString(aegis::storage::to_string(m_impl->loaded_import_session->status())));
         }
     } else if (m_impl->sample_mode_active) {
         mode = "sample mode";
@@ -4429,12 +4482,22 @@ bool MainWindow::has_loaded_import_package() const
     return m_impl->has_loaded_import_package;
 }
 
+bool MainWindow::has_loaded_import_design_session() const
+{
+    return m_impl->loaded_import_session != nullptr;
+}
+
 QString MainWindow::loaded_import_project_name() const
 {
     if (!m_impl->has_loaded_import_package) {
         return {};
     }
     return QString::fromStdString(m_impl->loaded_import_package.project().name);
+}
+
+QString MainWindow::loaded_import_design_session_summary_text() const
+{
+    return imported_design_session_summary_text(m_impl->loaded_import_session.get());
 }
 
 QString MainWindow::workspace_summary_text() const

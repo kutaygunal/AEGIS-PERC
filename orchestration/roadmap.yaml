@@ -156,6 +156,29 @@ roadmap:
         - "Status, warning, and error messaging is consistent across status bar and docked UI surfaces"
         - "Headless UI regression coverage guards all critical user workflows"
 
+    - id: P13
+      name: "Phase 13 — Post-Import Design Activation"
+      goal: "Turn a successfully imported customer package into a commercial-grade interactive design workspace with visible 2D design context, searchable objects, provenance, cross-probing, and analysis-ready state transitions."
+      deliverables:
+        - Unified imported-design session model
+        - Full imported LEF/DEF-backed 2D design scene realization
+        - Hierarchy and object browser for instances, nets, ports, and layers
+        - Rich imported object properties and provenance inspection
+        - Cross-probing across canvas, diagnostics, graph, trace, and violations
+        - Imported-design viewport presets and large-scene navigation controls
+        - Layer semantics, route coloring, and physical visibility presets
+        - Import completeness and unsupported-content coverage surfaces
+        - Reusable imported-session persistence and reopen acceleration
+        - Asynchronous post-import realization pipeline with partial-ready UI states
+        - Imported-design smoke corpus and regression coverage
+        - Guided path from import success to first actionable review
+      exit_criteria:
+        - "A successful import results in a visible, navigable 2D design workspace rather than package metadata alone"
+        - "Imported objects can be searched, selected, inspected, and cross-probed across major UI surfaces"
+        - "Users can distinguish fully rendered content, partially supported content, and unsupported content with explicit diagnostics"
+        - "Post-import realization remains responsive and communicates imported, realized, and analysis-ready states clearly"
+        - "Regression coverage proves imported-package workflows are usable beyond bundled sample/demo paths"
+
   dependencies:
     - P2 depends_on: [P1]
     - P3 depends_on: [P1, P2]
@@ -163,3 +186,4 @@ roadmap:
     - P5 depends_on: [P1, P2, P3, P4]
     - P6 depends_on: [P1, P2, P3, P4, P5]
     - P7 depends_on: [P1, P2, P3]
+    - P13 depends_on: [P6, P7]

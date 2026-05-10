@@ -304,7 +304,10 @@ TEST_CASE("UiWorkflow workspace summary updates after import load and run comple
     REQUIRE(window.workspace_summary_text().contains("imported customer project", Qt::CaseInsensitive));
     REQUIRE(window.workspace_summary_text().contains("Artifacts: 5", Qt::CaseInsensitive));
     REQUIRE(window.workspace_summary_text().contains("imported rule pack", Qt::CaseInsensitive));
-    REQUIRE(window.workspace_summary_text().contains("Ready to run with imported package content", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("scene and graph loaded", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("local job pipeline", Qt::CaseInsensitive));
+    REQUIRE(window.loaded_import_design_session_summary_text().contains("Design layers:", Qt::CaseInsensitive));
+    REQUIRE(window.loaded_import_design_session_summary_text().contains("Graph nodes:", Qt::CaseInsensitive));
 
     REQUIRE(window.trigger_workspace_action("run_checks"));
     REQUIRE(wait_until([&window]() {

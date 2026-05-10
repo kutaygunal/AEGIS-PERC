@@ -759,7 +759,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R Import"
       - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-    status: todo
+    status: review
 
   - id: P13-002
     phase: P13
@@ -782,7 +782,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R SceneAdapter"
       - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-    status: todo
+    status: review
 
   - id: P13-003
     phase: P13

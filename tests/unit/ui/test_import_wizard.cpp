@@ -247,7 +247,13 @@ TEST_CASE("ImportWizard load action commits validated package into workspace and
     QApplication::processEvents();
     REQUIRE_FALSE(window.is_import_dialog_visible());
     REQUIRE(window.has_loaded_import_package());
+    REQUIRE(window.has_loaded_import_design_session());
     REQUIRE(window.loaded_import_project_name() == QString::fromStdString(root.filename().string()));
+    REQUIRE(window.loaded_import_design_session_summary_text().contains("Imported design session", Qt::CaseInsensitive));
+    REQUIRE(window.loaded_import_design_session_summary_text().contains("Rule packs:", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("scene and graph loaded", Qt::CaseInsensitive));
+    REQUIRE(window.layer_panel_count() > 0);
+    REQUIRE(window.report_preview_summary_text().contains(root.filename().string().c_str(), Qt::CaseInsensitive));
     REQUIRE(window.last_status_message().contains("Loaded imported project package", Qt::CaseInsensitive));
 
     remove_tree(root);

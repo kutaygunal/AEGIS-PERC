@@ -158,7 +158,9 @@ public:
     bool import_load_action_enabled() const;
     bool trigger_import_load_action();
     bool has_loaded_import_package() const;
+    bool has_loaded_import_design_session() const;
     QString loaded_import_project_name() const;
+    QString loaded_import_design_session_summary_text() const;
     QString workspace_summary_text() const;
     int diagnostics_entry_count() const;
     QString diagnostics_details_text() const;
