@@ -37,7 +37,8 @@ jobs:
         run: ctest --preset ci-test -C Release
 
       - name: Package
-        run: cpack -C Release --preset windows-release
+        working-directory: build/windows-release
+        run: cpack -C Release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -95,7 +96,7 @@ jobs:
       - name: Capture coverage baseline
         run: |
           mkdir -p coverage
-          lcov --capture --directory build/linux-coverage --output-file coverage/lcov.info
+          lcov --capture --directory build/linux-coverage --output-file coverage/lcov.info --ignore-errors source
           lcov --remove coverage/lcov.info '/usr/*' '*/_deps/*' '*/catch2/*' --output-file coverage/lcov.info
           gcovr --root . --xml-pretty --output coverage/coverage.xml build/linux-coverage
 
