@@ -96,8 +96,8 @@ jobs:
       - name: Capture coverage baseline
         run: |
           mkdir -p coverage
-          lcov --capture --directory build/linux-coverage --output-file coverage/lcov.info --ignore-errors source,negative
-          lcov --remove coverage/lcov.info '/usr/*' '*/_deps/*' '*/catch2/*' --output-file coverage/lcov.info
+          lcov --capture --directory build/linux-coverage --output-file coverage/lcov.info --ignore-errors all
+          lcov --remove coverage/lcov.info '/usr/*' '*/_deps/*' '*/catch2/*' --output-file coverage/lcov.info --ignore-errors all
           gcovr --root . --xml-pretty --output coverage/coverage.xml build/linux-coverage
 
       - name: Upload coverage artifact
