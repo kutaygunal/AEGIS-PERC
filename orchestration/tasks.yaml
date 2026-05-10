@@ -619,7 +619,30 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R GraphExplorer"
       - "ctest --test-dir build --output-on-failure -R Ui"
-    status: review
+    status: done
+
+  - id: P13-FOLLOW-001
+    phase: P13
+    title: "Migrate HierarchyBrowser to QAbstractItemModel + QTreeView for million-object scalability"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P13-003]
+    acceptance:
+      - Hierarchy browser remains responsive with 1M+ imported design objects without blocking the UI thread.
+      - Items are loaded incrementally or lazily through a custom QAbstractItemModel backed by ImportedDesignSession::objects().
+      - Search/filter is backed by the model proxy rather than iterating all child QTreeWidgetItems.
+      - Selection, sort order, and category grouping remain equivalent to the current QTreeWidget behavior.
+      - Headless regression tests cover incremental/lazy load semantics and stress fixtures.
+    implementation_rules:
+      - Keep the same MainWindow integration API (set_session, current_stable_id, search_and_select, select_by_stable_id, clear_selection).
+      - Do not leak model internals into MainWindow or headless test code.
+      - Prefer standard Qt patterns (QSortFilterProxyModel, custom QAbstractItemModel) rather than custom widget rendering.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R HierarchyBrowser"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+    status: ready
 
   - id: P13-004
     phase: P13

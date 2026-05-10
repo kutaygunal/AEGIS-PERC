@@ -4,7 +4,7 @@
 2026-05-10
 
 ## Current Status
-`P13-003` is implemented and marked `review`: a docked Hierarchy Browser panel now lists imported design objects grouped by category (Instances, Nets, Ports, Layers, Technology Macros, Devices) with real-time search/filter, selection synchronization with the canvas, and explicit empty-state guidance.
+`P13-003` is done: the Hierarchy Browser panel lists imported design objects grouped by category with live search, selection sync, and explicit empty-state guidance.
 
 ## Last Completed Task
 `P13-003` — Add imported-design hierarchy and object browser for instances, nets, ports, and layers
@@ -14,6 +14,7 @@ No implementation task in progress
 
 ## Ready Tasks
 - `P13-004` — Expose commercial-grade imported object properties and provenance inspection
+- `P13-FOLLOW-001` — Migrate HierarchyBrowser to QAbstractItemModel + QTreeView for million-object scalability
 
 ## Blocked Tasks
 - None recorded in the current trimmed `tasks.yaml`
@@ -31,4 +32,4 @@ No implementation task in progress
   - `ctest --test-dir build -C Release --output-on-failure -R RunChecks` ✅
 
 ## Next Recommended Action
-Start `P13-003` by exposing the imported session/object inventory in a hierarchy browser that reuses the new stable scene/object IDs for synchronized selection.
+Start `P13-004` by enriching the Properties panel to show structured imported object provenance, artifact path, parser origin, and physical/logical metadata when an imported-design object is selected.
