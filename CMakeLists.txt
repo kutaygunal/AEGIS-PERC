@@ -65,7 +65,7 @@ endif()
 # Coverage
 # ---------------------------------------------------------------------------
 if(AEGIS_ENABLE_COVERAGE AND NOT MSVC)
-    add_compile_options(--coverage -O0 -g)
+    add_compile_options(--coverage -O0 -g -fprofile-update=atomic)
     add_link_options(--coverage)
 endif()
 

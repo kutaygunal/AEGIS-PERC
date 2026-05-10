@@ -732,5 +732,278 @@ tasks:
     status: ready
 
   # ─────────────────────────────────────────────────────────
+  # Sprint 13 — Post-Import Design Activation (P13)
+  # Focus: turn a successfully imported customer package into a
+  # commercial-grade interactive design workspace rather than only
+  # a validated package plus runnable checks.
+  # ─────────────────────────────────────────────────────────
+
+  - id: P13-001
+    phase: P13
+    title: "Build a unified imported-design session model from physical, logical, and policy artifacts"
+    priority: high
+    area: core
+    risk: high
+    depends_on: []
+    acceptance:
+      - After import commit, the workspace owns a single normalized session object representing the active imported design.
+      - The session model links LEF technology/library data, DEF physical placement/routing context, netlist connectivity, rule-pack metadata, and optional power/current enrichments.
+      - The session model exposes stable IDs for layers, instances, ports, nets, devices, and provenance records so UI surfaces can cross-probe without ad-hoc string matching.
+      - Failed or partial enrichment data remains representable with explicit diagnostics rather than silently disappearing.
+      - Unit tests verify deterministic session construction from the shipped customer import package.
+    implementation_rules:
+      - Reuse existing `ProjectPackage`, parser outputs, and graph models rather than creating duplicate ownership trees.
+      - Keep the session object UI-consumable but UI-agnostic.
+      - Preserve provenance for imported objects wherever possible.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Import"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+    status: todo
+
+  - id: P13-002
+    phase: P13
+    title: "Materialize imported DEF/LEF content into a full interactive 2D design scene"
+    priority: high
+    area: ui
+    risk: high
+    depends_on: [P13-001]
+    acceptance:
+      - Successfully imported customer projects render as a real top-down 2D design scene rather than summary-only workspace state.
+      - Scene generation includes die/core bounds, rows/tracks when available, instances/macros, pins/ports, routed segments, vias, blockages, and annotations derived from imported artifacts.
+      - Missing or unsupported geometry categories degrade gracefully with visible diagnostics and partial rendering instead of blank scenes.
+      - Stable scene IDs map back to imported design objects for properties, diagnostics, and violations.
+      - Headless tests verify non-empty imported scenes for the shipped package and deterministic scene object counts.
+    implementation_rules:
+      - Keep rendering 2D-first; do not introduce 3D-only concepts.
+      - Reuse `UiScene` and scene-adapter boundaries rather than pushing parser structures directly into widgets.
+      - Keep unresolved geometry visible in diagnostics even when not drawable.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R SceneAdapter"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+    status: todo
+
+  - id: P13-003
+    phase: P13
+    title: "Add imported-design hierarchy and object browser for instances, nets, ports, and layers"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P13-001, P13-002]
+    acceptance:
+      - A docked browser lists imported design objects grouped by hierarchy or logical categories such as instances, nets, ports, and layers.
+      - Users can search, filter, and select objects from the browser and have selection synchronize with canvas, properties, and graph views.
+      - Large object lists support incremental population or level-of-detail behavior so the browser remains responsive on realistic imports.
+      - Empty, partial, and unresolved hierarchy states provide explicit guidance rather than appearing broken.
+    implementation_rules:
+      - Favor model/view data sources over direct widget-owned copies of imported objects.
+      - Keep browser terminology aligned with semiconductor user expectations.
+      - Preserve stable object IDs through reloads when the underlying imported package is unchanged.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R GraphExplorer"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: todo
+
+  - id: P13-004
+    phase: P13
+    title: "Expose commercial-grade imported object properties and provenance inspection"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P13-001, P13-002]
+    acceptance:
+      - Selecting an imported instance, net, port, route segment, or diagnostic-backed object shows structured properties rather than generic placeholder metadata.
+      - Property views include source artifact path, parser/import origin, and relevant line/row references when available.
+      - Users can distinguish physical, logical, policy, power, and stress metadata in the same inspection surface.
+      - Property formatting remains readable for both sparse and dense imported metadata.
+    implementation_rules:
+      - Keep provenance display read-only and deterministic.
+      - Reuse existing properties-panel infrastructure before adding new bespoke widgets.
+      - Avoid leaking raw parser internals directly into user-facing labels.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R Properties"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: todo
+
+  - id: P13-005
+    phase: P13
+    title: "Implement imported-design cross-probing across canvas, diagnostics, graph, trace, and violations"
+    priority: high
+    area: ui
+    risk: high
+    depends_on: [P13-001, P13-002, P13-003, P13-004]
+    acceptance:
+      - Users can navigate from an imported artifact or object to related nets, devices, graph nodes, diagnostics, and violations in one or two actions.
+      - Cross-probing preserves current filters and reports explicit feedback when a link is unavailable or unsupported.
+      - Selecting an object from any major panel centers or reveals it in the primary 2D view when a physical location exists.
+      - Cross-probing works for imported-package workflows without requiring bundled sample mode.
+    implementation_rules:
+      - Use stable IDs and provenance mappings, not best-effort text matching, wherever possible.
+      - Keep navigation additive; avoid surprising selection clears.
+      - Log unresolved cross-probe requests once with actionable wording.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+      - "ctest --test-dir build --output-on-failure -R UiNotifications"
+    status: todo
+
+  - id: P13-006
+    phase: P13
+    title: "Add imported-design viewport presets, fit modes, and large-scene navigation controls"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P13-002]
+    acceptance:
+      - Users can switch between fit-whole-design, fit-selection, fit-violation, and bookmarked viewport presets on imported designs.
+      - Navigation remains usable for full-chip-style scenes through minimap-style overview, coordinates, and predictable zoom anchors.
+      - Workspace persistence restores the last meaningful imported-design viewport without trapping the user in an empty or invalid region.
+      - Performance instrumentation reflects imported-scene navigation costs separately from synthetic sample scenes.
+    implementation_rules:
+      - Extend existing viewport logic rather than introducing a separate navigation model.
+      - Keep controls keyboard-accessible and testable in headless mode where practical.
+      - Avoid storing view state that depends on unstable transient scene IDs.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R CanvasViewport"
+      - "ctest --test-dir build --output-on-failure -R WorkspacePersistence"
+    status: todo
+
+  - id: P13-007
+    phase: P13
+    title: "Introduce imported-design layer semantics, route coloring, and physical visibility presets"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [P13-001, P13-002]
+    acceptance:
+      - Layer controls distinguish technology, routing, cut/via, pin, blockage, and annotation classes when that information is available from imported data.
+      - The canvas can apply useful preset visibility modes such as routing-only, macros-only, pins-and-ports, power-focused, and violation-review views.
+      - Route and object coloring can reflect layer, object type, domain, or rule/violation context without corrupting the underlying imported data.
+      - Unsupported layer semantics degrade into sensible generic categories with visible diagnostics.
+    implementation_rules:
+      - Keep presets reversible and non-destructive.
+      - Reuse current layer-panel ownership patterns.
+      - Avoid hardcoding one foundry or one LEF naming convention.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R LayerPanel"
+      - "ctest --test-dir build --output-on-failure -R Ui"
+    status: todo
+
+  - id: P13-008
+    phase: P13
+    title: "Show import completeness and unsupported-content coverage directly in the active design workspace"
+    priority: high
+    area: ui
+    risk: medium
+    depends_on: [P13-001, P13-002, P13-004]
+    acceptance:
+      - Users can see what portion of the imported package is fully visualized, partially normalized, unsupported, or excluded from the active design view.
+      - Coverage messaging links directly to diagnostics and affected artifacts or object classes.
+      - The design workspace makes clear whether a blank or sparse region is due to actual design content, import limits, or disabled visibility filters.
+      - Coverage summaries are available before and after running checks.
+    implementation_rules:
+      - Keep coverage language actionable and non-marketing.
+      - Base summaries on tracked normalization/render results, not guesswork.
+      - Avoid flooding the activity log with repeated coverage notices.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R ImportWizard"
+      - "ctest --test-dir build --output-on-failure -R UiStates"
+    status: todo
+
+  - id: P13-009
+    phase: P13
+    title: "Persist imported-design sessions as reusable workspace artifacts"
+    priority: high
+    area: storage
+    risk: high
+    depends_on: [P13-001, P13-002, P13-003]
+    acceptance:
+      - Users can reopen a previously imported project into the same logical design workspace without redoing every normalization step from scratch.
+      - Persisted session data includes imported package identity, normalized object IDs, workspace mappings, and enough cached scene metadata to accelerate reopen flows.
+      - Cache invalidation or refresh occurs when source artifacts change or parser/session schema versions change.
+      - Failed cache loads degrade safely back to fresh import/session reconstruction.
+    implementation_rules:
+      - Keep cached session artifacts versioned and disposable.
+      - Do not conflate lightweight workspace persistence with future full database backends.
+      - Preserve deterministic rebuild paths for tests.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R WorkspacePersistence"
+      - "ctest --test-dir build --output-on-failure -R Storage"
+    status: todo
+
+  - id: P13-010
+    phase: P13
+    title: "Add asynchronous imported-design realization pipeline with partial-ready UI states"
+    priority: high
+    area: orchestration
+    risk: high
+    depends_on: [P13-001, P13-002, P13-003]
+    acceptance:
+      - After import succeeds, design realization stages such as normalization, scene build, browser indexing, and graph/object linking can run asynchronously without freezing the desktop shell.
+      - The UI can present partial-ready states so users understand whether the project is imported, visually loaded, indexed, and analysis-ready.
+      - Failures in later realization stages do not discard a previously valid imported package unless corruption is detected.
+      - Progress and cancellation semantics align with the existing job-monitor model.
+    implementation_rules:
+      - Reuse `LocalJobPipeline` or a compatible staged adapter rather than inventing an unrelated background-execution model.
+      - Keep state transitions explicit and testable.
+      - Avoid exposing half-built mutable models directly to widgets.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R JobPipeline"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+    status: todo
+
+  - id: P13-011
+    phase: P13
+    title: "Create imported-design commercial smoke corpus and regression coverage"
+    priority: high
+    area: testing
+    risk: medium
+    depends_on: [P13-002, P13-003, P13-005, P13-010]
+    acceptance:
+      - The repository includes a small but representative corpus of customer-style import packages covering sparse, medium, and geometry-rich designs.
+      - Regression tests verify that imported designs become visible, selectable, navigable, and cross-probeable after import succeeds.
+      - Test baselines distinguish parser success from workspace-realization success so failures localize cleanly.
+      - Corpus assets and expected limitations are documented.
+    implementation_rules:
+      - Keep corpus sizes CI-friendly.
+      - Prefer deterministic handcrafted fixtures over opaque giant binaries.
+      - Document known unsupported constructs per sample.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+      - "ctest --test-dir build --output-on-failure -R Import"
+    status: todo
+
+  - id: P13-012
+    phase: P13
+    title: "Harden post-import user workflow from import success to first actionable review in under five guided steps"
+    priority: medium
+    area: ui
+    risk: low
+    depends_on: [P13-002, P13-003, P13-005, P13-008, P13-010]
+    acceptance:
+      - A newly imported project guides the user from successful import to visible design, searchable objects, first checks, and first issue review with minimal friction.
+      - The workspace clearly distinguishes imported-but-not-yet-realized, realized-but-not-yet-analyzed, and analyzed states.
+      - First-use hints, summary surfaces, and context actions focus on imported-design workflows instead of sample/demo assumptions.
+      - Manual checklist coverage exists for the post-import activation journey.
+    implementation_rules:
+      - Keep guidance dismissible and non-modal after the first successful import.
+      - Reuse existing onboarding and workspace-summary infrastructure where practical.
+      - Avoid duplicate status messages across status bar, notifications, and activity log.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build --output-on-failure -R UiStates"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+    status: todo
+
+  # ─────────────────────────────────────────────────────────
 
 
