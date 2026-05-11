@@ -87,10 +87,11 @@ public:
             if (auto* b = std::get_if<bool>(&*v))      return *b;
             if (auto* i = std::get_if<int>(&*v))       return *i != 0;
             if (auto* d = std::get_if<double>(&*v))    return *d != 0.0;
-            const auto& s = std::get<std::string>(*v);
-            return s == "true" || s == "1" || s == "yes" || s == "on";
+            if (auto* s = std::get_if<std::string>(&*v)) {
+                return *s == "true" || *s == "1" || *s == "yes" || *s == "on";
+            }
+            return false;
         }
-        return std::nullopt;
     }
 
     /**

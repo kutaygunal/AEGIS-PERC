@@ -104,6 +104,17 @@ GraphExplorerPanel::GraphExplorerPanel(QWidget* parent)
                     emit graph_node_selected(stable_name);
                 }
             });
+    connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
+            [this](QTreeWidgetItem* item, int) {
+                if (item == nullptr) {
+                    return;
+                }
+                const QString stable_name = item->data(0, Qt::UserRole).toString();
+                if (!stable_name.isEmpty()) {
+                    emit graph_node_double_clicked(stable_name);
+                    emit cross_probe_requested(stable_name, "graph_explorer");
+                }
+            });
 
     update_status();
 }

@@ -27,6 +27,8 @@ public:
 
 signals:
     void object_selected(QString stable_id);
+    void object_double_clicked(QString stable_id);
+    void cross_probe_requested(QString stable_id, QString origin_panel);
 
 private:
     const aegis::storage::ImportedDesignSession* m_session = nullptr;

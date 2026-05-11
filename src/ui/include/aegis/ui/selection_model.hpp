@@ -22,6 +22,11 @@ public:
     [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] const std::vector<std::string>& selected_ids() const noexcept;
 
+    // Cross-probing support
+    void select_and_emit(const std::string& id);
+    [[nodiscard]] std::string primary_stable_id() const;
+    void set_primary_stable_id(const std::string& stable_id);
+
 signals:
     void selection_changed(QStringList selected_ids);
 

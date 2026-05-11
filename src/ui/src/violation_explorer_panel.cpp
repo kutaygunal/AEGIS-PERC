@@ -219,6 +219,19 @@ ViolationExplorerPanel::ViolationExplorerPanel(QWidget* parent)
                 update_context_action_state();
                 emit current_violation_changed();
             });
+    // P13-005: cross-probing via double-click on violation row
+    connect(m_table, &QTableView::doubleClicked, this,
+            [this](const QModelIndex& index) {
+                if (!index.isValid()) return;
+                const auto* violation = current_violation();
+                if (violation != nullptr) {
+                    emit violation_double_clicked(*violation);
+                    emit cross_probe_violation_requested(QString::fromStdString(violation->id));
+                    if (violation->location.net_name.has_value()) {
+                        emit cross_probe_to_graph_requested(QString::fromStdString(*violation->location.net_name));
+                    }
+                }
+            });
 
     auto connect_filter = [this]() {
         apply_filters_from_widgets();

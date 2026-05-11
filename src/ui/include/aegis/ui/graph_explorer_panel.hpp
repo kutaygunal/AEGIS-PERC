@@ -28,6 +28,8 @@ public:
 
 signals:
     void graph_node_selected(QString stable_name);
+    void graph_node_double_clicked(QString stable_name);
+    void cross_probe_requested(QString stable_name, QString origin_panel);
 
 private:
     const aegis::graph::ConnectivityGraph* m_graph = nullptr;

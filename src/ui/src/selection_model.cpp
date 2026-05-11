@@ -75,4 +75,39 @@ void SelectionModel::emit_selection_changed()
     emit selection_changed(ids);
 }
 
+void SelectionModel::select_and_emit(const std::string& id)
+{
+    if (id.empty()) {
+        clear();
+        return;
+    }
+    if (m_selected_ids.size() == 1 && m_selected_ids.front() == id) {
+        emit_selection_changed();
+        return;
+    }
+    m_selected_ids = {id};
+    emit_selection_changed();
+}
+
+std::string SelectionModel::primary_stable_id() const
+{
+    return m_selected_ids.empty() ? std::string{} : m_selected_ids.front();
+}
+
+void SelectionModel::set_primary_stable_id(const std::string& stable_id)
+{
+    if (stable_id.empty()) {
+        clear();
+        return;
+    }
+    if (!m_selected_ids.empty() && m_selected_ids.front() == stable_id) {
+        return;
+    }
+    m_selected_ids.insert(m_selected_ids.begin(), stable_id);
+    if (m_selected_ids.size() > 1) {
+        m_selected_ids.resize(1);
+    }
+    emit_selection_changed();
+}
+
 } // namespace aegis::ui

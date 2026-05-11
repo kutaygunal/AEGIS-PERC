@@ -687,7 +687,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R UiWorkflow"
       - "ctest --test-dir build --output-on-failure -R UiNotifications"
-    status: todo
+    status: done
 
   - id: P13-006
     phase: P13

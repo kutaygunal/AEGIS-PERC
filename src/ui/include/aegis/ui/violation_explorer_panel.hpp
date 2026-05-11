@@ -66,6 +66,10 @@ signals:
     void copy_selected_violations_requested();
     void export_selected_violations_requested();
     void navigate_current_violation_requested();
+    // P13-005 cross-probing
+    void violation_double_clicked(aegis::rules::Violation violation);
+    void cross_probe_violation_requested(QString violation_id);
+    void cross_probe_to_graph_requested(QString net_name);
 
 private:
     aegis::rules::ViolationCollection m_violations;

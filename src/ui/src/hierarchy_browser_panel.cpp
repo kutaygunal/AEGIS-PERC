@@ -94,6 +94,17 @@ HierarchyBrowserPanel::HierarchyBrowserPanel(QWidget* parent)
                     emit object_selected(stable_id);
                 }
             });
+    connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
+            [this](QTreeWidgetItem* item, int) {
+                if (item == nullptr) {
+                    return;
+                }
+                const QString stable_id = item->data(0, Qt::UserRole).toString();
+                if (!stable_id.isEmpty()) {
+                    emit object_double_clicked(stable_id);
+                    emit cross_probe_requested(stable_id, "hierarchy");
+                }
+            });
 
     update_status();
 }
