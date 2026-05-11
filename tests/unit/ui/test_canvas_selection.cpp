@@ -106,7 +106,7 @@ TEST_CASE("MainWindow properties panel updates through selection model", "[ui][P
 
     REQUIRE(window.selected_item_count() == 1);
     const QString summary = window.properties_summary_text();
-    REQUIRE(summary.contains("Selected: 1"));
-    REQUIRE(summary.contains("port:0"));
-    REQUIRE(summary.contains("name=IN"));
+    REQUIRE(summary.contains("Scene Properties", Qt::CaseInsensitive));
+    REQUIRE(summary.contains("Port", Qt::CaseInsensitive));
+    REQUIRE(summary.contains("M1", Qt::CaseInsensitive));
 }

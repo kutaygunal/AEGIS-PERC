@@ -255,6 +255,11 @@ TEST_CASE("ImportWizard load action commits validated package into workspace and
     REQUIRE(window.layer_panel_count() > 0);
     REQUIRE(window.hierarchy_browser_count() > 0);
     REQUIRE(window.is_hierarchy_browser_visible());
+    const QString props = window.properties_summary_text();
+    const bool props_valid = props.contains("Properties", Qt::CaseInsensitive) ||
+                             props.contains("Select layout items", Qt::CaseInsensitive) ||
+                             props.contains("item properties", Qt::CaseInsensitive);
+    REQUIRE(props_valid);
     REQUIRE(window.report_preview_summary_text().contains(root.filename().string().c_str(), Qt::CaseInsensitive));
     REQUIRE(window.last_status_message().contains("Loaded imported project package", Qt::CaseInsensitive));
 

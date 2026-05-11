@@ -2104,6 +2104,9 @@ void MainWindow::apply_import_package()
     if (m_impl->hierarchy_browser != nullptr) {
         m_impl->hierarchy_browser->set_session(m_impl->loaded_import_session.get());
     }
+    if (m_impl->properties_panel != nullptr) {
+        m_impl->properties_panel->set_session(m_impl->loaded_import_session.get());
+    }
 
     const QString project_name = QString::fromStdString(m_impl->loaded_import_package.project().name.empty()
         ? std::string{"ImportedProject"}
@@ -3387,6 +3390,9 @@ bool MainWindow::load_bundled_sample(const QString& sample_id)
         set_violations({});
         if (m_impl->hierarchy_browser != nullptr) {
             m_impl->hierarchy_browser->set_session(nullptr);
+        }
+        if (m_impl->properties_panel != nullptr) {
+            m_impl->properties_panel->set_session(nullptr);
         }
         refresh_workspace_summary();
         const QString message = QString("Loaded sample: %1").arg(QString::fromStdString(ir->design_name));

@@ -662,9 +662,10 @@ tasks:
       - Avoid leaking raw parser internals directly into user-facing labels.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Properties"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: todo
+      - "ctest --test-dir build --output-on-failure -R PropertiesPanel"
+      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+      - "ctest --test-dir build --output-on-failure -R CanvasSelection"
+    status: done
 
   - id: P13-005
     phase: P13
