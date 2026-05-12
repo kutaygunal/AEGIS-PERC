@@ -18,10 +18,6 @@ QString escape_html(const QString& text)
     return out;
 }
 
-QString escape_html(const std::string& text)
-{
-    return escape_html(QString::fromStdString(text));
-}
 
 QString format_row(const QString& key, const QString& value)
 {
