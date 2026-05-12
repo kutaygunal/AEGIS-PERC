@@ -9,6 +9,9 @@ endif()
 add_library(aegis_ui STATIC
     include/aegis/ui/main_window.hpp
     src/main_window.cpp
+    src/main_window_setup.cpp
+    src/job_workflow_controller.cpp
+    src/diagnostics_report_controller.cpp
     include/aegis/ui/activity_log_panel.hpp
     src/activity_log_panel.cpp
     include/aegis/ui/layer_panel.hpp

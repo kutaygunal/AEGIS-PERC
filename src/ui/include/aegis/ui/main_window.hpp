@@ -21,6 +21,9 @@ struct JobProgressSnapshot;
 
 namespace aegis::ui {
 
+class JobWorkflowController;
+class DiagnosticsReportController;
+
 // ---------------------------------------------------------------------------
 // Application shell with dockable workspace
 //
@@ -208,18 +211,31 @@ protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
 
-private:
+public:
     struct Impl;
+
+    // Forwarding helpers for controllers
+    void update_action_states();
+    void refresh_workspace_summary();
+    void show_status_message(const QString& message, int timeout_ms = 0);
+    void append_activity_log(const QString& message, ActivityLogSeverity severity = ActivityLogSeverity::Info);
+    void publish_ui_notification(const QString& message,
+                                 ActivityLogSeverity severity = ActivityLogSeverity::Info,
+                                 int timeout_ms = 0,
+                                 bool update_trace_panel = false);
+    void publish_trace_feedback(const QString& message, ActivityLogSeverity severity, int timeout_ms = 0);
+
+private:
     std::unique_ptr<Impl> m_impl;
+    std::unique_ptr<JobWorkflowController> m_jobs;
+    std::unique_ptr<DiagnosticsReportController> m_diagnostics;
 
     void setup_ui();
     void setup_actions();
     void setup_menus();
     void setup_toolbar();
     void setup_dock_panels();
-    void update_action_states();
     void update_trace_controls();
-    void refresh_workspace_summary();
     void refresh_diagnostics_panel();
     void refresh_onboarding_panel();
     bool navigate_current_violation_relationships();
@@ -229,13 +245,6 @@ private:
     void refresh_filter_preset_menu();
     void refresh_workspace_view_menu();
     bool reopen_project_from_path(const QString& path, bool mark_as_last_session);
-    void show_status_message(const QString& message, int timeout_ms = 0);
-    void append_activity_log(const QString& message, ActivityLogSeverity severity = ActivityLogSeverity::Info);
-    void publish_ui_notification(const QString& message,
-                                 ActivityLogSeverity severity = ActivityLogSeverity::Info,
-                                 int timeout_ms = 0,
-                                 bool update_trace_panel = false);
-    void publish_trace_feedback(const QString& message, ActivityLogSeverity severity, int timeout_ms = 0);
     void execute_run_checks();
     bool export_report_preview(bool html_export);
     bool start_imported_run_checks(bool is_retry);
