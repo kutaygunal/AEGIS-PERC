@@ -83,8 +83,34 @@ inline std::optional<SavedWorkspaceView> saved_workspace_view_from_variant(const
     view.overlays_visible = map.value("overlaysVisible", true).toBool();
     view.heatmap_visible = map.value("heatmapVisible", false).toBool();
     view.heatmap_opacity = map.value("heatmapOpacity", 0.6).toDouble();
-    view.performance_metrics_visible = map.value("performanceMetricsVisible", false).toBool();
+        view.performance_metrics_visible = map.value("performanceMetricsVisible", false).toBool();
     return view;
+}
+
+inline QVariantMap to_variant_map(const SavedViewportPreset& preset)
+{
+    QVariantMap map;
+    map.insert("name", preset.name);
+    map.insert("zoomLevel", preset.zoom_level);
+    map.insert("viewCenterX", preset.view_center_x);
+    map.insert("viewCenterY", preset.view_center_y);
+    return map;
+}
+
+inline std::optional<SavedViewportPreset> saved_viewport_preset_from_variant(const QVariant& value)
+{
+    const QVariantMap map = value.toMap();
+    const QString name = normalize_saved_name(map.value("name").toString());
+    if (name.isEmpty()) {
+        return std::nullopt;
+    }
+
+    SavedViewportPreset preset;
+    preset.name = name;
+    preset.zoom_level = map.value("zoomLevel", 1.0).toDouble();
+    preset.view_center_x = map.value("viewCenterX", 0.0).toDouble();
+    preset.view_center_y = map.value("viewCenterY", 0.0).toDouble();
+    return preset;
 }
 
 template <typename Entry>

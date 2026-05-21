@@ -393,6 +393,166 @@ void MainWindow::setup_actions()
         }
     });
 
+    auto* save_viewport_preset_action = register_action("save_viewport_preset", "Save Viewport Preset...", QKeySequence(), false,
+                                                        "Save the current canvas zoom and center as a named viewport preset");
+    connect(save_viewport_preset_action, &QAction::triggered, this, [this]() {
+        bool accepted = false;
+        const QString name = QInputDialog::getText(this,
+                                                   "Save Viewport Preset",
+                                                   "Preset name:",
+                                                   QLineEdit::Normal,
+                                                   QString{},
+                                                   &accepted);
+        if (!accepted) {
+            publish_ui_notification("Viewport preset save canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+        if (save_viewport_preset(name)) {
+            publish_ui_notification(QString("Saved viewport preset '%1'").arg(normalize_saved_name(name)), ActivityLogSeverity::Info, 3000);
+        } else {
+            publish_ui_notification("Viewport preset save failed: name is required", ActivityLogSeverity::Warning, 4000);
+        }
+    });
+
+    auto* manage_viewport_presets = register_action("manage_viewport_presets", "Manage Viewport Presets...", QKeySequence(), false,
+                                                      "Apply, rename, or delete saved viewport presets");
+    connect(manage_viewport_presets, &QAction::triggered, this, [this]() {
+        const QStringList names = viewport_preset_names();
+        if (names.isEmpty()) {
+            publish_ui_notification("No saved viewport presets", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        bool accepted = false;
+        const QString choice = QInputDialog::getItem(this,
+                                                     "Manage Viewport Presets",
+                                                     "Choose preset:",
+                                                     names,
+                                                     0,
+                                                     false,
+                                                     &accepted);
+        if (!accepted || choice.trimmed().isEmpty()) {
+            publish_ui_notification("Viewport preset management canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        const QStringList operations{"Apply", "Rename", "Delete"};
+        const QString operation = QInputDialog::getItem(this,
+                                                        "Manage Viewport Presets",
+                                                        "Operation:",
+                                                        operations,
+                                                        0,
+                                                        false,
+                                                        &accepted);
+        if (!accepted || operation.isEmpty()) {
+            publish_ui_notification("Viewport preset management canceled", ActivityLogSeverity::Info, 3000);
+            return;
+        }
+
+        if (operation == "Apply") {
+            if (apply_viewport_preset(choice)) {
+                publish_ui_notification(QString("Applied viewport preset '%1'").arg(choice), ActivityLogSeverity::Info, 3000);
+            }
+            return;
+        }
+        if (operation == "Rename") {
+            const QString renamed = QInputDialog::getText(this,
+                                                          "Rename Viewport Preset",
+                                                          "New preset name:",
+                                                          QLineEdit::Normal,
+                                                          choice,
+                                                          &accepted);
+            if (!accepted) {
+                publish_ui_notification("Viewport preset rename canceled", ActivityLogSeverity::Info, 3000);
+                return;
+            }
+            if (rename_viewport_preset(choice, renamed)) {
+                publish_ui_notification(QString("Renamed viewport preset to '%1'").arg(normalize_saved_name(renamed)), ActivityLogSeverity::Info, 3000);
+            } else {
+                publish_ui_notification("Viewport preset rename failed", ActivityLogSeverity::Warning, 4000);
+            }
+            return;
+        }
+        if (delete_viewport_preset(choice)) {
+            publish_ui_notification(QString("Deleted viewport preset '%1'").arg(choice), ActivityLogSeverity::Info, 3000);
+        }
+    });
+
+    auto* zoom_to_selection_action = register_action("zoom_to_selection", "Zoom to &Selection", QKeySequence("Ctrl+Shift+F"), false,
+                                                       "Fit the viewport to the current selection");
+    connect(zoom_to_selection_action, &QAction::triggered, this, [this]() {
+        if (m_impl->canvas != nullptr) {
+            m_impl->canvas->zoom_to_selection();
+        }
+    });
+
+    auto* zoom_to_violations_action = register_action("zoom_to_violations", "Zoom to &Violations", QKeySequence("Ctrl+Shift+V"), false,
+                                                        "Fit the viewport to all violation overlays");
+    connect(zoom_to_violations_action, &QAction::triggered, this, [this]() {
+        if (m_impl->canvas != nullptr) {
+            m_impl->canvas->zoom_to_violations();
+        }
+    });
+
+    auto* zoom_to_trace_action = register_action("zoom_to_trace", "Zoom to &Trace", QKeySequence("Ctrl+Shift+T"), false,
+                                                     "Fit the viewport to the active trace result");
+    connect(zoom_to_trace_action, &QAction::triggered, this, [this]() {
+        if (m_impl->canvas != nullptr) {
+            m_impl->canvas->zoom_to_trace();
+        }
+    });
+
+    auto* jump_to_coordinate_action = register_action("jump_to_coordinate", "Jump to &Coordinate...", QKeySequence("Ctrl+J"), false,
+                                                        "Center the viewport on a specific scene coordinate");
+    connect(jump_to_coordinate_action, &QAction::triggered, this, [this]() {
+        if (m_impl->canvas == nullptr) {
+            return;
+        }
+        bool accepted = false;
+        const QString text = QInputDialog::getText(this,
+                                                   "Jump to Coordinate",
+                                                   "X, Y (optional zoom):",
+                                                   QLineEdit::Normal,
+                                                   QString{},
+                                                   &accepted);
+        if (!accepted || text.trimmed().isEmpty()) {
+            return;
+        }
+        const QStringList parts = text.split(',');
+        if (parts.size() < 2) {
+            publish_ui_notification("Invalid coordinate format: expected X, Y", ActivityLogSeverity::Warning, 3000);
+            return;
+        }
+        bool ok_x = false, ok_y = false, ok_z = false;
+        const double x = parts[0].trimmed().toDouble(&ok_x);
+        const double y = parts[1].trimmed().toDouble(&ok_y);
+        double zoom = 0.0;
+        if (parts.size() > 2) {
+            zoom = parts[2].trimmed().toDouble(&ok_z);
+        }
+        if (!ok_x || !ok_y) {
+            publish_ui_notification("Invalid coordinate values", ActivityLogSeverity::Warning, 3000);
+            return;
+        }
+        m_impl->canvas->jump_to_coordinate(QPointF(x, y), zoom > 0.0 && ok_z ? zoom : m_impl->canvas->zoom_level());
+    });
+
+    auto* viewport_back_action = register_action("viewport_back", "Viewport &Back", QKeySequence("Alt+Left"), false,
+                                                   "Return to the previous viewport state");
+    connect(viewport_back_action, &QAction::triggered, this, [this]() {
+        if (m_impl->canvas != nullptr) {
+            m_impl->canvas->viewport_back();
+        }
+    });
+
+    auto* viewport_forward_action = register_action("viewport_forward", "Viewport &Forward", QKeySequence("Alt+Right"), false,
+                                                      "Go forward to the next viewport state");
+    connect(viewport_forward_action, &QAction::triggered, this, [this]() {
+        if (m_impl->canvas != nullptr) {
+            m_impl->canvas->viewport_forward();
+        }
+    });
+
     auto* run_checks = register_action("run_checks", "&Run Checks", QKeySequence(Qt::Key_F5), false,
                                        "Run available electrical checks for the active design graph");
     connect(run_checks, &QAction::triggered, this, [this]() {
@@ -578,12 +738,22 @@ void MainWindow::setup_menus()
     viewMenu->addAction(m_impl->actions.at("fit_view"));
     viewMenu->addAction(m_impl->actions.at("reset_view"));
     viewMenu->addSeparator();
+    viewMenu->addAction(m_impl->actions.at("zoom_to_selection"));
+    viewMenu->addAction(m_impl->actions.at("zoom_to_violations"));
+    viewMenu->addAction(m_impl->actions.at("zoom_to_trace"));
+    viewMenu->addAction(m_impl->actions.at("jump_to_coordinate"));
+    viewMenu->addSeparator();
+    viewMenu->addAction(m_impl->actions.at("viewport_back"));
+    viewMenu->addAction(m_impl->actions.at("viewport_forward"));
+    viewMenu->addSeparator();
     viewMenu->addAction(m_impl->actions.at("toggle_grid"));
     viewMenu->addAction(m_impl->actions.at("toggle_overlays"));
     m_impl->filter_presets_menu = viewMenu->addMenu("Filter &Presets");
     connect(m_impl->filter_presets_menu, &QMenu::aboutToShow, this, &MainWindow::refresh_filter_preset_menu);
     m_impl->workspace_views_menu = viewMenu->addMenu("Workspace &Views");
     connect(m_impl->workspace_views_menu, &QMenu::aboutToShow, this, &MainWindow::refresh_workspace_view_menu);
+    m_impl->viewport_presets_menu = viewMenu->addMenu("Viewport &Presets");
+    connect(m_impl->viewport_presets_menu, &QMenu::aboutToShow, this, &MainWindow::refresh_viewport_preset_menu);
 
     // Tools
     QMenu* toolsMenu = m_impl->menu_bar->addMenu("&Tools");
@@ -600,6 +770,16 @@ void MainWindow::setup_menus()
     toolsMenu->addAction(m_impl->actions.at("manage_filter_presets"));
     toolsMenu->addAction(m_impl->actions.at("save_workspace_view"));
     toolsMenu->addAction(m_impl->actions.at("manage_workspace_views"));
+    toolsMenu->addAction(m_impl->actions.at("save_viewport_preset"));
+    toolsMenu->addAction(m_impl->actions.at("manage_viewport_presets"));
+    toolsMenu->addSeparator();
+    toolsMenu->addAction(m_impl->actions.at("zoom_to_selection"));
+    toolsMenu->addAction(m_impl->actions.at("zoom_to_violations"));
+    toolsMenu->addAction(m_impl->actions.at("zoom_to_trace"));
+    toolsMenu->addAction(m_impl->actions.at("jump_to_coordinate"));
+    toolsMenu->addSeparator();
+    toolsMenu->addAction(m_impl->actions.at("viewport_back"));
+    toolsMenu->addAction(m_impl->actions.at("viewport_forward"));
     toolsMenu->addSeparator();
     toolsMenu->addAction(m_impl->actions.at("clear_selection"));
 
@@ -627,6 +807,14 @@ void MainWindow::setup_toolbar()
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("reset_view"));
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("toggle_grid"));
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("toggle_overlays"));
+    m_impl->workspace_toolbar->addSeparator();
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("zoom_to_selection"));
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("zoom_to_violations"));
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("zoom_to_trace"));
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("jump_to_coordinate"));
+    m_impl->workspace_toolbar->addSeparator();
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("viewport_back"));
+    m_impl->workspace_toolbar->addAction(m_impl->actions.at("viewport_forward"));
     m_impl->workspace_toolbar->addSeparator();
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("run_checks"));
     m_impl->workspace_toolbar->addAction(m_impl->actions.at("cancel_active_job"));
@@ -1608,6 +1796,14 @@ void MainWindow::update_action_states()
     m_impl->actions.at("manage_filter_presets")->setEnabled(!m_impl->filter_presets.empty());
     m_impl->actions.at("save_workspace_view")->setEnabled(true);
     m_impl->actions.at("manage_workspace_views")->setEnabled(!m_impl->workspace_views.empty());
+    m_impl->actions.at("save_viewport_preset")->setEnabled(has_scene);
+    m_impl->actions.at("manage_viewport_presets")->setEnabled(!m_impl->viewport_presets.empty());
+    m_impl->actions.at("zoom_to_selection")->setEnabled(has_scene && has_selection);
+    m_impl->actions.at("zoom_to_violations")->setEnabled(has_scene && has_violations);
+    m_impl->actions.at("zoom_to_trace")->setEnabled(has_scene && has_active_trace);
+    m_impl->actions.at("jump_to_coordinate")->setEnabled(has_scene);
+    m_impl->actions.at("viewport_back")->setEnabled(has_scene && m_impl->canvas->can_viewport_back());
+    m_impl->actions.at("viewport_forward")->setEnabled(has_scene && m_impl->canvas->can_viewport_forward());
 
     if (m_impl->canvas != nullptr) {
         m_impl->actions.at("toggle_grid")->setChecked(m_impl->canvas->grid_visible());
@@ -1711,6 +1907,30 @@ void MainWindow::refresh_workspace_view_menu()
     }
 }
 
+void MainWindow::refresh_viewport_preset_menu()
+{
+    if (m_impl->viewport_presets_menu == nullptr) {
+        return;
+    }
+
+    m_impl->viewport_presets_menu->clear();
+    m_impl->viewport_presets_menu->addAction(m_impl->actions.at("save_viewport_preset"));
+    m_impl->viewport_presets_menu->addAction(m_impl->actions.at("manage_viewport_presets"));
+    if (m_impl->viewport_presets.empty()) {
+        auto* empty = m_impl->viewport_presets_menu->addAction("No saved viewport presets");
+        empty->setEnabled(false);
+        return;
+    }
+
+    m_impl->viewport_presets_menu->addSeparator();
+    for (const auto& preset : m_impl->viewport_presets) {
+        auto* action = m_impl->viewport_presets_menu->addAction(preset.name);
+        connect(action, &QAction::triggered, this, [this, name = preset.name]() {
+            Q_UNUSED(apply_viewport_preset(name));
+        });
+    }
+}
+
 bool MainWindow::reopen_project_from_path(const QString& path, bool mark_as_last_session)
 {
     const QString normalized = QFileInfo(path).absoluteFilePath();
@@ -1789,6 +2009,13 @@ void MainWindow::restore_window_state()
         }
     }
 
+    m_impl->viewport_presets.clear();
+    for (const auto& value : settings.value(QString("%1/viewportPresets").arg(kSettingsWorkspaceUiGroup)).toList()) {
+        if (const auto preset = saved_viewport_preset_from_variant(value); preset.has_value()) {
+            m_impl->viewport_presets.push_back(*preset);
+        }
+    }
+
     const bool grid_visible = settings.value(QString("%1/gridVisible").arg(kSettingsWorkspaceUiGroup), true).toBool();
     if (m_impl->actions.contains("toggle_grid") && m_impl->actions.at("toggle_grid") != nullptr) {
         m_impl->actions.at("toggle_grid")->setChecked(grid_visible);
@@ -1821,6 +2048,7 @@ void MainWindow::restore_window_state()
     refresh_recent_project_actions();
     refresh_filter_preset_menu();
     refresh_workspace_view_menu();
+    refresh_viewport_preset_menu();
     refresh_onboarding_panel();
     update_action_states();
     if (m_impl->reopen_last_session_enabled && !m_impl->last_successful_project_path.trimmed().isEmpty()) {
@@ -1897,6 +2125,12 @@ void MainWindow::save_window_state()
         workspace_views.push_back(to_variant_map(view));
     }
     settings.setValue(QString("%1/workspaceViews").arg(kSettingsWorkspaceUiGroup), workspace_views);
+
+    QVariantList viewport_presets;
+    for (const auto& preset : m_impl->viewport_presets) {
+        viewport_presets.push_back(to_variant_map(preset));
+    }
+    settings.setValue(QString("%1/viewportPresets").arg(kSettingsWorkspaceUiGroup), viewport_presets);
     refresh_recent_project_actions();
     settings.setValue(QString("%1/version").arg(kSettingsRecentProjectsGroup), kRecentProjectsStateVersion);
     settings.setValue(QString("%1/paths").arg(kSettingsRecentProjectsGroup), m_impl->recent_project_paths);

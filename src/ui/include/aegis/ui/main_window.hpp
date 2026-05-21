@@ -90,6 +90,11 @@ public:
     bool rename_workspace_view(const QString& old_name, const QString& new_name);
     bool delete_workspace_view(const QString& name);
     [[nodiscard]] QStringList workspace_view_names() const;
+    bool save_viewport_preset(const QString& name);
+    bool apply_viewport_preset(const QString& name);
+    bool rename_viewport_preset(const QString& old_name, const QString& new_name);
+    bool delete_viewport_preset(const QString& name);
+    [[nodiscard]] QStringList viewport_preset_names() const;
     void clear_violation_filters();
     QString current_violation_id() const;
     QString violation_details_text() const;
@@ -244,6 +249,7 @@ private:
     void refresh_recent_project_actions();
     void refresh_filter_preset_menu();
     void refresh_workspace_view_menu();
+    void refresh_viewport_preset_menu();
     bool reopen_project_from_path(const QString& path, bool mark_as_last_session);
     void execute_run_checks();
     bool export_report_preview(bool html_export);

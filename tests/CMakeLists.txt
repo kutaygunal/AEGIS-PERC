@@ -27,6 +27,7 @@ add_executable(aegis_unit_tests
     unit/ui/test_scene_adapter.cpp
     unit/ui/test_layout_canvas.cpp
     unit/ui/test_canvas_viewport.cpp
+    unit/ui/test_canvas_viewport_p13.cpp
     unit/ui/test_layer_panel.cpp
     unit/ui/test_canvas_selection.cpp
     unit/ui/test_violation_overlay.cpp
@@ -48,6 +49,7 @@ add_executable(aegis_unit_tests
     unit/ui/test_run_checks.cpp
     unit/ui/test_workspace_state.cpp
     unit/ui/test_workspace_persistence.cpp
+    unit/ui/test_viewport_presets.cpp
     unit/ui/test_trace_workflow.cpp
     unit/ui/test_ui_states.cpp
     unit/ui/test_ui_notifications.cpp

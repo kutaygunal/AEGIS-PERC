@@ -83,6 +83,13 @@ struct SavedWorkspaceView {
     bool performance_metrics_visible = false;
 };
 
+struct SavedViewportPreset {
+    QString name;
+    double zoom_level = 1.0;
+    double view_center_x = 0.0;
+    double view_center_y = 0.0;
+};
+
 struct MainWindow::Impl {
     struct DiagnosticEntry {
         QString severity;
@@ -142,6 +149,7 @@ struct MainWindow::Impl {
     QMenu* recent_projects_menu = nullptr;
     QMenu* filter_presets_menu = nullptr;
     QMenu* workspace_views_menu = nullptr;
+    QMenu* viewport_presets_menu = nullptr;
     QToolBar* workspace_toolbar = nullptr;
     QLabel* performance_status_label = nullptr;
     QLabel* job_progress_label = nullptr;
@@ -182,6 +190,7 @@ struct MainWindow::Impl {
     bool onboarding_dismissed = false;
     std::vector<SavedFilterPreset> filter_presets;
     std::vector<SavedWorkspaceView> workspace_views;
+    std::vector<SavedViewportPreset> viewport_presets;
     ActionMap actions;
     std::vector<JobHistoryEntry> job_history;
     int job_history_max_entries = 12;

@@ -32,6 +32,13 @@ struct CanvasPerformanceMetrics {
     bool operator==(const CanvasPerformanceMetrics& other) const noexcept = default;
 };
 
+struct ViewportState {
+    double zoom_level = 1.0;
+    QPointF view_center{0.0, 0.0};
+
+    bool operator==(const ViewportState& other) const noexcept = default;
+};
+
 class LayoutCanvas : public QWidget {
     Q_OBJECT
 public:
@@ -84,6 +91,19 @@ public:
     [[nodiscard]] bool center_on_violation(const std::string& violation_id);
     void zoom_by(double factor, const QPointF& widget_anchor);
     void pan_by(const QPointF& widget_delta);
+
+    // Viewport presets / large-scene navigation
+    [[nodiscard]] ViewportState current_viewport_state() const noexcept;
+    void restore_viewport_state(const ViewportState& state);
+    void push_viewport_state();
+    [[nodiscard]] bool can_viewport_back() const noexcept;
+    [[nodiscard]] bool can_viewport_forward() const noexcept;
+    void viewport_back();
+    void viewport_forward();
+    void zoom_to_selection();
+    void zoom_to_violations();
+    void zoom_to_trace();
+    void jump_to_coordinate(const QPointF& scene_point, double zoom);
 
     [[nodiscard]] double zoom_level() const noexcept;
     [[nodiscard]] QPointF view_center() const noexcept;
@@ -157,6 +177,14 @@ private:
     double m_lod_cache_zoom = 0.0;
     QPointF m_lod_cache_center{0.0, 0.0};
     QSize m_lod_cache_size;
+
+    // Viewport history for large-scene navigation
+    std::vector<ViewportState> m_viewport_history;
+    std::size_t m_viewport_history_index = 0;
+    bool m_viewport_history_pushing = false;
+    static constexpr std::size_t kMaxViewportHistory = 32;
+    void prune_viewport_history();
+    void fit_to_rect(const QRectF& rect);
 };
 
 } // namespace aegis::ui

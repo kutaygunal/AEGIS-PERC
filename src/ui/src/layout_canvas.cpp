@@ -350,6 +350,7 @@ void LayoutCanvas::toggle_grid()
 
 void LayoutCanvas::fit_to_view()
 {
+    push_viewport_state();
     const QRectF source = scene_rect();
     const QRectF target = rect().adjusted(kViewportMargin, kViewportMargin,
                                           -kViewportMargin, -kViewportMargin);
@@ -368,6 +369,7 @@ void LayoutCanvas::fit_to_view()
 
 void LayoutCanvas::reset_view()
 {
+    push_viewport_state();
     m_zoom_level = 1.0;
     m_view_center = scene_rect().center();
     m_view_initialized = true;
@@ -378,6 +380,7 @@ void LayoutCanvas::reset_view()
 
 void LayoutCanvas::center_on_scene_point(const QPointF& scene_point)
 {
+    push_viewport_state();
     ensure_view_initialized();
     m_view_center = scene_point;
     invalidate_lod_cache();
@@ -387,6 +390,7 @@ void LayoutCanvas::center_on_scene_point(const QPointF& scene_point)
 
 bool LayoutCanvas::center_on_violation(const std::string& violation_id)
 {
+    push_viewport_state();
     const auto it = std::find_if(m_violation_overlays.begin(), m_violation_overlays.end(),
                                  [&violation_id](const ViolationOverlayItem& overlay) {
                                      return overlay.violation_id == violation_id;
@@ -1014,6 +1018,200 @@ double LayoutCanvas::hit_test_distance_scene(const SceneItem& item, const QPoint
 void LayoutCanvas::notify_viewport_changed()
 {
     emit viewport_changed(m_zoom_level, m_view_center);
+}
+
+ViewportState LayoutCanvas::current_viewport_state() const noexcept
+{
+    return ViewportState{m_zoom_level, m_view_center};
+}
+
+void LayoutCanvas::restore_viewport_state(const ViewportState& state)
+{
+    ensure_view_initialized();
+    m_zoom_level = std::clamp(state.zoom_level, kMinZoom, kMaxZoom);
+    m_view_center = state.view_center;
+    m_view_initialized = true;
+    invalidate_lod_cache();
+    notify_viewport_changed();
+    update();
+}
+
+void LayoutCanvas::push_viewport_state()
+{
+    if (m_viewport_history_pushing) {
+        return;
+    }
+    const ViewportState state = current_viewport_state();
+    // Remove any forward history after current index
+    if (m_viewport_history_index < m_viewport_history.size()) {
+        m_viewport_history.erase(m_viewport_history.begin() + m_viewport_history_index, m_viewport_history.end());
+    }
+    // Avoid pushing duplicate consecutive states
+    if (!m_viewport_history.empty() && m_viewport_history.back() == state) {
+        return;
+    }
+    m_viewport_history.push_back(state);
+    m_viewport_history_index = m_viewport_history.size();
+    prune_viewport_history();
+}
+
+void LayoutCanvas::prune_viewport_history()
+{
+    if (m_viewport_history.size() > kMaxViewportHistory) {
+        const std::size_t excess = m_viewport_history.size() - kMaxViewportHistory;
+        m_viewport_history.erase(m_viewport_history.begin(), m_viewport_history.begin() + excess);
+        m_viewport_history_index = std::max(std::size_t{1}, m_viewport_history_index - excess);
+    }
+}
+
+bool LayoutCanvas::can_viewport_back() const noexcept
+{
+    return m_viewport_history_index > 1;
+}
+
+bool LayoutCanvas::can_viewport_forward() const noexcept
+{
+    return m_viewport_history_index + 1 < m_viewport_history.size();
+}
+
+void LayoutCanvas::viewport_back()
+{
+    if (!can_viewport_back()) {
+        return;
+    }
+    --m_viewport_history_index;
+    const ViewportState state = m_viewport_history[m_viewport_history_index];
+    m_viewport_history_pushing = true;
+    restore_viewport_state(state);
+    m_viewport_history_pushing = false;
+}
+
+void LayoutCanvas::viewport_forward()
+{
+    if (!can_viewport_forward()) {
+        return;
+    }
+    ++m_viewport_history_index;
+    const ViewportState state = m_viewport_history[m_viewport_history_index];
+    m_viewport_history_pushing = true;
+    restore_viewport_state(state);
+    m_viewport_history_pushing = false;
+}
+
+void LayoutCanvas::fit_to_rect(const QRectF& rect)
+{
+    if (!rect.isValid() || rect.width() <= 0.0 || rect.height() <= 0.0) {
+        return;
+    }
+    const QRectF target = QWidget::rect().adjusted(kViewportMargin, kViewportMargin,
+                                                   -kViewportMargin, -kViewportMargin);
+    const double target_width = std::max(1.0, target.width());
+    const double target_height = std::max(1.0, target.height());
+    const double sx = target_width / rect.width();
+    const double sy = target_height / rect.height();
+    m_zoom_level = std::clamp(std::min(sx, sy), kMinZoom, kMaxZoom);
+    m_view_center = rect.center();
+    m_view_initialized = true;
+    invalidate_lod_cache();
+    notify_viewport_changed();
+    update();
+}
+
+void LayoutCanvas::zoom_to_selection()
+{
+    if (m_selection_model == nullptr || m_selection_model->selected_ids().empty()) {
+        return;
+    }
+    QRectF bbox;
+    bool first = true;
+    for (const auto& item : m_scene.items) {
+        if (m_selection_model->contains(item.id) && item.bounds.valid) {
+            const QRectF r = bounds_to_rect(item.bounds);
+            if (first) {
+                bbox = r;
+                first = false;
+            } else {
+                bbox = bbox.united(r);
+            }
+        }
+    }
+    if (!first) {
+        push_viewport_state();
+        fit_to_rect(bbox);
+    }
+}
+
+void LayoutCanvas::zoom_to_violations()
+{
+    if (m_violation_overlays.empty()) {
+        return;
+    }
+    QRectF bbox;
+    bool first = true;
+    for (const auto& overlay : m_violation_overlays) {
+        if (!overlay.resolved) {
+            continue;
+        }
+        QRectF r;
+        if (overlay.bounds.has_value()) {
+            r = *overlay.bounds;
+        } else if (overlay.point.has_value()) {
+            r = QRectF(*overlay.point, *overlay.point).normalized();
+        } else {
+            continue;
+        }
+        if (first) {
+            bbox = r;
+            first = false;
+        } else {
+            bbox = bbox.united(r);
+        }
+    }
+    if (!first) {
+        push_viewport_state();
+        fit_to_rect(bbox);
+    }
+}
+
+void LayoutCanvas::zoom_to_trace()
+{
+    if (!m_trace_result.resolved || m_trace_result.related_scene_item_ids.empty()) {
+        return;
+    }
+    QRectF bbox;
+    bool first = true;
+    for (const auto& item : m_scene.items) {
+        if (std::find(m_trace_result.related_scene_item_ids.begin(),
+                      m_trace_result.related_scene_item_ids.end(),
+                      item.id) != m_trace_result.related_scene_item_ids.end()
+            && item.bounds.valid) {
+            const QRectF r = bounds_to_rect(item.bounds);
+            if (first) {
+                bbox = r;
+                first = false;
+            } else {
+                bbox = bbox.united(r);
+            }
+        }
+    }
+    if (!first) {
+        push_viewport_state();
+        fit_to_rect(bbox);
+    }
+}
+
+void LayoutCanvas::jump_to_coordinate(const QPointF& scene_point, double zoom)
+{
+    push_viewport_state();
+    ensure_view_initialized();
+    m_view_center = scene_point;
+    if (zoom > 0.0 && std::isfinite(zoom)) {
+        m_zoom_level = std::clamp(zoom, kMinZoom, kMaxZoom);
+    }
+    m_view_initialized = true;
+    invalidate_lod_cache();
+    notify_viewport_changed();
+    update();
 }
 
 } // namespace aegis::ui

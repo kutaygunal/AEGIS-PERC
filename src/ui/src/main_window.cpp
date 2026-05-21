@@ -654,6 +654,105 @@ QStringList MainWindow::workspace_view_names() const
     return saved_entry_names(m_impl->workspace_views);
 }
 
+bool MainWindow::save_viewport_preset(const QString& name)
+{
+    const QString normalized = normalize_saved_name(name);
+    if (normalized.isEmpty() || m_impl->canvas == nullptr) {
+        return false;
+    }
+
+    SavedViewportPreset preset;
+    preset.name = normalized;
+    preset.zoom_level = m_impl->canvas->zoom_level();
+    const QPointF center = m_impl->canvas->view_center();
+    preset.view_center_x = center.x();
+    preset.view_center_y = center.y();
+
+    const auto it = std::find_if(m_impl->viewport_presets.begin(), m_impl->viewport_presets.end(),
+                                 [&normalized](const SavedViewportPreset& p) {
+                                     return saved_name_matches(p.name, normalized);
+                                 });
+    if (it != m_impl->viewport_presets.end()) {
+        *it = preset;
+    } else {
+        m_impl->viewport_presets.push_back(std::move(preset));
+    }
+    save_window_state();
+    refresh_viewport_preset_menu();
+    update_action_states();
+    return true;
+}
+
+bool MainWindow::apply_viewport_preset(const QString& name)
+{
+    const auto it = std::find_if(m_impl->viewport_presets.begin(), m_impl->viewport_presets.end(),
+                                 [&name](const SavedViewportPreset& p) {
+                                     return saved_name_matches(p.name, name);
+                                 });
+    if (it == m_impl->viewport_presets.end() || m_impl->canvas == nullptr) {
+        return false;
+    }
+
+    aegis::ui::ViewportState state;
+    state.zoom_level = it->zoom_level;
+    state.view_center = QPointF(it->view_center_x, it->view_center_y);
+    m_impl->canvas->restore_viewport_state(state);
+    return true;
+}
+
+bool MainWindow::rename_viewport_preset(const QString& old_name, const QString& new_name)
+{
+    const QString normalized = normalize_saved_name(new_name);
+    if (normalized.isEmpty()) {
+        return false;
+    }
+
+    const auto it = std::find_if(m_impl->viewport_presets.begin(), m_impl->viewport_presets.end(),
+                                 [&old_name](const SavedViewportPreset& p) {
+                                     return saved_name_matches(p.name, old_name);
+                                 });
+    if (it == m_impl->viewport_presets.end()) {
+        return false;
+    }
+
+    auto duplicate = std::find_if(m_impl->viewport_presets.begin(), m_impl->viewport_presets.end(),
+                                  [&normalized, &it](const SavedViewportPreset& p) {
+                                      return &p != &(*it) && saved_name_matches(p.name, normalized);
+                                  });
+    if (duplicate != m_impl->viewport_presets.end()) {
+        *duplicate = *it;
+        duplicate->name = normalized;
+        m_impl->viewport_presets.erase(it);
+    } else {
+        it->name = normalized;
+    }
+
+    save_window_state();
+    refresh_viewport_preset_menu();
+    update_action_states();
+    return true;
+}
+
+bool MainWindow::delete_viewport_preset(const QString& name)
+{
+    const auto original_size = m_impl->viewport_presets.size();
+    std::erase_if(m_impl->viewport_presets, [&name](const SavedViewportPreset& p) {
+        return saved_name_matches(p.name, name);
+    });
+    if (m_impl->viewport_presets.size() == original_size) {
+        return false;
+    }
+    save_window_state();
+    refresh_viewport_preset_menu();
+    update_action_states();
+    return true;
+}
+
+QStringList MainWindow::viewport_preset_names() const
+{
+    return saved_entry_names(m_impl->viewport_presets);
+}
+
 void MainWindow::clear_violation_filters()
 {
     if (m_impl->violation_explorer != nullptr) {
