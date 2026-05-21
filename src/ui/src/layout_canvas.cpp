@@ -100,6 +100,7 @@ void LayoutCanvas::set_scene(UiScene scene)
 {
     m_scene = std::move(scene);
     m_layer_visibility.clear();
+    m_violation_item_colors.clear();
     for (const auto& layer : m_scene.layers) {
         m_layer_visibility[layer.name] = true;
     }
@@ -272,6 +273,52 @@ void LayoutCanvas::set_violation_overlays_visible(bool visible)
 bool LayoutCanvas::violation_overlays_visible() const noexcept
 {
     return m_violation_overlays_visible;
+}
+
+void LayoutCanvas::set_coloring_mode(ColoringMode mode)
+{
+    if (m_coloring_mode == mode) {
+        return;
+    }
+    m_coloring_mode = mode;
+    update();
+}
+
+ColoringMode LayoutCanvas::coloring_mode() const noexcept
+{
+    return m_coloring_mode;
+}
+
+QColor LayoutCanvas::color_for_item(const SceneItem& item) const
+{
+    if (m_coloring_mode == ColoringMode::LayerColor) {
+        return color_from_scene(item.color);
+    }
+
+    if (m_coloring_mode == ColoringMode::ObjectType) {
+        switch (item.layer_category) {
+            case SceneLayerCategory::Routing: return QColor("#E15759");
+            case SceneLayerCategory::CutVia: return QColor("#F28E2B");
+            case SceneLayerCategory::Pin: return QColor("#59A14F");
+            case SceneLayerCategory::Blockage: return QColor("#79706E");
+            case SceneLayerCategory::Instance: return QColor("#4C78A8");
+            case SceneLayerCategory::DieArea: return QColor("#999999");
+            case SceneLayerCategory::Annotation: return QColor("#EDC948");
+            case SceneLayerCategory::Technology: return QColor("#B07AA1");
+            default: return QColor("#808080");
+        }
+    }
+
+    if (m_coloring_mode == ColoringMode::ViolationContext) {
+        auto it = m_violation_item_colors.find(item.id);
+        if (it != m_violation_item_colors.end()) {
+            return it->second;
+        }
+        return QColor("#808080").lighter(140);
+    }
+
+    // Domain mode falls back to layer color until domain metadata is propagated per-item
+    return color_from_scene(item.color);
 }
 
 int LayoutCanvas::unresolved_violation_count() const noexcept
@@ -704,7 +751,7 @@ std::size_t LayoutCanvas::paint_scene(QPainter& painter)
     for (const auto& entry : m_lod_cache) {
         const auto& item = m_scene.items.at(entry.item_index);
 
-        QColor color = color_from_scene(item.color);
+        QColor color = color_for_item(item);
         QColor fill = color;
         fill.setAlpha(96);
         QColor stroke = color.lighter(135);
@@ -889,6 +936,7 @@ void LayoutCanvas::rebuild_heatmap()
 void LayoutCanvas::rebuild_violation_overlays()
 {
     m_violation_overlays.clear();
+    m_violation_item_colors.clear();
     m_unresolved_violation_count = 0;
 
     for (const auto& violation : m_violations.violations()) {
@@ -904,10 +952,19 @@ void LayoutCanvas::rebuild_violation_overlays()
             overlay.resolved = true;
         }
 
+        QColor vcolor;
+        switch (violation.severity) {
+            case aegis::rules::Severity::Error: vcolor = QColor("#E15759"); break;
+            case aegis::rules::Severity::Warning: vcolor = QColor("#F28E2B"); break;
+            case aegis::rules::Severity::Fatal: vcolor = QColor("#E15759"); break;
+            default: vcolor = QColor("#4C78A8"); break;
+        }
+
         for (const auto& item : m_scene.items) {
             if (!item_matches_violation_location(item, violation.location)) {
                 continue;
             }
+            m_violation_item_colors[item.id] = vcolor;
             if (!item.bounds.valid) {
                 continue;
             }

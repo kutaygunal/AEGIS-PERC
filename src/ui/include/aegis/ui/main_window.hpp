@@ -95,6 +95,12 @@ public:
     bool rename_viewport_preset(const QString& old_name, const QString& new_name);
     bool delete_viewport_preset(const QString& name);
     [[nodiscard]] QStringList viewport_preset_names() const;
+
+    bool apply_visibility_preset(const QString& preset_name);
+    [[nodiscard]] QStringList visibility_preset_names() const;
+    void set_coloring_mode(const QString& mode_name);
+    [[nodiscard]] QString coloring_mode_name() const;
+
     void clear_violation_filters();
     QString current_violation_id() const;
     QString violation_details_text() const;

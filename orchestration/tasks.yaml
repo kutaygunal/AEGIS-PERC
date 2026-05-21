@@ -731,7 +731,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R LayerPanel"
       - "ctest --test-dir build --output-on-failure -R Ui"
-    status: todo
+    status: review
 
   - id: P13-008
     phase: P13

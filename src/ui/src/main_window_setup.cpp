@@ -618,6 +618,41 @@ void MainWindow::setup_actions()
         }
     });
 
+    auto* coloring_mode_menu = new QMenu("Coloring Mode", this);
+    auto* color_layer = new QAction("By Layer Color", this);
+    auto* color_type = new QAction("By Object Type", this);
+    auto* color_domain = new QAction("By Domain", this);
+    auto* color_violation = new QAction("By Violation Context", this);
+    color_layer->setCheckable(true);
+    color_type->setCheckable(true);
+    color_domain->setCheckable(true);
+    color_violation->setCheckable(true);
+    color_layer->setChecked(true);
+    coloring_mode_menu->addAction(color_layer);
+    coloring_mode_menu->addAction(color_type);
+    coloring_mode_menu->addAction(color_domain);
+    coloring_mode_menu->addAction(color_violation);
+    m_impl->actions.emplace("color_layer", color_layer);
+    m_impl->actions.emplace("color_type", color_type);
+    m_impl->actions.emplace("color_domain", color_domain);
+    m_impl->actions.emplace("color_violation", color_violation);
+    connect(color_layer, &QAction::triggered, this, [this]() { set_coloring_mode("Layer Color"); });
+    connect(color_type, &QAction::triggered, this, [this]() { set_coloring_mode("Object Type"); });
+    connect(color_domain, &QAction::triggered, this, [this]() { set_coloring_mode("Domain"); });
+    connect(color_violation, &QAction::triggered, this, [this]() { set_coloring_mode("Violation Context"); });
+    m_impl->actions.emplace("coloring_mode_menu", coloring_mode_menu->menuAction());
+
+    auto* visibility_preset_menu = new QMenu("Visibility Presets", this);
+    const QStringList preset_names = visibility_preset_names();
+    for (const QString& preset_name : preset_names) {
+        auto* action = new QAction(preset_name, this);
+        visibility_preset_menu->addAction(action);
+        connect(action, &QAction::triggered, this, [this, preset_name]() {
+            Q_UNUSED(apply_visibility_preset(preset_name));
+        });
+    }
+    m_impl->actions.emplace("visibility_preset_menu", visibility_preset_menu->menuAction());
+
     auto* about = register_action("about", "&About AEGIS-PERC", QKeySequence(), false,
                                   "Show product and workspace information");
     connect(about, &QAction::triggered, this, [this]() {
@@ -754,6 +789,8 @@ void MainWindow::setup_menus()
     connect(m_impl->workspace_views_menu, &QMenu::aboutToShow, this, &MainWindow::refresh_workspace_view_menu);
     m_impl->viewport_presets_menu = viewMenu->addMenu("Viewport &Presets");
     connect(m_impl->viewport_presets_menu, &QMenu::aboutToShow, this, &MainWindow::refresh_viewport_preset_menu);
+    viewMenu->addAction(m_impl->actions.at("visibility_preset_menu"));
+    viewMenu->addAction(m_impl->actions.at("coloring_mode_menu"));
 
     // Tools
     QMenu* toolsMenu = m_impl->menu_bar->addMenu("&Tools");
@@ -1798,6 +1835,15 @@ void MainWindow::update_action_states()
     m_impl->actions.at("manage_workspace_views")->setEnabled(!m_impl->workspace_views.empty());
     m_impl->actions.at("save_viewport_preset")->setEnabled(has_scene);
     m_impl->actions.at("manage_viewport_presets")->setEnabled(!m_impl->viewport_presets.empty());
+    m_impl->actions.at("visibility_preset_menu")->setEnabled(has_scene);
+    m_impl->actions.at("coloring_mode_menu")->setEnabled(has_scene);
+    if (m_impl->canvas != nullptr) {
+        const QString mode = coloring_mode_name();
+        m_impl->actions.at("color_layer")->setChecked(mode == "Layer Color");
+        m_impl->actions.at("color_type")->setChecked(mode == "Object Type");
+        m_impl->actions.at("color_domain")->setChecked(mode == "Domain");
+        m_impl->actions.at("color_violation")->setChecked(mode == "Violation Context");
+    }
     m_impl->actions.at("zoom_to_selection")->setEnabled(has_scene && has_selection);
     m_impl->actions.at("zoom_to_violations")->setEnabled(has_scene && has_violations);
     m_impl->actions.at("zoom_to_trace")->setEnabled(has_scene && has_active_trace);

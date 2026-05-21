@@ -753,6 +753,68 @@ QStringList MainWindow::viewport_preset_names() const
     return saved_entry_names(m_impl->viewport_presets);
 }
 
+bool MainWindow::apply_visibility_preset(const QString& preset_name)
+{
+    if (m_impl->layer_panel == nullptr) {
+        return false;
+    }
+    VisibilityPreset preset = VisibilityPreset::All;
+    if (preset_name.compare("Routing Only", Qt::CaseInsensitive) == 0) {
+        preset = VisibilityPreset::RoutingOnly;
+    } else if (preset_name.compare("Macros Only", Qt::CaseInsensitive) == 0) {
+        preset = VisibilityPreset::MacrosOnly;
+    } else if (preset_name.compare("Pins & Ports", Qt::CaseInsensitive) == 0) {
+        preset = VisibilityPreset::PinsAndPorts;
+    } else if (preset_name.compare("Power Focused", Qt::CaseInsensitive) == 0) {
+        preset = VisibilityPreset::PowerFocused;
+    } else if (preset_name.compare("Violation Review", Qt::CaseInsensitive) == 0) {
+        preset = VisibilityPreset::ViolationReview;
+    }
+    m_impl->layer_panel->apply_visibility_preset(preset);
+    return true;
+}
+
+QStringList MainWindow::visibility_preset_names() const
+{
+    return QStringList{
+        "All Layers",
+        "Routing Only",
+        "Macros Only",
+        "Pins & Ports",
+        "Power Focused",
+        "Violation Review",
+    };
+}
+
+void MainWindow::set_coloring_mode(const QString& mode_name)
+{
+    if (m_impl->canvas == nullptr) {
+        return;
+    }
+    ColoringMode mode = ColoringMode::LayerColor;
+    if (mode_name.compare("Object Type", Qt::CaseInsensitive) == 0) {
+        mode = ColoringMode::ObjectType;
+    } else if (mode_name.compare("Domain", Qt::CaseInsensitive) == 0) {
+        mode = ColoringMode::Domain;
+    } else if (mode_name.compare("Violation Context", Qt::CaseInsensitive) == 0) {
+        mode = ColoringMode::ViolationContext;
+    }
+    m_impl->canvas->set_coloring_mode(mode);
+}
+
+QString MainWindow::coloring_mode_name() const
+{
+    if (m_impl->canvas == nullptr) {
+        return "Layer Color";
+    }
+    switch (m_impl->canvas->coloring_mode()) {
+        case ColoringMode::ObjectType: return "Object Type";
+        case ColoringMode::Domain: return "Domain";
+        case ColoringMode::ViolationContext: return "Violation Context";
+        default: return "Layer Color";
+    }
+}
+
 void MainWindow::clear_violation_filters()
 {
     if (m_impl->violation_explorer != nullptr) {

@@ -4,6 +4,9 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QPushButton>
+#include <QComboBox>
+#include <QComboBox>
+#include <set>
 #include <QVBoxLayout>
 
 namespace aegis::ui {
@@ -30,6 +33,21 @@ LayerPanel::LayerPanel(QWidget* parent)
     buttons->addWidget(m_hide_all_button);
     buttons->addWidget(m_isolate_button);
     layout->addLayout(buttons);
+
+    m_preset_combo = new QComboBox(this);
+    m_preset_combo->addItem("All Layers", QVariant::fromValue(static_cast<int>(VisibilityPreset::All)));
+    m_preset_combo->addItem("Routing Only", QVariant::fromValue(static_cast<int>(VisibilityPreset::RoutingOnly)));
+    m_preset_combo->addItem("Macros Only", QVariant::fromValue(static_cast<int>(VisibilityPreset::MacrosOnly)));
+    m_preset_combo->addItem("Pins & Ports", QVariant::fromValue(static_cast<int>(VisibilityPreset::PinsAndPorts)));
+    m_preset_combo->addItem("Power Focused", QVariant::fromValue(static_cast<int>(VisibilityPreset::PowerFocused)));
+    m_preset_combo->addItem("Violation Review", QVariant::fromValue(static_cast<int>(VisibilityPreset::ViolationReview)));
+    layout->addWidget(m_preset_combo);
+
+    connect(m_preset_combo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+        if (m_updating) return;
+        const int preset_value = m_preset_combo->itemData(index).toInt();
+        apply_visibility_preset(static_cast<VisibilityPreset>(preset_value));
+    });
 
     connect(m_show_all_button, &QPushButton::clicked, this, &LayerPanel::show_all_layers);
     connect(m_hide_all_button, &QPushButton::clicked, this, &LayerPanel::hide_all_layers);
@@ -58,6 +76,7 @@ void LayerPanel::set_layers(const std::vector<SceneLayer>& layers)
         auto* item = new QListWidgetItem(QString::fromStdString(layer.name), m_list);
         item->setData(kLayerNameRole, QString::fromStdString(layer.name));
         item->setData(kLayerColorRole, QString::fromStdString(layer.color));
+        item->setData(Qt::UserRole + 3, QVariant::fromValue(static_cast<int>(layer.category)));
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsSelectable | Qt::ItemIsEnabled);
         item->setCheckState(Qt::Checked);
         update_item_presentation(item);
@@ -125,6 +144,79 @@ void LayerPanel::isolate_layer(const QString& layer_name)
         const QString name = m_list->item(i)->data(kLayerNameRole).toString();
         set_layer_visible(name, name == layer_name);
     }
+}
+
+
+std::vector<std::pair<QString, SceneLayerCategory>> LayerPanel::layer_categories() const
+{
+    std::vector<std::pair<QString, SceneLayerCategory>> result;
+    for (int i = 0; i < m_list->count(); ++i) {
+        auto* item = m_list->item(i);
+        result.emplace_back(item->data(kLayerNameRole).toString(),
+                            static_cast<SceneLayerCategory>(item->data(Qt::UserRole + 3).toInt()));
+    }
+    return result;
+}
+
+void LayerPanel::apply_visibility_preset(VisibilityPreset preset)
+{
+    m_current_preset = preset;
+    if (preset == VisibilityPreset::All) {
+        show_all_layers();
+        return;
+    }
+
+    std::set<SceneLayerCategory> visible_categories;
+    switch (preset) {
+        case VisibilityPreset::RoutingOnly:
+            visible_categories = {SceneLayerCategory::Routing, SceneLayerCategory::CutVia};
+            break;
+        case VisibilityPreset::MacrosOnly:
+            visible_categories = {SceneLayerCategory::Instance};
+            break;
+        case VisibilityPreset::PinsAndPorts:
+            visible_categories = {SceneLayerCategory::Pin};
+            break;
+        case VisibilityPreset::PowerFocused:
+            visible_categories = {SceneLayerCategory::Routing, SceneLayerCategory::CutVia, SceneLayerCategory::Pin};
+            break;
+        case VisibilityPreset::ViolationReview:
+            visible_categories = {SceneLayerCategory::Routing, SceneLayerCategory::Pin, SceneLayerCategory::Instance,
+                                  SceneLayerCategory::CutVia, SceneLayerCategory::Blockage};
+            break;
+        default:
+            break;
+    }
+
+    for (int i = 0; i < m_list->count(); ++i) {
+        auto* item = m_list->item(i);
+        const QString name = item->data(kLayerNameRole).toString();
+        const auto category = static_cast<SceneLayerCategory>(item->data(Qt::UserRole + 3).toInt());
+        const bool visible = visible_categories.count(category) > 0;
+        set_layer_visible(name, visible);
+    }
+
+    m_updating = true;
+    const int target_index = m_preset_combo->findData(QVariant::fromValue(static_cast<int>(preset)));
+    if (target_index >= 0 && m_preset_combo->currentIndex() != target_index) {
+        m_preset_combo->setCurrentIndex(target_index);
+    }
+    m_updating = false;
+}
+
+void LayerPanel::set_category_visible(SceneLayerCategory category, bool visible)
+{
+    for (int i = 0; i < m_list->count(); ++i) {
+        auto* item = m_list->item(i);
+        if (static_cast<SceneLayerCategory>(item->data(Qt::UserRole + 3).toInt()) == category) {
+            set_layer_visible(item->data(kLayerNameRole).toString(), visible);
+        }
+    }
+}
+
+VisibilityPreset LayerPanel::current_visibility_preset() const noexcept
+{
+    return m_current_preset;
 }
 
 void LayerPanel::update_item_presentation(QListWidgetItem* item)

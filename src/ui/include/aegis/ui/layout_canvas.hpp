@@ -75,6 +75,9 @@ public:
     [[nodiscard]] int unresolved_violation_count() const noexcept;
     [[nodiscard]] const std::vector<ViolationOverlayItem>& violation_overlays() const noexcept;
 
+    void set_coloring_mode(ColoringMode mode);
+    [[nodiscard]] ColoringMode coloring_mode() const noexcept;
+
     void set_layer_visibility(const std::string& layer_name, bool visible);
     [[nodiscard]] bool layer_visibility(const std::string& layer_name) const;
     void show_all_layers();
@@ -153,6 +156,8 @@ private:
     std::vector<ViolationOverlayItem> m_violation_overlays;
     bool m_violation_overlays_visible = true;
     int m_unresolved_violation_count = 0;
+    ColoringMode m_coloring_mode = ColoringMode::LayerColor;
+    std::map<std::string, QColor> m_violation_item_colors;
 
     struct LodCacheEntry {
         std::size_t item_index = 0;
@@ -164,6 +169,7 @@ private:
     void rebuild_lod_cache();
     void invalidate_lod_cache() noexcept;
     [[nodiscard]] double hit_test_distance_scene(const SceneItem& item, const QPointF& scene_point) const;
+    [[nodiscard]] QColor color_for_item(const SceneItem& item) const;
     void paint_grid(QPainter& painter);
     std::size_t paint_scene(QPainter& painter);
     std::size_t paint_heatmap(QPainter& painter);

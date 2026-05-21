@@ -98,7 +98,59 @@ void expand_bounds(SceneBounds& target, const SceneBounds& source)
 struct LayerStyle {
     std::string color = kFallbackColor;
     int z_order = 0;
+    SceneLayerCategory category = SceneLayerCategory::Unknown;
 };
+
+
+[[nodiscard]] SceneLayerCategory classify_layer(const std::string& name, const std::string& purpose)
+{
+    auto lower = [](std::string value) {
+        for (char& ch : value) {
+            ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        }
+        return value;
+    };
+
+    const std::string n = lower(name);
+    const std::string p = lower(purpose);
+
+    if (n.find("via") != std::string::npos || n.find("cut") != std::string::npos) {
+        return SceneLayerCategory::CutVia;
+    }
+    if (n.find("pin") != std::string::npos || n.find("port") != std::string::npos) {
+        return SceneLayerCategory::Pin;
+    }
+    if (n.find("blockage") != std::string::npos || n.find("obs") != std::string::npos) {
+        return SceneLayerCategory::Blockage;
+    }
+    if (n.find("annotation") != std::string::npos || n.find("label") != std::string::npos || n.find("text") != std::string::npos) {
+        return SceneLayerCategory::Annotation;
+    }
+    if (n.find("poly") != std::string::npos || n.find("diff") != std::string::npos ||
+        n.find("well") != std::string::npos || n.find("active") != std::string::npos ||
+        n.find("implant") != std::string::npos || n.find("contact") != std::string::npos) {
+        return SceneLayerCategory::Technology;
+    }
+    if (n.find("metal") != std::string::npos || n.find("route") != std::string::npos ||
+        (n.size() >= 2 && n[0] == 'm' && std::isdigit(static_cast<unsigned char>(n[1])))) {
+        return SceneLayerCategory::Routing;
+    }
+
+    if (p.find("route") != std::string::npos || p.find("wire") != std::string::npos) {
+        return SceneLayerCategory::Routing;
+    }
+    if (p.find("pin") != std::string::npos || p.find("port") != std::string::npos) {
+        return SceneLayerCategory::Pin;
+    }
+    if (p.find("via") != std::string::npos || p.find("cut") != std::string::npos) {
+        return SceneLayerCategory::CutVia;
+    }
+    if (p.find("block") != std::string::npos || p.find("obs") != std::string::npos) {
+        return SceneLayerCategory::Blockage;
+    }
+
+    return SceneLayerCategory::Unknown;
+}
 
 [[nodiscard]] std::unordered_map<std::string, LayerStyle> build_layer_style_map(
     const aegis::parsing::LayoutIR& ir)
@@ -107,7 +159,7 @@ struct LayerStyle {
     for (std::size_t i = 0; i < ir.layers.size(); ++i) {
         const auto& layer = ir.layers[i];
         const std::string color = layer.color.empty() ? std::string{kFallbackColor} : layer.color;
-        styles[layer.name] = LayerStyle{color, layer.order};
+        styles[layer.name] = LayerStyle{color, layer.order, classify_layer(layer.name, layer.purpose)};
     }
     return styles;
 }
@@ -261,6 +313,7 @@ UiScene build_ui_scene(const aegis::parsing::LayoutIR& ir)
             layer.color.empty() ? std::string{kFallbackColor} : layer.color,
             layer.order,
             i,
+            classify_layer(layer.name, layer.purpose),
         });
     }
 
@@ -277,6 +330,7 @@ UiScene build_ui_scene(const aegis::parsing::LayoutIR& ir)
         item.layer_name = geometry.layer;
         item.color = style.color;
         item.z_order = style.z_order;
+        item.layer_category = style.category;
         item.source_metadata = {
             {"source", "LayoutIR.geometries"},
             {"source_index", std::to_string(i)},
@@ -310,6 +364,7 @@ UiScene build_ui_scene(const aegis::parsing::LayoutIR& ir)
         item.layer_name = layer_name;
         item.color = style.color;
         item.z_order = style.z_order;
+        item.layer_category = SceneLayerCategory::Pin;
         item.source_metadata = {
             {"source", "LayoutIR.ports"},
             {"source_index", std::to_string(i)},
@@ -336,6 +391,7 @@ UiScene build_ui_scene(const aegis::parsing::LayoutIR& ir)
         item.layer_name = layer_name;
         item.color = style.color;
         item.z_order = style.z_order;
+        item.layer_category = SceneLayerCategory::Annotation;
         item.source_metadata = {
             {"source", "LayoutIR.annotations"},
             {"source_index", std::to_string(i)},
@@ -377,7 +433,7 @@ ImportedSceneBuildResult build_imported_design_scene(const aegis::storage::Impor
             return;
         }
         const std::size_t index = result.scene.layers.size();
-        result.scene.layers.push_back(SceneLayer{layer_id(layer_name, index), layer_name, purpose, color, z_order, index});
+        result.scene.layers.push_back(SceneLayer{layer_id(layer_name, index), layer_name, purpose, color, z_order, index, classify_layer(layer_name, purpose)});
         layer_indices.emplace(layer_name, index);
     };
 
@@ -475,6 +531,7 @@ ImportedSceneBuildResult build_imported_design_scene(const aegis::storage::Impor
         item.layer_name = "__instance__";
         item.color = "#4C78A8";
         item.z_order = 50;
+        item.layer_category = SceneLayerCategory::Instance;
         const aegis::parsing::Rectangle rectangle{x, y, width, height};
         item.bounds = bounds_from_rectangle(rectangle);
         item.points = rectangle_points(rectangle);
@@ -501,6 +558,7 @@ ImportedSceneBuildResult build_imported_design_scene(const aegis::storage::Impor
         item.layer_name = "__diearea__";
         item.color = "#999999";
         item.z_order = -100;
+        item.layer_category = SceneLayerCategory::DieArea;
         item.bounds = bounds_from_rectangle(*diearea);
         item.points = rectangle_points(*diearea);
         item.source_metadata = {
@@ -525,6 +583,7 @@ ImportedSceneBuildResult build_imported_design_scene(const aegis::storage::Impor
         item.layer_name = "__diearea__";
         item.color = "#999999";
         item.z_order = -90;
+        item.layer_category = SceneLayerCategory::Annotation;
         item.points.push_back({x, y});
         item.bounds = SceneBounds{x, y, x, y, true};
         item.source_metadata = {

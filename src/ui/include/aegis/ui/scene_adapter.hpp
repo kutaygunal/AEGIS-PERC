@@ -51,6 +51,25 @@ enum class SceneShapeKind {
     Point,
 };
 
+enum class SceneLayerCategory {
+    Unknown,
+    Technology,
+    Routing,
+    CutVia,
+    Pin,
+    Blockage,
+    Annotation,
+    Instance,
+    DieArea,
+};
+
+enum class ColoringMode {
+    LayerColor,
+    ObjectType,
+    Domain,
+    ViolationContext,
+};
+
 struct SceneLayer {
     std::string id;
     std::string name;
@@ -58,6 +77,7 @@ struct SceneLayer {
     std::string color;
     int         z_order = 0;
     std::size_t source_index = 0;
+    SceneLayerCategory category = SceneLayerCategory::Unknown;
 
     bool operator==(const SceneLayer& other) const noexcept = default;
 };
@@ -72,6 +92,7 @@ struct SceneItem {
     SceneBounds bounds;
     std::vector<ScenePoint> points;
     std::map<std::string, std::string> source_metadata;
+    SceneLayerCategory layer_category = SceneLayerCategory::Unknown;
 
     bool operator==(const SceneItem& other) const noexcept = default;
 };
