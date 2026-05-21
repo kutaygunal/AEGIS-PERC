@@ -235,6 +235,7 @@ void MainWindow::set_scene(UiScene scene)
 {
     m_impl->owned_graph.reset();
     m_impl->sample_mode_active = false;
+    m_impl->last_coverage_summary.reset();
     set_connectivity_graph(nullptr);
 
     if (m_impl->layer_panel != nullptr) {
@@ -1438,6 +1439,64 @@ QString MainWindow::loaded_import_design_session_summary_text() const
 QString MainWindow::workspace_summary_text() const
 {
     return m_impl->last_workspace_summary_text;
+}
+
+bool MainWindow::has_coverage_summary() const
+{
+    return m_impl->last_coverage_summary.has_value();
+}
+
+QString MainWindow::coverage_summary_text() const
+{
+    if (!m_impl->last_coverage_summary.has_value()) {
+        return {};
+    }
+    const auto& cov = *m_impl->last_coverage_summary;
+    QStringList lines;
+    lines.append(QString("Coverage: %1 / %2 objects rendered (%3%)")
+        .arg(cov.rendered_objects)
+        .arg(cov.total_objects)
+        .arg(QString::number(cov.coverage_ratio() * 100.0, 'f', 1)));
+    if (cov.skipped_instances > 0) {
+        lines.append(QString("Skipped instances: %1").arg(cov.skipped_instances));
+    }
+    if (cov.fallback_sized_instances > 0) {
+        lines.append(QString("Fallback-sized instances: %1").arg(cov.fallback_sized_instances));
+    }
+    if (cov.session_errors > 0) {
+        lines.append(QString("Session errors: %1").arg(cov.session_errors));
+    }
+    if (cov.unresolved_references > 0) {
+        lines.append(QString("Unresolved references: %1").arg(cov.unresolved_references));
+    }
+    if (!cov.coverage_diagnostics.empty()) {
+        lines.append("Diagnostics:");
+        for (const auto& diag : cov.coverage_diagnostics) {
+            lines.append(QString("  - %1").arg(QString::fromStdString(diag)));
+        }
+    }
+    return lines.join("\n");
+}
+
+int MainWindow::coverage_skipped_count() const
+{
+    return m_impl->last_coverage_summary.has_value()
+        ? static_cast<int>(m_impl->last_coverage_summary->skipped_instances)
+        : 0;
+}
+
+int MainWindow::coverage_fallback_count() const
+{
+    return m_impl->last_coverage_summary.has_value()
+        ? static_cast<int>(m_impl->last_coverage_summary->fallback_sized_instances)
+        : 0;
+}
+
+bool MainWindow::coverage_has_issues() const
+{
+    return m_impl->last_coverage_summary.has_value()
+        ? m_impl->last_coverage_summary->has_issues()
+        : false;
 }
 
 int MainWindow::diagnostics_entry_count() const

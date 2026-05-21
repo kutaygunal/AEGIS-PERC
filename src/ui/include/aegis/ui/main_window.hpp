@@ -182,6 +182,11 @@ public:
     QString loaded_import_project_name() const;
     QString loaded_import_design_session_summary_text() const;
     QString workspace_summary_text() const;
+    bool has_coverage_summary() const;
+    QString coverage_summary_text() const;
+    int coverage_skipped_count() const;
+    int coverage_fallback_count() const;
+    bool coverage_has_issues() const;
     int diagnostics_entry_count() const;
     QString diagnostics_details_text() const;
     bool set_diagnostics_severity_filter(const QString& severity);

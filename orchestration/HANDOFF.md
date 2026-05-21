@@ -4,10 +4,10 @@
 2026-05-21
 
 ## Current Status
-`P13-007` is complete and under review: layer semantics, route coloring, and physical visibility presets are implemented and all 142 UI tests pass.
+`P13-008` is complete and under review: import completeness and unsupported-content coverage surfaces are now shown directly in the active design workspace.
 
 ## Last Completed Task
-`P13-007` ??? Introduce imported-design layer semantics, route coloring, and physical visibility presets
+`P13-008` ??? Show import completeness and unsupported-content coverage directly in the active design workspace
 
 ## Current Task
 No implementation task in progress
@@ -19,29 +19,32 @@ No implementation task in progress
 - None recorded in the current trimmed `tasks.yaml`
 
 ## Important Notes
-- `SceneLayerCategory` enum added to `scene_adapter.hpp` with categories: Unknown, Technology, Routing, CutVia, Pin, Blockage, Annotation, Instance, DieArea.
-- `classify_layer()` uses name and purpose heuristics to categorize layers without hardcoding a single foundry or LEF convention.
-- `LayerPanel` now supports `VisibilityPreset` enum (All, RoutingOnly, MacrosOnly, PinsAndPorts, PowerFocused, ViolationReview) via a combo box and `apply_visibility_preset()` API.
-- `LayoutCanvas` now supports `ColoringMode` enum (LayerColor, ObjectType, Domain, ViolationContext) via `set_coloring_mode()`. ObjectType renders distinct colors per category; ViolationContext tints items by severity when they match unresolved violations.
-- `MainWindow` wires View-menu actions for both visibility presets and coloring modes, with test accessors for headless verification.
-- All presets are reversible and non-destructive; the underlying scene data is never mutated.
-- Unsupported layer semantics degrade to `Unknown` with generic gray coloring in object-type mode.
+- `DesignCoverageSummary` struct added to `scene_adapter.hpp` with fields for total/rendered objects, skipped/fallback instances, session diagnostics by severity, unresolved references, and scene content flags (die area, instances, routes, pins, annotations).
+- `build_design_coverage_summary()` compares `ImportedDesignSession` objects against rendered `UiScene` items to compute coverage ratios.
+- `MainWindow::apply_import_package()` now computes and stores a `DesignCoverageSummary` after loading the imported scene.
+- `refresh_workspace_summary()` appends coverage lines to the workspace summary label when a coverage summary is present, including:
+  - Objects rendered vs total with percentage
+  - Skipped instances count (if any)
+  - Fallback-sized instances count (if any)
+  - Session errors (if any)
+  - Unresolved references (if any)
+  - Scene build diagnostics from `ImportedSceneBuildResult`
+- Test accessors added to `MainWindow`: `has_coverage_summary()`, `coverage_summary_text()`, `coverage_skipped_count()`, `coverage_fallback_count()`, `coverage_has_issues()`.
+- Coverage summary is cleared when loading a bundled sample or custom scene, so it only appears for imported designs.
 - Files touched:
   - `src/ui/include/aegis/ui/scene_adapter.hpp`
-  - `src/ui/include/aegis/ui/layer_panel.hpp`
-  - `src/ui/include/aegis/ui/layout_canvas.hpp`
-  - `src/ui/include/aegis/ui/main_window.hpp`
   - `src/ui/src/scene_adapter.cpp`
-  - `src/ui/src/layer_panel.cpp`
-  - `src/ui/src/layout_canvas.cpp`
+  - `src/ui/src/main_window_state.hpp`
   - `src/ui/src/main_window.cpp`
   - `src/ui/src/main_window_setup.cpp`
+  - `src/ui/include/aegis/ui/main_window.hpp`
   - `tests/CMakeLists.txt`
-  - `tests/unit/ui/test_layer_semantics.cpp`
-  - `tests/unit/ui/test_canvas_coloring.cpp`
+  - `tests/unit/ui/test_coverage_summary.cpp`
 - Validation run:
   - `cmake --build build --config Release` ???
-  - `ctest --test-dir build -C Release --output-on-failure` ??? (142 UI tests pass, total suite green)
+  - `ctest --test-dir build -C Release --output-on-failure -R ImportWizard` ???
+  - `ctest --test-dir build -C Release --output-on-failure -R UiStates` ???
+  - `ctest --test-dir build -C Release --output-on-failure` ??? (full suite green, 144 UI tests)
 
 ## Next Recommended Action
 Start `P13-FOLLOW-001` by migrating `HierarchyBrowserPanel` from `QTreeWidget` to `QAbstractItemModel` + `QTreeView` with on-demand lazy loading for million-object scalability, or pick up the next ready task from `tasks.yaml`.

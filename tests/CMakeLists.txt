@@ -32,6 +32,7 @@ add_executable(aegis_unit_tests
     unit/ui/test_layer_semantics.cpp
     unit/ui/test_canvas_selection.cpp
     unit/ui/test_canvas_coloring.cpp
+    unit/ui/test_coverage_summary.cpp
     unit/ui/test_violation_overlay.cpp
     unit/ui/test_violation_explorer.cpp
     unit/ui/test_violation_filter.cpp

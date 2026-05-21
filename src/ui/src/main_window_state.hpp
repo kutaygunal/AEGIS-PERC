@@ -2,6 +2,7 @@
 
 #include "aegis/ui/main_window.hpp"
 #include "aegis/ui/violation_filter.hpp"
+#include "aegis/ui/scene_adapter.hpp"
 
 #include <QByteArray>
 #include <QDateTime>
@@ -178,6 +179,7 @@ struct MainWindow::Impl {
     std::optional<aegis::orchestration::JobProgressSnapshot> last_job_snapshot;
     std::filesystem::path active_job_output_dir;
     QString last_workspace_summary_text;
+    std::optional<DesignCoverageSummary> last_coverage_summary;
     std::vector<aegis::rules::Violation> latest_violations;
     std::vector<DiagnosticEntry> diagnostics_entries;
     QStringList recent_project_paths;

@@ -753,7 +753,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R ImportWizard"
       - "ctest --test-dir build --output-on-failure -R UiStates"
-    status: todo
+    status: review
 
   - id: P13-009
     phase: P13

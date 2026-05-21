@@ -116,4 +116,37 @@ struct ImportedSceneBuildResult {
 [[nodiscard]] ImportedSceneBuildResult build_imported_design_scene(const aegis::storage::ImportedDesignSession& session);
 
 
+
+// ---------------------------------------------------------------------------
+// Design coverage summary
+//
+// Read-only presentation of what was rendered, skipped, or unsupported
+// during imported-design scene realization.
+// ---------------------------------------------------------------------------
+
+struct DesignCoverageSummary {
+    std::size_t total_artifacts = 0;
+    std::size_t total_objects = 0;
+    std::size_t rendered_objects = 0;
+    std::size_t skipped_instances = 0;
+    std::size_t fallback_sized_instances = 0;
+    std::size_t session_diagnostics = 0;
+    std::size_t session_errors = 0;
+    std::size_t session_warnings = 0;
+    std::size_t unresolved_references = 0;
+    bool has_die_area = false;
+    bool has_instances = false;
+    bool has_routes = false;
+    bool has_pins = false;
+    bool has_annotations = false;
+    std::vector<std::string> coverage_diagnostics;
+
+    [[nodiscard]] double coverage_ratio() const noexcept;
+    [[nodiscard]] bool has_issues() const noexcept;
+};
+
+[[nodiscard]] DesignCoverageSummary build_design_coverage_summary(
+    const aegis::storage::ImportedDesignSession& session,
+    const UiScene& scene);
+
 } // namespace aegis::ui

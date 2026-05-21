@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cctype>
 #include <sstream>
+#include <set>
 #include <unordered_map>
 
 namespace aegis::ui {
@@ -624,6 +625,68 @@ ImportedSceneBuildResult build_imported_design_scene(const aegis::storage::Impor
     });
 
     return result;
+}
+
+
+double DesignCoverageSummary::coverage_ratio() const noexcept
+{
+    if (total_objects == 0) {
+        return 0.0;
+    }
+    return static_cast<double>(rendered_objects) / static_cast<double>(total_objects);
+}
+
+bool DesignCoverageSummary::has_issues() const noexcept
+{
+    return skipped_instances > 0 || fallback_sized_instances > 0 || session_errors > 0 || unresolved_references > 0;
+}
+
+DesignCoverageSummary build_design_coverage_summary(
+    const aegis::storage::ImportedDesignSession& session,
+    const UiScene& scene)
+{
+    DesignCoverageSummary summary;
+    summary.total_artifacts = session.package().artifacts().size();
+    summary.total_objects = session.objects().size();
+    summary.rendered_objects = 0;
+    summary.session_diagnostics = session.diagnostics().size();
+    summary.unresolved_references = session.unresolved_graph_references().size();
+
+    for (const auto& diag : session.diagnostics()) {
+        if (diag.severity == aegis::storage::SessionDiagnosticSeverity::Error) {
+            ++summary.session_errors;
+        } else if (diag.severity == aegis::storage::SessionDiagnosticSeverity::Warning) {
+            ++summary.session_warnings;
+        }
+    }
+
+    std::set<std::string> rendered_ids;
+    for (const auto& item : scene.items) {
+        if (!item.id.empty()) {
+            rendered_ids.insert(item.id);
+        }
+    }
+    for (const auto& object : session.objects()) {
+        if (rendered_ids.count(object.stable_id) > 0) {
+            ++summary.rendered_objects;
+        }
+    }
+
+    for (const auto& item : scene.items) {
+        if (item.layer_category == SceneLayerCategory::DieArea) {
+            summary.has_die_area = true;
+        } else if (item.layer_category == SceneLayerCategory::Instance) {
+            summary.has_instances = true;
+        } else if (item.layer_category == SceneLayerCategory::Routing) {
+            summary.has_routes = true;
+        } else if (item.layer_category == SceneLayerCategory::Pin) {
+            summary.has_pins = true;
+        } else if (item.layer_category == SceneLayerCategory::Annotation) {
+            summary.has_annotations = true;
+        }
+    }
+
+    return summary;
 }
 
 } // namespace aegis::ui

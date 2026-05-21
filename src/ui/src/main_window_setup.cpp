@@ -1176,6 +1176,8 @@ void MainWindow::apply_import_package()
 
     const auto imported_scene = build_imported_design_scene(*m_impl->loaded_import_session);
     set_scene(imported_scene.scene);
+    m_impl->last_coverage_summary = build_design_coverage_summary(*m_impl->loaded_import_session, imported_scene.scene);
+    m_impl->last_coverage_summary->coverage_diagnostics = imported_scene.diagnostics;
     set_connectivity_graph(&m_impl->loaded_import_session->graph());
     set_violations({});
 
@@ -1271,12 +1273,42 @@ void MainWindow::refresh_workspace_summary()
     }
 
     const int violation_count = m_impl->violation_explorer != nullptr ? m_impl->violation_explorer->total_violation_count() : 0;
-    m_impl->last_workspace_summary_text = QString("Project: %1\nMode: %2\nArtifacts: %3\nRule source: %4\nViolations: %5\nReadiness: %6")
-        .arg(project_name, mode)
-        .arg(artifact_count)
-        .arg(rule_source)
-        .arg(violation_count)
-        .arg(readiness);
+    QStringList summary_lines;
+    summary_lines.append(QString("Project: %1").arg(project_name));
+    summary_lines.append(QString("Mode: %1").arg(mode));
+    summary_lines.append(QString("Artifacts: %1").arg(artifact_count));
+    summary_lines.append(QString("Rule source: %1").arg(rule_source));
+    summary_lines.append(QString("Violations: %1").arg(violation_count));
+    summary_lines.append(QString("Readiness: %1").arg(readiness));
+
+    if (m_impl->last_coverage_summary.has_value()) {
+        const auto& cov = *m_impl->last_coverage_summary;
+        summary_lines.append("Coverage:");
+        summary_lines.append(QString("  Objects: %1 / %2 rendered (%3%)")
+            .arg(cov.rendered_objects)
+            .arg(cov.total_objects)
+            .arg(QString::number(cov.coverage_ratio() * 100.0, 'f', 1)));
+        if (cov.skipped_instances > 0) {
+            summary_lines.append(QString("  Skipped instances: %1").arg(cov.skipped_instances));
+        }
+        if (cov.fallback_sized_instances > 0) {
+            summary_lines.append(QString("  Fallback-sized instances: %1").arg(cov.fallback_sized_instances));
+        }
+        if (cov.session_errors > 0) {
+            summary_lines.append(QString("  Session errors: %1").arg(cov.session_errors));
+        }
+        if (cov.unresolved_references > 0) {
+            summary_lines.append(QString("  Unresolved references: %1").arg(cov.unresolved_references));
+        }
+        if (!cov.coverage_diagnostics.empty()) {
+            summary_lines.append("  Diagnostics:");
+            for (const auto& diag : cov.coverage_diagnostics) {
+                summary_lines.append(QString("    - %1").arg(QString::fromStdString(diag)));
+            }
+        }
+    }
+
+    m_impl->last_workspace_summary_text = summary_lines.join("\n");
     if (m_impl->workspace_summary_label != nullptr) {
         m_impl->workspace_summary_label->setText(m_impl->last_workspace_summary_text);
     }
