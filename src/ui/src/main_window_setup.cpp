@@ -1171,11 +1171,131 @@ void MainWindow::apply_import_package()
     m_impl->has_loaded_import_package = true;
     m_impl->sample_mode_active = false;
 
-    aegis::storage::ImportedDesignSessionBuilder session_builder;
-    m_impl->loaded_import_session = std::make_unique<aegis::storage::ImportedDesignSession>(
-        session_builder.build(m_impl->loaded_import_package, m_impl->loaded_import_base_path));
+    // Clear previous realization state
+    m_impl->realization_stage = RealizationStage::None;
+    m_impl->loaded_import_session.reset();
+    m_impl->last_coverage_summary.reset();
+    set_connectivity_graph(nullptr);
+    set_violations({});
+    if (m_impl->hierarchy_browser != nullptr) {
+        m_impl->hierarchy_browser->set_session(nullptr);
+    }
+    if (m_impl->properties_panel != nullptr) {
+        m_impl->properties_panel->set_session(nullptr);
+    }
 
-    const auto imported_scene = build_imported_design_scene(*m_impl->loaded_import_session);
+    // Create and start async realization
+    m_impl->realization = std::make_unique<ImportedDesignRealization>(this);
+    connect(m_impl->realization.get(), &ImportedDesignRealization::finished,
+            this, &MainWindow::on_realization_finished);
+
+    m_impl->realization->start(m_impl->loaded_import_package, m_impl->loaded_import_base_path);
+
+    if (!m_impl->loaded_import_base_path.empty() && std::filesystem::exists(m_impl->loaded_import_base_path)) {
+        const QString recent_path = QString::fromStdString(m_impl->loaded_import_base_path.string());
+        m_impl->recent_project_paths.removeAll(recent_path);
+        m_impl->recent_project_paths.prepend(recent_path);
+        m_impl->last_successful_project_path = recent_path;
+        refresh_recent_project_actions();
+    }
+
+    publish_ui_notification("Started imported design realization", ActivityLogSeverity::Info, 2000);
+    refresh_workspace_summary();
+    update_action_states();
+
+    if (m_impl->import_review_dialog != nullptr) {
+        m_impl->import_review_dialog->close();
+    }
+}
+
+void MainWindow::finalize_active_job()
+{
+    m_jobs->finalize_active_job();
+}
+
+void MainWindow::poll_realization_progress()
+{
+    if (m_impl->realization == nullptr) {
+        if (m_impl->realization_poll_timer != nullptr) {
+            m_impl->realization_poll_timer->stop();
+        }
+        return;
+    }
+
+    const auto progress = m_impl->realization->progress();
+    if (progress.stage != m_impl->realization_stage) {
+        m_impl->realization_stage = progress.stage;
+        refresh_workspace_summary();
+    }
+
+    if (progress.finished) {
+        if (m_impl->realization_poll_timer != nullptr) {
+            m_impl->realization_poll_timer->stop();
+        }
+    }
+}
+
+void MainWindow::on_realization_finished()
+{
+    if (m_impl->realization_poll_timer != nullptr) {
+        m_impl->realization_poll_timer->stop();
+    }
+
+    auto full_result = m_impl->realization->take_result();
+    if (!full_result.has_value()) {
+        if (m_impl->realization != nullptr) {
+            m_impl->realization->disconnect();
+        }
+        refresh_workspace_summary();
+        update_action_states();
+        return;
+    }
+
+    m_impl->realization_stage = full_result->reached_stage;
+
+    if (full_result->cancelled) {
+        publish_ui_notification("Imported design realization was cancelled", ActivityLogSeverity::Warning, 4000);
+        m_impl->loaded_import_session.reset();
+        m_impl->last_coverage_summary.reset();
+        set_connectivity_graph(nullptr);
+        set_violations({});
+        if (m_impl->hierarchy_browser != nullptr) {
+            m_impl->hierarchy_browser->set_session(nullptr);
+        }
+        if (m_impl->properties_panel != nullptr) {
+            m_impl->properties_panel->set_session(nullptr);
+        }
+        if (m_impl->realization != nullptr) {
+            m_impl->realization->disconnect();
+        }
+        refresh_workspace_summary();
+        update_action_states();
+        return;
+    }
+
+    if (full_result->failed) {
+        publish_ui_notification(QString("Imported design realization failed: %1")
+            .arg(QString::fromStdString(full_result->error_message)), ActivityLogSeverity::Error, 5000);
+        m_impl->loaded_import_session.reset();
+        m_impl->last_coverage_summary.reset();
+        set_connectivity_graph(nullptr);
+        set_violations({});
+        if (m_impl->hierarchy_browser != nullptr) {
+            m_impl->hierarchy_browser->set_session(nullptr);
+        }
+        if (m_impl->properties_panel != nullptr) {
+            m_impl->properties_panel->set_session(nullptr);
+        }
+        if (m_impl->realization != nullptr) {
+            m_impl->realization->disconnect();
+        }
+        refresh_workspace_summary();
+        update_action_states();
+        return;
+    }
+
+    m_impl->loaded_import_session = std::move(full_result->session);
+    const auto& imported_scene = full_result->scene_result;
     set_scene(imported_scene.scene);
     m_impl->last_coverage_summary = build_design_coverage_summary(*m_impl->loaded_import_session, imported_scene.scene);
     m_impl->last_coverage_summary->coverage_diagnostics = imported_scene.diagnostics;
@@ -1209,18 +1329,12 @@ void MainWindow::apply_import_package()
         m_impl->last_successful_project_path = recent_path;
         refresh_recent_project_actions();
     }
+    if (m_impl->realization != nullptr) {
+        m_impl->realization->disconnect();
+    }
     refresh_workspace_summary();
     refresh_diagnostics_panel();
     update_action_states();
-
-    if (m_impl->import_review_dialog != nullptr) {
-        m_impl->import_review_dialog->close();
-    }
-}
-
-void MainWindow::finalize_active_job()
-{
-    m_jobs->finalize_active_job();
 }
 
 void MainWindow::refresh_workspace_summary()
@@ -1240,7 +1354,13 @@ void MainWindow::refresh_workspace_summary()
         rule_source = m_impl->loaded_import_package.normalized().rule_artifact_ids.empty()
             ? QString("imported package without rule pack")
             : QString("imported rule pack");
-        if (!imported_package_inputs_exist(m_impl->loaded_import_package, m_impl->loaded_import_base_path)) {
+        if (m_impl->realization != nullptr && !m_impl->realization->progress().finished) {
+            const auto progress = m_impl->realization->progress();
+            readiness = QString("Realization in progress: %1 (%2/%3); local job pipeline remains available")
+                            .arg(progress.message)
+                            .arg(progress.completed_stages)
+                            .arg(progress.total_stages);
+        } else if (!imported_package_inputs_exist(m_impl->loaded_import_package, m_impl->loaded_import_base_path)) {
             readiness = "Imported package inputs missing on disk";
         } else if (m_impl->loaded_import_package.validation_status() == aegis::storage::ValidationStatus::Invalid) {
             readiness = "Import package has blocking diagnostics";

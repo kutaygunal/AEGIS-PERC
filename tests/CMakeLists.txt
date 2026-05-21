@@ -58,6 +58,7 @@ add_executable(aegis_unit_tests
     unit/ui/test_ui_notifications.cpp
     unit/ui/test_canvas_performance.cpp
     unit/ui/test_ui_workflow.cpp
+    unit/ui/test_realization_pipeline.cpp
     unit/data/test_sample_data.cpp
     unit/graph/test_graph_minimal.cpp
     unit/graph/test_connectivity_graph.cpp

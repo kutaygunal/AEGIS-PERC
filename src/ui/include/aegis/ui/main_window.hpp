@@ -23,6 +23,8 @@ namespace aegis::ui {
 
 class JobWorkflowController;
 class DiagnosticsReportController;
+class ImportedDesignRealization;
+struct RealizationResult;
 
 // ---------------------------------------------------------------------------
 // Application shell with dockable workspace
@@ -245,6 +247,9 @@ private:
     std::unique_ptr<Impl> m_impl;
     std::unique_ptr<JobWorkflowController> m_jobs;
     std::unique_ptr<DiagnosticsReportController> m_diagnostics;
+
+    void poll_realization_progress();
+    void on_realization_finished();
 
     void setup_ui();
     void setup_actions();

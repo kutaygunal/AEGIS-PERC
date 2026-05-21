@@ -32,6 +32,8 @@ add_library(aegis_ui STATIC
     src/trace_panel.cpp
     include/aegis/ui/scene_adapter.hpp
     src/scene_adapter.cpp
+    include/aegis/ui/imported_design_realization.hpp
+    src/imported_design_realization.cpp
     include/aegis/ui/selection_model.hpp
     src/selection_model.cpp
     include/aegis/ui/violation_overlay.hpp

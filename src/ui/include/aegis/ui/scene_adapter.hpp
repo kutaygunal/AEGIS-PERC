@@ -70,6 +70,15 @@ enum class ColoringMode {
     ViolationContext,
 };
 
+enum class RealizationStage {
+    None,
+    Imported,
+    SessionBuilt,
+    SceneBuilt,
+    Indexed,
+    AnalysisReady
+};
+
 struct SceneLayer {
     std::string id;
     std::string name;

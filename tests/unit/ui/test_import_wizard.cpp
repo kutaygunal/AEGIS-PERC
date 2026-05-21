@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <thread>
 
 namespace fs = std::filesystem;
 
@@ -59,6 +60,20 @@ void remove_tree(const fs::path& root)
 {
     std::error_code ec;
     fs::remove_all(root, ec);
+}
+
+bool wait_until(const std::function<bool()>& predicate, int timeout_ms = 3000)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (std::chrono::steady_clock::now() < deadline) {
+        QApplication::processEvents();
+        if (predicate()) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    QApplication::processEvents();
+    return predicate();
 }
 
 } // namespace
@@ -244,7 +259,7 @@ TEST_CASE("ImportWizard load action commits validated package into workspace and
     REQUIRE_FALSE(window.has_loaded_import_package());
 
     REQUIRE(window.trigger_import_load_action());
-    QApplication::processEvents();
+    REQUIRE(wait_until([&window]() { return window.has_loaded_import_design_session(); }));
     REQUIRE_FALSE(window.is_import_dialog_visible());
     REQUIRE(window.has_loaded_import_package());
     REQUIRE(window.has_loaded_import_design_session());

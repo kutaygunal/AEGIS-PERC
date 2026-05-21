@@ -3,6 +3,7 @@
 #include "aegis/ui/main_window.hpp"
 #include "aegis/ui/violation_filter.hpp"
 #include "aegis/ui/scene_adapter.hpp"
+#include "aegis/ui/imported_design_realization.hpp"
 
 #include <QByteArray>
 #include <QDateTime>
@@ -172,6 +173,9 @@ struct MainWindow::Impl {
     std::unique_ptr<aegis::storage::ImportedDesignSession> loaded_import_session;
     bool has_loaded_import_package = false;
     bool sample_mode_active = false;
+    std::unique_ptr<ImportedDesignRealization> realization;
+    RealizationStage realization_stage = RealizationStage::None;
+    QTimer* realization_poll_timer = nullptr;
     aegis::orchestration::LocalJobPipeline job_pipeline;
     aegis::orchestration::JobPipelineOptions job_pipeline_options;
     QTimer* job_poll_timer = nullptr;
