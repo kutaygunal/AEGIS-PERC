@@ -3,10 +3,12 @@ add_library(aegis_storage STATIC
     include/aegis/storage/project_package.hpp
     include/aegis/storage/import_validation.hpp
     include/aegis/storage/imported_design_session.hpp
+    include/aegis/storage/session_cache.hpp
     src/storage_engine.cpp
     src/project_package.cpp
     src/import_validation.cpp
     src/imported_design_session.cpp
+    src/session_cache.cpp
 )
 
 target_include_directories(aegis_storage

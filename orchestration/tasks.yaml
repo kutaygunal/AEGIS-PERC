@@ -775,7 +775,7 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build --output-on-failure -R WorkspacePersistence"
       - "ctest --test-dir build --output-on-failure -R Storage"
-    status: todo
+    status: review
 
   - id: P13-010
     phase: P13

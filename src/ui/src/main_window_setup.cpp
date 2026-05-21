@@ -28,6 +28,7 @@
 #include "aegis/storage/import_validation.hpp"
 #include "aegis/storage/imported_design_session.hpp"
 #include "aegis/storage/project_package.hpp"
+#include "aegis/storage/session_cache.hpp"
 
 #include <QAction>
 #include <QApplication>
@@ -2037,6 +2038,10 @@ bool MainWindow::reopen_project_from_path(const QString& path, bool mark_as_last
     }
 
     apply_import_package();
+    if (m_impl->loaded_import_session != nullptr) {
+        aegis::storage::SessionCache cache;
+        Q_UNUSED(cache.save(*m_impl->loaded_import_session, m_impl->loaded_import_base_path));
+    }
     m_impl->recent_project_paths.removeAll(normalized);
     m_impl->recent_project_paths.prepend(normalized);
     m_impl->last_successful_project_path = normalized;
