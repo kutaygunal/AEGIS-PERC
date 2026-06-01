@@ -274,7 +274,8 @@ tasks:
       - Do not change dock widget order or area in the persistent state — only initial visibility.
     test_commands:
       - "cmake --build build/windows-release --config Release"
-      - "ctest --preset ci-test -R UiWorkflow"
-      - "ctest --preset ci-test -R UiStates"
-      - "ctest --preset ci-test -R WorkspacePersistence"
-    status: todo
+      - "ctest --test-dir build/windows-release -C Release --output-on-failure -R UiWorkflow"
+      - "ctest --test-dir build/windows-release -C Release --output-on-failure -R UiStates"
+      - "ctest --test-dir build/windows-release -C Release --output-on-failure -R WorkspaceActions"
+      - "ctest --test-dir build/windows-release -C Release --output-on-failure -R WorkspacePersistence"
+    status: review
