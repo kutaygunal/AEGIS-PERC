@@ -333,6 +333,10 @@ void JobWorkflowController::finalize_active_job()
     if (result->state == aegis::orchestration::JobState::Completed) {
         aegis::rules::ViolationCollection collection{result->violations};
         m_window.set_violations(collection);
+        // S1-014: surface the result-oriented docks once a check job
+        // produces a result set. The user may have previously hidden any
+        // of these; set_workspace_state respects that override.
+        m_window.set_workspace_state(MainWindow::WorkspaceState::ChecksRun);
         m_state.last_job_retry_available = false;
         m_state.last_job_retry_reason = "Retry unavailable: last local job completed successfully";
         history_result_summary = QString("Completed with %1 violation(s)").arg(collection.size());

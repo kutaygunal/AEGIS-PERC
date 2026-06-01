@@ -75,6 +75,7 @@
 #include <fstream>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <utility>
 
@@ -161,6 +162,12 @@ void MainWindow::setup_ui()
     // Dock panels
     setup_dock_panels();
     update_action_states();
+
+    // S1-014: apply the first-launch workspace state (Empty) before
+    // restore_window_state() runs in the constructor. This hides optional
+    // docks on a clean first launch while restoreState() still has the
+    // final say when QSettings carry a saved layout.
+    set_workspace_state(WorkspaceState::Empty);
 }
 
 void MainWindow::execute_run_checks()
@@ -256,6 +263,12 @@ void MainWindow::set_scene(UiScene scene)
             m_impl->report_preview->set_snapshot(m_impl->canvas->grab());
         }
     }
+    // S1-014: a non-empty scene implies a design is loaded. An empty
+    // scene is treated as a reset and does not advance the state.
+    if (m_impl->canvas != nullptr && m_impl->canvas->has_scene()
+        && m_impl->workspace_state == WorkspaceState::Empty) {
+        set_workspace_state(WorkspaceState::DesignLoaded);
+    }
     refresh_workspace_summary();
     update_action_states();
 }
@@ -263,6 +276,13 @@ void MainWindow::set_scene(UiScene scene)
 void MainWindow::set_violations(aegis::rules::ViolationCollection violations)
 {
     m_diagnostics->set_violations(std::move(violations));
+    // S1-014: set_workspace_state(ChecksRun) is called from
+    // JobWorkflowController::finalize_active_job() and
+    // DiagnosticsReportController when results are produced; here we
+    // only update the diagnostics panel and the workspace summary,
+    // without forcing a dock-visibility lifecycle change. Tests that
+    // exercise the lifecycle directly call set_workspace_state().
+    update_action_states();
 }
 void MainWindow::set_connectivity_graph(const aegis::graph::ConnectivityGraph* graph)
 {
@@ -270,6 +290,11 @@ void MainWindow::set_connectivity_graph(const aegis::graph::ConnectivityGraph* g
     m_impl->trace_adapter.set_graph(graph);
     if (m_impl->graph_explorer != nullptr) {
         m_impl->graph_explorer->set_graph(graph);
+    }
+    // S1-014: a non-null graph implies a design is loaded. null is a
+    // reset and does not advance the state.
+    if (graph != nullptr && m_impl->workspace_state == WorkspaceState::Empty) {
+        set_workspace_state(WorkspaceState::DesignLoaded);
     }
     refresh_workspace_summary();
     update_action_states();
@@ -334,6 +359,107 @@ bool MainWindow::is_dock_widget_visible(const QString& title) const
         }
     }
     return false;
+}
+
+namespace {
+
+// S1-014: First-launch simplification.
+// Default visibility table for each dock title per workspace state.
+// Mandatory docks (workspace summary, log) are always shown.
+// Optional docks are hidden in Empty and revealed as the user progresses.
+const std::map<QString, std::map<MainWindow::WorkspaceState, bool>>&
+dock_visibility_table()
+{
+    static const std::map<QString, std::map<MainWindow::WorkspaceState, bool>> table = {
+        // Always-on / mandatory surfaces.
+        {"Workspace Summary", {{MainWindow::WorkspaceState::Empty,        true},
+                                {MainWindow::WorkspaceState::DesignLoaded, true},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Log",              {{MainWindow::WorkspaceState::Empty,        true},
+                                {MainWindow::WorkspaceState::DesignLoaded, true},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        // Optional surfaces — hidden at first launch.
+        {"Properties",       {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, true},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Layers",           {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, true},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Graph Explorer",   {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, true},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Hierarchy",        {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, true},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Trace",            {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, true},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Report Preview",   {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, false},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Violations",       {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, false},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Diagnostics",      {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, false},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+        {"Jobs",             {{MainWindow::WorkspaceState::Empty,        false},
+                                {MainWindow::WorkspaceState::DesignLoaded, false},
+                                {MainWindow::WorkspaceState::ChecksRun,     true}}},
+    };
+    return table;
+}
+
+} // namespace
+
+MainWindow::WorkspaceState MainWindow::workspace_state() const
+{
+    return m_impl->workspace_state;
+}
+
+bool MainWindow::is_dock_hidden_by_user(const QString& dock_title) const
+{
+    return m_impl->user_hidden_docks.find(dock_title) != m_impl->user_hidden_docks.end();
+}
+
+void MainWindow::reset_user_dock_visibility_overrides()
+{
+    m_impl->user_hidden_docks.clear();
+}
+
+void MainWindow::set_workspace_state(WorkspaceState state)
+{
+    // Note: this method is intentionally NOT a no-op when called with the
+    // current state. The first launch needs to apply the Empty defaults,
+    // and the dock-visibility-mutating block must always run.
+    m_impl->workspace_state = state;
+
+    m_impl->applying_workspace_state = true;
+    const auto& table = dock_visibility_table();
+    for (auto* dock : m_impl->docks) {
+        if (dock == nullptr) {
+            continue;
+        }
+        const QString title = dock->windowTitle();
+        const auto table_it = table.find(title);
+        if (table_it == table.end()) {
+            continue; // unknown dock — don't touch
+        }
+        const auto state_it = table_it->second.find(state);
+        if (state_it == table_it->second.end()) {
+            continue;
+        }
+        const bool want_visible = state_it->second;
+        const bool user_overrode_hidden = m_impl->user_hidden_docks.find(title)
+                                          != m_impl->user_hidden_docks.end();
+        if (want_visible && !user_overrode_hidden) {
+            dock->show();
+        } else if (!want_visible) {
+            dock->hide();
+        }
+    }
+    m_impl->applying_workspace_state = false;
+    update_action_states();
 }
 
 QStringList MainWindow::layer_panel_names() const

@@ -254,3 +254,27 @@ tasks:
       - "cmake --build build --config Release"
       - "ctest --test-dir build -C Release --output-on-failure -R SignoffStress"
     status: todo
+
+  - id: S1-014
+    sprint: S1
+    title: "UI: simplify first-launch workspace (hide optional docks + toolbar groups)"
+    priority: high
+    area: ui
+    risk: low
+    depends_on: []
+    acceptance:
+      - On a clean first launch (no QSettings), only the mandatory surfaces are visible: menu bar, slim toolbar (import / samples / run checks), central canvas, log dock, and the workspace summary / onboarding panel.
+      - Optional docks (Layers, Graph Explorer, Hierarchy, Trace, Report Preview, Violations, Diagnostics, Jobs) are hidden by default and re-shown automatically when a design is imported, a check run completes, or a trace is requested.
+      - A `View → Panels` submenu exposes every dock as a toggleable action so users can re-enable any hidden panel.
+      - User-driven hide survives `save_window_state` / `restore_window_state`; auto-show never overrides an explicit user choice.
+      - Headless tests cover: default empty-state dock visibility, `set_workspace_state` transitions, panel menu wiring, and QSettings persistence of user choices.
+    implementation_rules:
+      - Keep the implementation additive: introduce a `WorkspaceState` enum and a `default_dock_visibility_for_state` table; do not delete existing dock creation code.
+      - All visibility changes must be reversible; never call `deleteLater()` on a dock from a hide operation.
+      - Do not change dock widget order or area in the persistent state — only initial visibility.
+    test_commands:
+      - "cmake --build build/windows-release --config Release"
+      - "ctest --preset ci-test -R UiWorkflow"
+      - "ctest --preset ci-test -R UiStates"
+      - "ctest --preset ci-test -R WorkspacePersistence"
+    status: todo

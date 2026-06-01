@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "aegis/graph/connectivity_graph.hpp"
 #include "aegis/parsing/layout_ir.hpp"
 #include "aegis/rules/violation.hpp"
 #include "aegis/ui/main_window.hpp"
@@ -7,7 +8,10 @@
 #include "aegis/ui/violation_filter.hpp"
 
 #include <QApplication>
+#include <QDockWidget>
 #include <QListWidget>
+#include <QMenu>
+#include <QMenuBar>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
@@ -478,4 +482,168 @@ TEST_CASE("UiWorkflow existing app shell state persistence path remains valid", 
         REQUIRE_FALSE(restored.isVisible());
         REQUIRE(restored.has_layout_canvas());
     }
+}
+
+TEST_CASE("S1-014 first-launch workspace hides optional docks and reveals them on design load and check completion", "[ui][P-S1][S1-014][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+
+    // First launch (clean QSettings): only mandatory docks should be visible.
+    {
+        aegis::ui::MainWindow window;
+        REQUIRE(window.workspace_state() == aegis::ui::MainWindow::WorkspaceState::Empty);
+
+        // Mandatory / always-on surfaces.
+        REQUIRE(window.is_dock_widget_visible("Workspace Summary"));
+        REQUIRE(window.is_dock_widget_visible("Log"));
+
+        // Optional surfaces must be hidden at first launch.
+        REQUIRE_FALSE(window.is_dock_widget_visible("Layers"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Graph Explorer"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Hierarchy"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Trace"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Report Preview"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Violations"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Diagnostics"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Jobs"));
+    }
+
+    // Setting a scene and a graph transitions to DesignLoaded and reveals
+    // the design-aware optional docks.
+    {
+        aegis::ui::MainWindow window;
+        const auto ir = make_workflow_ir();
+        window.set_scene(aegis::ui::build_ui_scene(ir));
+        std::vector<std::string> unresolved;
+        aegis::graph::ConnectivityGraph graph = aegis::graph::ConnectivityGraph::from_layout_ir(ir, unresolved);
+        window.set_connectivity_graph(&graph);
+
+        REQUIRE(window.workspace_state() == aegis::ui::MainWindow::WorkspaceState::DesignLoaded);
+        REQUIRE(window.is_dock_widget_visible("Layers"));
+        REQUIRE(window.is_dock_widget_visible("Graph Explorer"));
+        REQUIRE(window.is_dock_widget_visible("Hierarchy"));
+        REQUIRE(window.is_dock_widget_visible("Properties"));
+        REQUIRE(window.is_dock_widget_visible("Trace"));
+
+        // Report Preview / Violations / Diagnostics / Jobs still hidden
+        // until a check run produces results.
+        REQUIRE_FALSE(window.is_dock_widget_visible("Report Preview"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Violations"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Diagnostics"));
+        REQUIRE_FALSE(window.is_dock_widget_visible("Jobs"));
+    }
+
+    // Receiving a (possibly empty) violation collection transitions to
+    // ChecksRun and reveals the result-oriented docks.
+    {
+        aegis::ui::MainWindow window;
+        const auto ir = make_workflow_ir();
+        window.set_scene(aegis::ui::build_ui_scene(ir));
+        std::vector<std::string> unresolved;
+        aegis::graph::ConnectivityGraph graph = aegis::graph::ConnectivityGraph::from_layout_ir(ir, unresolved);
+        window.set_connectivity_graph(&graph);
+
+        aegis::rules::ViolationCollection empty_results{};
+        window.set_violations(std::move(empty_results));
+        // S1-014: set_violations() updates the diagnostics panel but does
+        // not force a workspace-state change on its own (the production
+        // lifecycle transitions ChecksRun from JobWorkflowController when
+        // a job completes). For this test we advance the state directly.
+        window.set_workspace_state(aegis::ui::MainWindow::WorkspaceState::ChecksRun);
+        REQUIRE(window.workspace_state() == aegis::ui::MainWindow::WorkspaceState::ChecksRun);
+        REQUIRE(window.is_dock_widget_visible("Report Preview"));
+        REQUIRE(window.is_dock_widget_visible("Violations"));
+        REQUIRE(window.is_dock_widget_visible("Diagnostics"));
+        REQUIRE(window.is_dock_widget_visible("Jobs"));
+    }
+}
+
+TEST_CASE("S1-014 user-driven dock hide is remembered and overrides auto-show", "[ui][P-S1][S1-014][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+
+    aegis::ui::MainWindow window;
+    // The window must be shown for QDockWidget::visibilityChanged to fire
+    // reliably. Without an event-loop pump, child show()/hide() may not
+    // emit the signal.
+    window.show();
+    QApplication::processEvents();
+
+    auto* layers_dock = window.findChild<QDockWidget*>(QStringLiteral("LayersDock"));
+    REQUIRE(layers_dock != nullptr);
+
+    // At first launch, Layers is hidden by the Empty-state default. The
+    // user has to toggle it on first (or drag it out) before they can
+    // record an explicit hide intent.
+    layers_dock->show();
+    QApplication::processEvents();
+    REQUIRE_FALSE(window.is_dock_hidden_by_user("Layers"));
+
+    layers_dock->hide();
+    QApplication::processEvents();
+    REQUIRE(window.is_dock_hidden_by_user("Layers"));
+
+    const auto ir = make_workflow_ir();
+    window.set_scene(aegis::ui::build_ui_scene(ir));
+    std::vector<std::string> unresolved;
+    aegis::graph::ConnectivityGraph graph = aegis::graph::ConnectivityGraph::from_layout_ir(ir, unresolved);
+    window.set_connectivity_graph(&graph);
+
+    REQUIRE(window.workspace_state() == aegis::ui::MainWindow::WorkspaceState::DesignLoaded);
+    REQUIRE_FALSE(window.is_dock_widget_visible("Layers"));
+    REQUIRE(window.is_dock_widget_visible("Graph Explorer"));
+
+    // A subsequent show() through the View menu must clear the user-override
+    // and let auto-show work normally on future transitions.
+    layers_dock->show();
+    QApplication::processEvents();
+    REQUIRE_FALSE(window.is_dock_hidden_by_user("Layers"));
+
+    window.set_workspace_state(aegis::ui::MainWindow::WorkspaceState::Empty);
+    REQUIRE_FALSE(window.is_dock_widget_visible("Layers"));
+    window.set_workspace_state(aegis::ui::MainWindow::WorkspaceState::DesignLoaded);
+    REQUIRE(window.is_dock_widget_visible("Layers"));
+}
+
+TEST_CASE("S1-014 View menu exposes a Panels submenu with toggleable dock actions", "[ui][P-S1][S1-014][UiWorkflow]")
+{
+    QtAppGuard app;
+    SettingsCleanupGuard settings_guard;
+
+    aegis::ui::MainWindow window;
+    QMenuBar* menu_bar = window.menuBar();
+    REQUIRE(menu_bar != nullptr);
+
+    // Walk the menu hierarchy to find the View → Panels submenu.
+    QMenu* view_menu = nullptr;
+    for (QAction* action : menu_bar->actions()) {
+        if (action->text().contains("View", Qt::CaseInsensitive)) {
+            view_menu = action->menu();
+            break;
+        }
+    }
+    REQUIRE(view_menu != nullptr);
+
+    QMenu* panels_menu = nullptr;
+    for (QAction* action : view_menu->actions()) {
+        if (action->menu() != nullptr && action->menu()->title() == "&Panels") {
+            panels_menu = action->menu();
+            break;
+        }
+    }
+    REQUIRE(panels_menu != nullptr);
+
+    QStringList panel_titles;
+    for (QAction* action : panels_menu->actions()) {
+        if (action->isCheckable()) {
+            panel_titles.append(action->text());
+        }
+    }
+    REQUIRE(panel_titles.contains("Layers"));
+    REQUIRE(panel_titles.contains("Violations"));
+    REQUIRE(panel_titles.contains("Report Preview"));
+    REQUIRE(panel_titles.contains("Jobs"));
+    REQUIRE(panel_titles.contains("Log"));
 }

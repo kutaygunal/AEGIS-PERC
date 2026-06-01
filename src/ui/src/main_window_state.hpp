@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <vector>
 #include <filesystem>
 #include <functional>
@@ -212,6 +213,18 @@ struct MainWindow::Impl {
     };
     std::function<QString(const QString&)> report_export_path_picker;
     std::function<QString(QWidget*)> signoff_baseline_picker;
+
+    // Workspace state (S1-014 first-launch simplification).
+    // `workspace_state` is set explicitly by lifecycle hooks and by tests.
+    // `user_hidden_docks` records dock titles the user has explicitly hidden
+    // via the View → Panels menu, so set_workspace_state() will not auto-
+    // show docks the user has chosen to keep hidden.
+    MainWindow::WorkspaceState workspace_state = MainWindow::WorkspaceState::Empty;
+    std::set<QString> user_hidden_docks;
+    // Set while set_workspace_state() is mutating dock visibility, so the
+    // visibilityChanged listeners do not interpret programmatic hides as
+    // user intent.
+    bool applying_workspace_state = false;
 };
 
 inline std::filesystem::path resolve_import_artifact_path(const std::filesystem::path& base_path,

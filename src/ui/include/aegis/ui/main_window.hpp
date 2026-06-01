@@ -247,6 +247,21 @@ public:
                                  bool update_trace_panel = false);
     void publish_trace_feedback(const QString& message, ActivityLogSeverity severity, int timeout_ms = 0);
 
+    // Workspace state (first-launch simplification) -------------------------
+    // Drives default dock / panel / toolbar visibility for the lifecycle
+    // stages. Transitions are idempotent and never override a user-driven
+    // hide (a user who manually hid a panel will not see it reappear
+    // automatically when entering the next state).
+    enum class WorkspaceState {
+        Empty,         // no design, no project — first launch
+        DesignLoaded,  // design imported, no checks run yet
+        ChecksRun,     // a check job has produced results
+    };
+    void set_workspace_state(WorkspaceState state);
+    [[nodiscard]] WorkspaceState workspace_state() const;
+    [[nodiscard]] bool is_dock_hidden_by_user(const QString& dock_title) const;
+    void reset_user_dock_visibility_overrides();
+
 private:
     std::unique_ptr<Impl> m_impl;
     std::unique_ptr<JobWorkflowController> m_jobs;

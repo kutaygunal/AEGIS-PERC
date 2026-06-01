@@ -205,14 +205,33 @@ TEST_CASE("WorkspaceActions view menu uses real dock toggle actions", "[ui][P3-0
     auto* view_menu = find_view_menu(window);
     REQUIRE(view_menu != nullptr);
 
+    // S1-014: dock toggles now live under "View → Panels" submenu.
+    QMenu* panels_menu = nullptr;
+    for (auto* action : view_menu->actions()) {
+        if (action->menu() != nullptr && action->menu()->title() == "&Panels") {
+            panels_menu = action->menu();
+            break;
+        }
+    }
+    REQUIRE(panels_menu != nullptr);
+
     auto* layers_dock = find_dock(window, "Layers");
     auto* graph_dock = find_dock(window, "Graph Explorer");
     REQUIRE(layers_dock != nullptr);
     REQUIRE(graph_dock != nullptr);
 
+    // S1-014: at first launch, Layers and Graph Explorer are hidden by
+    // the Empty-state default. Show them so the toggle behavior can be
+    // exercised in isolation.
+    layers_dock->show();
+    graph_dock->show();
+    QApplication::processEvents();
+    REQUIRE(!layers_dock->isHidden());
+    REQUIRE(!graph_dock->isHidden());
+
     QAction* layers_toggle = nullptr;
     QAction* graph_toggle = nullptr;
-    for (auto* action : view_menu->actions()) {
+    for (auto* action : panels_menu->actions()) {
         if (action == nullptr) {
             continue;
         }
@@ -227,7 +246,6 @@ TEST_CASE("WorkspaceActions view menu uses real dock toggle actions", "[ui][P3-0
     REQUIRE(layers_toggle != nullptr);
     REQUIRE(graph_toggle != nullptr);
 
-    REQUIRE(!layers_dock->isHidden());
     layers_toggle->trigger();
     QApplication::processEvents();
     REQUIRE(layers_dock->isHidden());
@@ -235,11 +253,10 @@ TEST_CASE("WorkspaceActions view menu uses real dock toggle actions", "[ui][P3-0
     QApplication::processEvents();
     REQUIRE(!layers_dock->isHidden());
 
-    REQUIRE(window.is_graph_explorer_visible());
     graph_toggle->trigger();
     QApplication::processEvents();
-    REQUIRE(!window.is_graph_explorer_visible());
+    REQUIRE(graph_dock->isHidden());
     graph_toggle->trigger();
     QApplication::processEvents();
-    REQUIRE(window.is_graph_explorer_visible());
+    REQUIRE(!graph_dock->isHidden());
 }

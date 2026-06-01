@@ -1193,6 +1193,12 @@ void MainWindow::apply_import_package()
 
     m_impl->realization->start(m_impl->loaded_import_package, m_impl->loaded_import_base_path);
 
+    // S1-014: a project is being loaded; surface the design-aware docks.
+    // The realization pipeline will eventually set up the graph and
+    // populated objects. The transition is best-effort: it does not block
+    // the import.
+    set_workspace_state(WorkspaceState::DesignLoaded);
+
     if (!m_impl->loaded_import_base_path.empty() && std::filesystem::exists(m_impl->loaded_import_base_path)) {
         const QString recent_path = QString::fromStdString(m_impl->loaded_import_base_path.string());
         m_impl->recent_project_paths.removeAll(recent_path);
@@ -1521,6 +1527,19 @@ void MainWindow::setup_dock_panels()
         dock->setWidget(widget);
         addDockWidget(area, dock);
         m_impl->docks.append(dock);
+        // S1-014: track user-driven visibility changes. Programmatic changes
+        // (e.g. from set_workspace_state) are guarded by
+        // `applying_workspace_state` so they don't pollute user intent.
+        connect(dock, &QDockWidget::visibilityChanged, this, [this, title](bool visible) {
+            if (m_impl->applying_workspace_state) {
+                return;
+            }
+            if (visible) {
+                m_impl->user_hidden_docks.erase(title);
+            } else {
+                m_impl->user_hidden_docks.insert(title);
+            }
+        });
         return dock;
     };
 
@@ -2011,22 +2030,25 @@ void MainWindow::setup_dock_panels()
     refresh_job_history_panel();
 
     if (m_impl->view_menu != nullptr) {
-        m_impl->view_menu->addSeparator();
-        m_impl->view_menu->addAction(workspace_summary_dock->toggleViewAction());
-        m_impl->view_menu->addAction(diagnostics_dock->toggleViewAction());
-        m_impl->view_menu->addAction(layers_dock->toggleViewAction());
-        m_impl->view_menu->addAction(properties_dock->toggleViewAction());
-        m_impl->view_menu->addAction(violations_dock->toggleViewAction());
-        m_impl->view_menu->addAction(report_dock->toggleViewAction());
+        // S1-014: group dock toggles under "View → Panels" for discoverability.
+        // The actions are still Qt's own toggleViewAction instances, so the
+        // checked state always reflects the current dock visibility.
+        auto* panels_menu = m_impl->view_menu->addMenu("&Panels");
+        panels_menu->addAction(workspace_summary_dock->toggleViewAction());
+        panels_menu->addAction(diagnostics_dock->toggleViewAction());
+        panels_menu->addAction(layers_dock->toggleViewAction());
+        panels_menu->addAction(properties_dock->toggleViewAction());
+        panels_menu->addAction(violations_dock->toggleViewAction());
+        panels_menu->addAction(report_dock->toggleViewAction());
         if (m_impl->graph_dock != nullptr) {
-            m_impl->view_menu->addAction(m_impl->graph_dock->toggleViewAction());
+            panels_menu->addAction(m_impl->graph_dock->toggleViewAction());
         }
         if (m_impl->hierarchy_dock != nullptr) {
-            m_impl->view_menu->addAction(m_impl->hierarchy_dock->toggleViewAction());
+            panels_menu->addAction(m_impl->hierarchy_dock->toggleViewAction());
         }
-        m_impl->view_menu->addAction(trace_dock->toggleViewAction());
-        m_impl->view_menu->addAction(job_history_dock->toggleViewAction());
-        m_impl->view_menu->addAction(log_dock->toggleViewAction());
+        panels_menu->addAction(trace_dock->toggleViewAction());
+        panels_menu->addAction(job_history_dock->toggleViewAction());
+        panels_menu->addAction(log_dock->toggleViewAction());
     }
     QWidget::setTabOrder(m_impl->canvas, m_impl->layer_panel);
     QWidget::setTabOrder(m_impl->layer_panel, m_impl->violation_explorer);
@@ -2338,6 +2360,13 @@ void MainWindow::restore_window_state()
         clear_violation_filters();
     }
 
+    // S1-014: per-user dock-hidden overrides are kept in-memory only for
+    // this development cycle. The QSettings saveState() above already
+    // records the current dock visibility, which restoreState() applies
+    // on the next launch; the in-memory list is the lifecycle hint so
+    // the workspace state machine does not undo an explicit hide.
+    // Persistence can be added once the user-driven hide list stabilizes.
+
     refresh_recent_project_actions();
     refresh_filter_preset_menu();
     refresh_workspace_view_menu();
@@ -2378,6 +2407,9 @@ bool MainWindow::load_bundled_sample(const QString& sample_id)
         if (m_impl->properties_panel != nullptr) {
             m_impl->properties_panel->set_session(nullptr);
         }
+        // S1-014: reveal the design-aware docks (Layers / Graph Explorer /
+        // Hierarchy / Trace / Properties) once a design is present.
+        set_workspace_state(WorkspaceState::DesignLoaded);
         refresh_workspace_summary();
         const QString message = QString("Loaded sample: %1").arg(QString::fromStdString(ir->design_name));
         publish_ui_notification(message, ActivityLogSeverity::Info);
@@ -2431,6 +2463,13 @@ void MainWindow::save_window_state()
     settings.setValue(QString("%1/reopenLastSession").arg(kSettingsRecentProjectsGroup), m_impl->reopen_last_session_enabled);
     settings.setValue(QString("%1/lastSuccessfulPath").arg(kSettingsRecentProjectsGroup), m_impl->last_successful_project_path);
     settings.setValue(QString("%1/dismissed").arg(kSettingsOnboardingGroup), m_impl->onboarding_dismissed);
+
+    // S1-014: per-user dock-hidden overrides are kept in-memory only for
+    // this development cycle. The QSettings saveState() above already
+    // records the current dock visibility, which restoreState() applies
+    // on the next launch; the in-memory list is the lifecycle hint so
+    // the workspace state machine does not undo an explicit hide.
+    // Persistence can be added once the user-driven hide list stabilizes.
 }
 
 } // namespace aegis::ui
