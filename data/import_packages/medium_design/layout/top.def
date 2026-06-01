@@ -1,0 +1,79 @@
+VERSION 5.8 ;
+DIVIDERCHAR "/" ;
+BUSBITCHARS "[]" ;
+DESIGN medium_top ;
+UNITS DISTANCE MICRONS 1000 ;
+DIEAREA ( 0 0 ) ( 200000 200000 ) ;
+ROW ROW_0 corecell 5000 5000 N DO 40 BY 1 STEP 5000 0 ;
+ROW ROW_1 corecell 5000 10000 FS DO 40 BY 1 STEP 5000 0 ;
+COMPONENTS 6 ;
+  - ff1 DFF
+    + SOURCE USER
+    + PLACED ( 30000 30000 ) N ;
+  - ff2 DFF
+    + SOURCE USER
+    + PLACED ( 120000 30000 ) N ;
+  - and1 AND2
+    + SOURCE USER
+    + PLACED ( 75000 80000 ) N ;
+  - or1 OR2
+    + SOURCE USER
+    + PLACED ( 30000 130000 ) N ;
+  - buf1 BUF
+    + SOURCE USER
+    + PLACED ( 150000 130000 ) N ;
+  - fill1 FILL
+    + SOURCE DIST
+    + PLACED ( 160000 160000 ) N ;
+END COMPONENTS
+PINS 7 ;
+  - clk + NET clk
+    + DIRECTION INPUT
+    + LAYER met1 ( 0 0 ) ( 4000 20000 )
+    + PLACED ( 0 90000 ) N ;
+  - rst + NET rst
+    + DIRECTION INPUT
+    + LAYER met1 ( 0 0 ) ( 20000 4000 )
+    + PLACED ( 90000 0 ) N ;
+  - a + NET a
+    + DIRECTION INPUT
+    + LAYER met1 ( 0 0 ) ( 4000 20000 )
+    + PLACED ( 0 150000 ) N ;
+  - b + NET b
+    + DIRECTION INPUT
+    + LAYER met1 ( 0 0 ) ( 20000 4000 )
+    + PLACED ( 150000 0 ) N ;
+  - out + NET out
+    + DIRECTION OUTPUT
+    + LAYER met1 ( 0 0 ) ( 4000 20000 )
+    + PLACED ( 196000 100000 ) N ;
+  - vdd + NET vdd
+    + DIRECTION INOUT
+    + USE POWER
+    + LAYER met4 ( 0 0 ) ( 160000 10000 )
+    + PLACED ( 20000 20000 ) N ;
+  - vss + NET vss
+    + DIRECTION INOUT
+    + USE GROUND
+    + LAYER met4 ( 0 0 ) ( 160000 10000 )
+    + PLACED ( 20000 95000 ) N ;
+END PINS
+NETS 8 ;
+  - clk
+    ( PIN clk ) ( ff1 CLK ) ( ff2 CLK ) ;
+  - rst
+    ( PIN rst ) ( ff1 RST ) ( ff2 RST ) ;
+  - a
+    ( PIN a ) ( ff1 D ) ;
+  - b
+    ( PIN b ) ( ff2 D ) ;
+  - mid1
+    ( ff1 Q ) ( and1 A ) ;
+  - mid2
+    ( ff2 Q ) ( and1 B ) ;
+  - mid3
+    ( and1 Y ) ( or1 A ) ( buf1 A ) ;
+  - out
+    ( PIN out ) ( or1 Y ) ( buf1 Y ) ;
+END NETS
+END DESIGN

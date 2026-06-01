@@ -21,6 +21,8 @@
 #include "aegis/parsing/layout_ir.hpp"
 #include "aegis/parsing/power_intent.hpp"
 #include "aegis/orchestration/job_pipeline.hpp"
+#include "aegis/reporting/baseline.hpp"
+#include "aegis/reporting/regression_diff.hpp"
 #include "aegis/reporting/report_generator.hpp"
 #include "aegis/rules/electrical_rules.hpp"
 #include "aegis/rules/rule_engine.hpp"
@@ -1394,13 +1396,49 @@ void MainWindow::refresh_workspace_summary()
     }
 
     const int violation_count = m_impl->violation_explorer != nullptr ? m_impl->violation_explorer->total_violation_count() : 0;
+    int waived_count = 0;
+    int active_count = 0;
+    for (const auto& v : m_impl->latest_violations) {
+        const bool waived = v.metadata.get<bool>("waived").value_or(false);
+        waived ? ++waived_count : ++active_count;
+    }
     QStringList summary_lines;
     summary_lines.append(QString("Project: %1").arg(project_name));
     summary_lines.append(QString("Mode: %1").arg(mode));
     summary_lines.append(QString("Artifacts: %1").arg(artifact_count));
     summary_lines.append(QString("Rule source: %1").arg(rule_source));
-    summary_lines.append(QString("Violations: %1").arg(violation_count));
+    if (violation_count > 0 || waived_count > 0) {
+        summary_lines.append(QString("Violations: %1 (active %2, waived %3)")
+                                 .arg(violation_count)
+                                 .arg(active_count)
+                                 .arg(waived_count));
+    } else {
+        summary_lines.append(QString("Violations: %1").arg(violation_count));
+    }
     summary_lines.append(QString("Readiness: %1").arg(readiness));
+
+    // Optional baseline diff summary (uses active findings; waived findings are excluded).
+    const QString baseline_path = m_impl->signoff_baseline_path.trimmed();
+    if (!baseline_path.isEmpty()) {
+        summary_lines.append(QString("Baseline: %1").arg(baseline_path));
+        try {
+            const auto baseline = aegis::reporting::read_baseline_json_file(baseline_path.toStdString());
+            std::vector<aegis::rules::Violation> active_violations;
+            active_violations.reserve(m_impl->latest_violations.size());
+            for (const auto& v : m_impl->latest_violations) {
+                if (!v.metadata.get<bool>("waived").value_or(false)) {
+                    active_violations.push_back(v);
+                }
+            }
+            const auto diff = aegis::reporting::diff_baseline_against_violations(baseline, active_violations);
+            summary_lines.append(QString("Baseline diff: new %1, removed %2, changed %3")
+                                     .arg(diff.summary.new_count)
+                                     .arg(diff.summary.removed_count)
+                                     .arg(diff.summary.changed_severity_count));
+        } catch (const std::exception& ex) {
+            summary_lines.append(QString("Baseline diff: error (%1)").arg(ex.what()));
+        }
+    }
 
     if (m_impl->last_coverage_summary.has_value()) {
         const auto& cov = *m_impl->last_coverage_summary;
@@ -1498,6 +1536,53 @@ void MainWindow::setup_dock_panels()
                                                                   "Current project mode, rule source, artifact counts, and readiness summary");
     m_impl->workspace_summary_label->setWordWrap(true);
     workspace_summary_layout->addWidget(m_impl->workspace_summary_label);
+
+    // Signoff baseline selection (used for regression diff summary display).
+    auto* baseline_row = new QHBoxLayout();
+    auto* baseline_label = new QLabel("&Baseline:", workspace_summary_panel);
+    baseline_row->addWidget(baseline_label);
+    m_impl->signoff_baseline_path_edit = new QLineEdit(workspace_summary_panel);
+    m_impl->signoff_baseline_path_edit->setObjectName("SignoffBaselinePath");
+    m_impl->signoff_baseline_path_edit->setReadOnly(true);
+    m_impl->signoff_baseline_path_edit->setPlaceholderText("Select a baseline JSON to show regression summary");
+    baseline_label->setBuddy(m_impl->signoff_baseline_path_edit);
+    baseline_row->addWidget(m_impl->signoff_baseline_path_edit, 1);
+    auto* baseline_browse = new QPushButton("&Browse", workspace_summary_panel);
+    baseline_browse->setObjectName("SignoffBaselineBrowseButton");
+    baseline_row->addWidget(baseline_browse);
+    auto* baseline_clear = new QPushButton("&Clear", workspace_summary_panel);
+    baseline_clear->setObjectName("SignoffBaselineClearButton");
+    baseline_row->addWidget(baseline_clear);
+    workspace_summary_layout->addLayout(baseline_row);
+
+    connect(baseline_browse, &QPushButton::clicked, this, [this, workspace_summary_panel]() {
+        QString selected;
+        if (m_impl->signoff_baseline_picker) {
+            selected = m_impl->signoff_baseline_picker(workspace_summary_panel);
+        } else {
+            selected = QFileDialog::getOpenFileName(this,
+                                                    "Select Baseline JSON",
+                                                    QString{},
+                                                    "JSON Files (*.json)");
+        }
+        if (selected.trimmed().isEmpty()) {
+            return;
+        }
+        m_impl->signoff_baseline_path = selected;
+        if (m_impl->signoff_baseline_path_edit != nullptr) {
+            m_impl->signoff_baseline_path_edit->setText(selected);
+        }
+        save_window_state();
+        refresh_workspace_summary();
+    });
+    connect(baseline_clear, &QPushButton::clicked, this, [this]() {
+        m_impl->signoff_baseline_path.clear();
+        if (m_impl->signoff_baseline_path_edit != nullptr) {
+            m_impl->signoff_baseline_path_edit->clear();
+        }
+        save_window_state();
+        refresh_workspace_summary();
+    });
 
     m_impl->onboarding_panel = new QWidget(workspace_summary_panel);
     auto* onboarding_layout = new QVBoxLayout(m_impl->onboarding_panel);
@@ -2198,6 +2283,11 @@ void MainWindow::restore_window_state()
     }
     m_impl->onboarding_dismissed = settings.value(QString("%1/dismissed").arg(kSettingsOnboardingGroup), false).toBool();
 
+    m_impl->signoff_baseline_path = settings.value(QString("%1/signoffBaselinePath").arg(kSettingsWorkspaceUiGroup)).toString();
+    if (m_impl->signoff_baseline_path_edit != nullptr) {
+        m_impl->signoff_baseline_path_edit->setText(m_impl->signoff_baseline_path);
+    }
+
     m_impl->filter_presets.clear();
     for (const auto& value : settings.value(QString("%1/filterPresets").arg(kSettingsWorkspaceUiGroup)).toList()) {
         if (const auto preset = saved_filter_preset_from_variant(value); preset.has_value()) {
@@ -2317,6 +2407,7 @@ void MainWindow::save_window_state()
     settings.setValue(QString("%1/heatmapVisible").arg(kSettingsWorkspaceUiGroup), heatmap_visible());
     settings.setValue(QString("%1/heatmapOpacity").arg(kSettingsWorkspaceUiGroup), heatmap_opacity());
     settings.setValue(QString("%1/performanceMetricsVisible").arg(kSettingsWorkspaceUiGroup), performance_metrics_visible());
+    settings.setValue(QString("%1/signoffBaselinePath").arg(kSettingsWorkspaceUiGroup), m_impl->signoff_baseline_path);
     settings.setValue(QString("%1/violationFilter").arg(kSettingsWorkspaceUiGroup), violation_filter_state().to_variant_map());
     QVariantList filter_presets;
     for (const auto& preset : m_impl->filter_presets) {

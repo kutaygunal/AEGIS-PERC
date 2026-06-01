@@ -1,0 +1,39 @@
+VERSION 5.7 ;
+  NOWIREEXTENSIONATPIN ON ;
+  DIVIDERCHAR "/" ;
+  BUSBITCHARS "[]" ;
+MACRO sparse_top
+  CLASS BLOCK ;
+  FOREIGN sparse_top ;
+  ORIGIN 0.000 0.000 ;
+  SIZE 100.000 BY 100.000 ;
+  PIN in
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 0.000 45.000 4.000 55.000 ;
+    END
+  END in
+  PIN out
+    DIRECTION OUTPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 96.000 45.000 100.000 55.000 ;
+    END
+  END out
+  PIN vdd
+    DIRECTION INOUT ;
+    USE POWER ;
+    PORT
+      LAYER met2 ;
+        RECT 45.000 0.000 55.000 100.000 ;
+    END
+  END vdd
+  OBS
+      LAYER met1 ;
+        RECT 20.000 20.000 80.000 80.000 ;
+  END
+END sparse_top
+END LIBRARY

@@ -1,0 +1,28 @@
+manifest_version: 1
+project:
+  name: MediumDesign
+  description: Moderate-complexity handcrafted import package for smoke testing. Contains 6 components, 8 nets, and 4 metal layers on a 200x200 um die.
+  customer: AEGIS Smoke Corpus
+  design_stage: place_route
+
+artifacts:
+  technology:
+    - path: layout/technology.lef
+      role: lef
+  layout:
+    - path: layout/top.def
+      role: def
+  netlist:
+    - path: netlist/top.v
+      role: verilog
+  rules:
+    - path: rules/aegis_rules.yaml
+      role: aegis_rule_pack
+  power:
+    - path: power/power_domains.csv
+      role: power_domains_csv
+      optional: true
+  current:
+    - path: reports/current_report.csv
+      role: current_csv
+      optional: true

@@ -1,10 +1,76 @@
 #include "aegis/rules/violation.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cctype>
+#include <cstdint>
+#include <cstdio>
 #include <stdexcept>
 
 namespace aegis::rules {
+namespace {
+
+std::string normalize_token(std::string value)
+{
+    auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+
+    // Trim
+    while (!value.empty() && is_space(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
+    while (!value.empty() && is_space(static_cast<unsigned char>(value.back()))) value.pop_back();
+
+    // Collapse whitespace runs to a single space
+    std::string out;
+    out.reserve(value.size());
+    bool prev_space = false;
+    for (unsigned char c : value) {
+        if (is_space(c)) {
+            if (!prev_space) out.push_back(' ');
+            prev_space = true;
+            continue;
+        }
+        prev_space = false;
+        out.push_back(static_cast<char>(c));
+    }
+    return out;
+}
+
+std::string percent_encode(std::string_view s)
+{
+    auto is_safe = [](unsigned char c) {
+        if (std::isalnum(c) != 0) return true;
+        switch (c) {
+        case '_':
+        case '-':
+        case '.':
+        case ':':
+        case '/':
+            return true;
+        default:
+            return false;
+        }
+    };
+
+    std::string out;
+    out.reserve(s.size());
+    for (unsigned char c : s) {
+        if (is_safe(c)) {
+            out.push_back(static_cast<char>(c));
+            continue;
+        }
+        char buf[4] = {};
+        std::snprintf(buf, sizeof(buf), "%%%02X", static_cast<unsigned int>(c));
+        out.append(buf);
+    }
+    return out;
+}
+
+std::string normalized_component(const std::optional<std::string>& v)
+{
+    if (!v.has_value()) return {};
+    return percent_encode(normalize_token(*v));
+}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Severity helpers
@@ -75,9 +141,45 @@ void from_json(const nlohmann::json& j, ViolationLocation& loc) {
 // Violation JSON (ADL)
 // ---------------------------------------------------------------------------
 
+std::string Violation::identity_key() const
+{
+    // Contract (v1):
+    // - Deterministic and stable across changes to `message` and `id`.
+    // - Includes rule_id + structured location fields.
+    // - Point is quantized to 1e-3 units to tolerate insignificant float noise.
+    const std::string rule = percent_encode(normalize_token(rule_id));
+
+    std::string point_part;
+    if (location.point.has_value()) {
+        const auto& p = *location.point;
+        const std::int64_t xq = static_cast<std::int64_t>(std::llround(p.x * 1000.0));
+        const std::int64_t yq = static_cast<std::int64_t>(std::llround(p.y * 1000.0));
+        point_part = std::to_string(xq) + "," + std::to_string(yq);
+    }
+
+    std::string out;
+    out.reserve(128);
+    out.append("v");
+    out.append(std::to_string(identity_schema_version));
+    out.append("|rule=");
+    out.append(rule);
+    out.append("|layer=");
+    out.append(normalized_component(location.layer));
+    out.append("|net=");
+    out.append(normalized_component(location.net_name));
+    out.append("|pin=");
+    out.append(normalized_component(location.pin_name));
+    out.append("|device=");
+    out.append(normalized_component(location.device_name));
+    out.append("|pt=");
+    out.append(point_part);
+    return out;
+}
+
 void to_json(nlohmann::json& j, const Violation& v) {
     j = {
         {"id", v.id},
+        {"identity_key", v.identity_key()},
         {"rule_id", v.rule_id},
         {"severity", severity_to_string(v.severity)},
         {"message", v.message},

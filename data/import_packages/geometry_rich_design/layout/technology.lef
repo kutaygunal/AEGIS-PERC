@@ -1,0 +1,95 @@
+VERSION 5.7 ;
+  NOWIREEXTENSIONATPIN ON ;
+  DIVIDERCHAR "/" ;
+  BUSBITCHARS "[]" ;
+MACRO geometry_rich_top
+  CLASS BLOCK ;
+  FOREIGN geometry_rich_top ;
+  ORIGIN 0.000 0.000 ;
+  SIZE 300.000 BY 300.000 ;
+  PIN clk
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 0.000 140.000 4.000 160.000 ;
+    END
+  END clk
+  PIN rst
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 140.000 0.000 160.000 4.000 ;
+    END
+  END rst
+  PIN data_in
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 0.000 40.000 4.000 60.000 ;
+    END
+  END data_in
+  PIN scan_en
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 40.000 0.000 60.000 4.000 ;
+    END
+  END scan_en
+  PIN data_out
+    DIRECTION OUTPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 296.000 140.000 300.000 160.000 ;
+    END
+  END data_out
+  PIN scan_out
+    DIRECTION OUTPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 296.000 40.000 300.000 60.000 ;
+    END
+  END scan_out
+  PIN vdd
+    DIRECTION INOUT ;
+    USE POWER ;
+    PORT
+      LAYER met5 ;
+        RECT 10.000 10.000 290.000 20.000 ;
+    END
+    PORT
+      LAYER met5 ;
+        RECT 10.000 280.000 290.000 290.000 ;
+    END
+    PORT
+      LAYER met5 ;
+        RECT 10.000 145.000 290.000 155.000 ;
+    END
+  END vdd
+  PIN vss
+    DIRECTION INOUT ;
+    USE GROUND ;
+    PORT
+      LAYER met5 ;
+        RECT 10.000 80.000 290.000 90.000 ;
+    END
+    PORT
+      LAYER met5 ;
+        RECT 10.000 210.000 290.000 220.000 ;
+    END
+  END vss
+  OBS
+      LAYER met1 ;
+        RECT 20.000 20.000 280.000 280.000 ;
+      LAYER met2 ;
+        RECT 20.000 20.000 280.000 280.000 ;
+      LAYER met3 ;
+        RECT 20.000 20.000 280.000 280.000 ;
+  END
+END geometry_rich_top
+END LIBRARY

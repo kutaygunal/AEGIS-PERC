@@ -1,0 +1,116 @@
+VERSION 5.8 ;
+DIVIDERCHAR "/" ;
+BUSBITCHARS "[]" ;
+DESIGN geometry_rich_top ;
+UNITS DISTANCE MICRONS 1000 ;
+DIEAREA ( 0 0 ) ( 300000 300000 ) ;
+ROW ROW_0 corecell 5000 5000 N DO 60 BY 1 STEP 5000 0 ;
+ROW ROW_1 corecell 5000 10000 FS DO 60 BY 1 STEP 5000 0 ;
+ROW ROW_2 corecell 5000 15000 N DO 60 BY 1 STEP 5000 0 ;
+ROW ROW_3 corecell 5000 20000 FS DO 60 BY 1 STEP 5000 0 ;
+ROW ROW_4 corecell 5000 25000 N DO 60 BY 1 STEP 5000 0 ;
+COMPONENTS 12 ;
+  - dff_0 DFF
+    + SOURCE USER
+    + PLACED ( 30000 30000 ) N ;
+  - dff_1 DFF
+    + SOURCE USER
+    + PLACED ( 100000 30000 ) N ;
+  - dff_2 DFF
+    + SOURCE USER
+    + PLACED ( 170000 30000 ) N ;
+  - dff_3 DFF
+    + SOURCE USER
+    + PLACED ( 240000 30000 ) N ;
+  - and_0 AND2
+    + SOURCE USER
+    + PLACED ( 60000 100000 ) N ;
+  - and_1 AND2
+    + SOURCE USER
+    + PLACED ( 150000 100000 ) N ;
+  - or_0 OR2
+    + SOURCE USER
+    + PLACED ( 220000 100000 ) N ;
+  - mux_0 MUX2
+    + SOURCE USER
+    + PLACED ( 40000 180000 ) N ;
+  - mux_1 MUX2
+    + SOURCE USER
+    + PLACED ( 120000 180000 ) N ;
+  - buf_0 BUF
+    + SOURCE USER
+    + PLACED ( 200000 180000 ) N ;
+  - buf_1 BUF
+    + SOURCE USER
+    + PLACED ( 260000 180000 ) N ;
+  - fill_0 FILL
+    + SOURCE DIST
+    + PLACED ( 250000 250000 ) N ;
+END COMPONENTS
+PINS 8 ;
+  - clk + NET clk
+    + DIRECTION INPUT
+    + LAYER met1 ( 0 0 ) ( 4000 20000 )
+    + PLACED ( 0 150000 ) N ;
+  - rst + NET rst
+    + DIRECTION INPUT
+    + LAYER met1 ( 0 0 ) ( 20000 4000 )
+    + PLACED ( 150000 0 ) N ;
+  - data_in + NET data_in
+    + DIRECTION INPUT
+    + LAYER met1 ( 0 0 ) ( 4000 20000 )
+    + PLACED ( 0 50000 ) N ;
+  - scan_en + NET scan_en
+    + DIRECTION INPUT
+    + LAYER met1 ( 0 0 ) ( 20000 4000 )
+    + PLACED ( 50000 0 ) N ;
+  - data_out + NET data_out
+    + DIRECTION OUTPUT
+    + LAYER met1 ( 0 0 ) ( 4000 20000 )
+    + PLACED ( 296000 150000 ) N ;
+  - scan_out + NET scan_out
+    + DIRECTION OUTPUT
+    + LAYER met1 ( 0 0 ) ( 4000 20000 )
+    + PLACED ( 296000 50000 ) N ;
+  - vdd + NET vdd
+    + DIRECTION INOUT
+    + USE POWER
+    + LAYER met5 ( 0 0 ) ( 280000 10000 )
+    + PLACED ( 10000 15000 ) N ;
+  - vss + NET vss
+    + DIRECTION INOUT
+    + USE GROUND
+    + LAYER met5 ( 0 0 ) ( 280000 10000 )
+    + PLACED ( 10000 85000 ) N ;
+END PINS
+NETS 14 ;
+  - clk
+    ( PIN clk ) ( dff_0 CLK ) ( dff_1 CLK ) ( dff_2 CLK ) ( dff_3 CLK ) ;
+  - rst
+    ( PIN rst ) ( dff_0 RST ) ( dff_1 RST ) ( dff_2 RST ) ( dff_3 RST ) ;
+  - data_in
+    ( PIN data_in ) ( dff_0 D ) ( mux_0 A ) ;
+  - scan_en
+    ( PIN scan_en ) ( mux_0 S ) ( mux_1 S ) ;
+  - q0
+    ( dff_0 Q ) ( and_0 A ) ( mux_0 B ) ;
+  - q1
+    ( dff_1 Q ) ( and_0 B ) ( and_1 A ) ;
+  - q2
+    ( dff_2 Q ) ( and_1 B ) ( or_0 A ) ;
+  - q3
+    ( dff_3 Q ) ( or_0 B ) ( mux_1 B ) ;
+  - and_out_0
+    ( and_0 Y ) ( mux_0 A ) ;
+  - and_out_1
+    ( and_1 Y ) ( mux_1 A ) ;
+  - or_out
+    ( or_0 Y ) ( buf_0 A ) ;
+  - mux_out_0
+    ( mux_0 Y ) ( buf_0 A ) ;
+  - mux_out_1
+    ( mux_1 Y ) ( buf_1 A ) ;
+  - data_out
+    ( PIN data_out ) ( buf_0 Y ) ( buf_1 Y ) ;
+END NETS
+END DESIGN

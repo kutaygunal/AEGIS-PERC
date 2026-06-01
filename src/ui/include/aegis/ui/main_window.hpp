@@ -157,6 +157,9 @@ public:
     bool onboarding_visible() const;
     QString onboarding_text() const;
     void dismiss_onboarding();
+    bool post_import_guidance_visible() const;
+    QString post_import_guidance_text() const;
+    void dismiss_post_import_guidance();
     bool is_sample_browser_visible() const;
     QStringList bundled_sample_ids() const;
     bool load_bundled_sample(const QString& sample_id);
@@ -219,6 +222,7 @@ public:
     void set_job_pipeline_artificial_delay_for_tests(int milliseconds);
     void set_report_opener_for_tests(std::function<bool(const QString&)> opener);
     void set_report_export_path_picker_for_tests(std::function<QString(const QString&)> picker);
+    void set_signoff_baseline_path_for_tests(const QString& path);
 
     // Persistence hooks (public for testability)
     void restore_window_state();

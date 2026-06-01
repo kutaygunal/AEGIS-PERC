@@ -1,5 +1,6 @@
 add_library(aegis_rules STATIC
     include/aegis/rules/violation.hpp
+    include/aegis/rules/waivers.hpp
     include/aegis/rules/rule_engine.hpp
     include/aegis/rules/electrical_rules.hpp
     include/aegis/rules/rule_pack.hpp
@@ -7,6 +8,7 @@ add_library(aegis_rules STATIC
     src/electrical_rules.cpp
     src/rule_pack.cpp
     src/violation.cpp
+    src/waivers.cpp
 )
 
 target_include_directories(aegis_rules

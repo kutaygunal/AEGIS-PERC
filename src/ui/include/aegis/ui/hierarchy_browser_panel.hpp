@@ -6,15 +6,18 @@
 
 class QLabel;
 class QLineEdit;
-class QTreeWidget;
-class QTreeWidgetItem;
+class QSortFilterProxyModel;
+class QTreeView;
 
 namespace aegis::ui {
+
+class HierarchyBrowserModel;
 
 class HierarchyBrowserPanel : public QWidget {
     Q_OBJECT
 public:
     explicit HierarchyBrowserPanel(QWidget* parent = nullptr);
+    ~HierarchyBrowserPanel() override;
 
     void set_session(const aegis::storage::ImportedDesignSession* session);
     [[nodiscard]] const aegis::storage::ImportedDesignSession* session() const noexcept;
@@ -34,17 +37,13 @@ private:
     const aegis::storage::ImportedDesignSession* m_session = nullptr;
     QLineEdit* m_search = nullptr;
     QLabel* m_status = nullptr;
-    QTreeWidget* m_tree = nullptr;
+    QTreeView* m_tree = nullptr;
+    HierarchyBrowserModel* m_model = nullptr;
+    QSortFilterProxyModel* m_proxy = nullptr;
     QString m_selected_stable_id;
 
-    void rebuild_tree();
-    void apply_search_filter();
+    void apply_filter();
     void update_status();
-    [[nodiscard]] QTreeWidgetItem* find_item_by_stable_id(const QString& stable_id) const;
-    void add_object_item(QTreeWidgetItem* parent,
-                         const QString& label,
-                         const QString& stable_id,
-                         const QString& kind);
 };
 
 } // namespace aegis::ui

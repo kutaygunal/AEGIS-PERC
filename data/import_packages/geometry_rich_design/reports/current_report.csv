@@ -1,0 +1,10 @@
+net_name,current_mA,voltage_domain,layer
+data_out,45.2,CORE_0V8,M3
+scan_out,12.1,CORE_0V8,M2
+or_out,8.5,CORE_0V8,M1
+and_out_0,6.3,CORE_0V8,M1
+and_out_1,6.3,CORE_0V8,M1
+clk,1.5,CORE_0V8,M1
+rst,0.4,CORE_0V8,M1
+data_in,0.2,CORE_0V8,M1
+scan_en,0.1,CORE_0V8,M1

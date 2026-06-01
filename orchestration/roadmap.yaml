@@ -1,167 +1,34 @@
 roadmap:
   name: "AEGIS-PERC"
   version: "1.0.0"
-  description: "Electrical rule verification and root-cause analysis platform"
+  description: "Commercial signoff workflow for electrical reliability verification"
+
+  big_idea:
+    statement: "Turn AEGIS-PERC into a tool teams can run in real signoff loops: run checks → apply waivers → diff vs baseline → gate regressions → export audit-ready reports."
+    why_now:
+      - "Core import, graph, rules, and UI workflows exist; the missing product value is the signoff loop and regression control."
+      - "Waivers and baseline diffs are table-stakes for commercial adoption and CI gating."
 
   phases:
-    - id: P1
-      name: "Phase 1 — Commercial Foundation"
-      goal: "Establish a production-grade codebase skeleton with build/test/observability infrastructure and a runnable application shell."
+    - id: S1
+      name: "Sprint 1 — Signoff Workflow MVP"
+      goal: "Ship waivers + baselines + regression diff as a cohesive headless+UI workflow."
       deliverables:
-        - Project architecture skeleton
-        - Core service registry
-        - Structured rotating logs
-        - Diagnostic bundle export
-        - Configuration schema validation
-        - Configuration migration system
-        - CI hardening
-        - Test framework setup
-        - Application shell
-        - Synthetic sample dataset
+        - Deterministic violation identity keys
+        - Waiver parsing (CSV/YAML/JSON) + application with audit trail
+        - Baseline JSON format with schema versioning
+        - Regression diff engine (new/removed/changed) with metrics
+        - CLI commands to write baseline and produce diff + exit codes for gating
+        - Reporting exports for baseline/diff JSON
+        - UI summary surfaces for active/waived and regression deltas
+        - Stress fixtures for performance and determinism
       exit_criteria:
-        - "CMake builds on Windows, Linux, and macOS"
-        - "Unit tests run in under 60 seconds"
-        - "Application launches to a dockable workspace"
-        - "Logs are structured and exportable"
-        - "Configuration loads with schema validation"
-
-    - id: P2
-      name: "Phase 2 — Verification Core"
-      goal: "Implement layout/netlist import, intermediate representation, connectivity graph, and deterministic electrical rule checking."
-      deliverables:
-        - Layout/netlist import abstraction
-        - JSON intermediate representation
-        - DEF-like parser prototype
-        - SPICE-like netlist parser prototype
-        - Connectivity graph engine
-        - Device/net/pin model
-        - Power/signal domain tagging
-        - Rule engine abstraction
-        - Basic electrical rule checks
-        - Violation result model
-        - Deterministic test fixtures
-      exit_criteria:
-        - "Synthetic layouts parse into the intermediate representation"
-        - "Graph represents devices, nets, and pins correctly"
-        - "Rule engine runs without UI dependency"
-        - "Violation model captures location, severity, and metadata"
-        - "All core verification logic is unit-tested"
-
-    - id: P3
-      name: "Phase 3 — Visualization Core ✅"
-      goal: "Completed an interactive 2D layout canvas and violation inspection UI while keeping business logic in core modules."
-      deliverables:
-        - Read-only UI scene adapter for LayoutIR
-        - QWidget/QPainter 2D canvas and layout rendering
-        - Layer visibility and appearance controls
-        - Pan/zoom/grid/selection workflow
-        - Severity-colored violation overlays and explorer
-        - Connectivity tracing and graph exploration docks
-        - Violation filtering and details panel
-        - Heatmap view
-        - Report preview
-        - Workspace actions, toolbar, shortcuts, and UI workflow tests
-      exit_criteria:
-        - "Canvas loads the synthetic sample dataset and renders layers"
-        - "Pan/zoom/selection operate with LOD caching and performance instrumentation"
-        - "Violation overlays, filters, and heatmap stay synchronized with UI state"
-        - "Details and report preview update from selection/filter models, not direct model ownership"
-        - "Graph exploration, tracing, and visualization workflow smoke tests pass"
-
-    - id: P5
-      name: "Phase 5 — Automation & Extensibility"
-      goal: "Add Python scripting, batch CLI, plugin SDK, reporting, and local persistence."
-      deliverables:
-        - Python scripting API
-        - Batch analysis CLI
-        - Plugin SDK
-        - Rule plugin interface
-        - Parser plugin interface
-        - Report generation
-        - HTML/JSON export
-        - Local database persistence
-        - Project/session save-load
-      exit_criteria:
-        - "Python scripts can load a layout and trigger rule checks"
-        - "CLI runs a batch job end-to-end with JSON report output"
-        - "Plugins load dynamically with host version checks"
-        - "Reports export to HTML and JSON with embedded diagrams"
-        - "Sessions save and restore workspace state and analysis results"
-
-    - id: P6
-      name: "Phase 6 — Customer Workflow Import & Scalable Execution"
-      goal: "Turn AEGIS-PERC into a realistic semiconductor customer-facing workflow by supporting practical design package import, project validation, scripted execution, and scalable job orchestration."
-      deliverables:
-        - Multi-file project import workflow
-        - Import manifest and project package model
-        - LEF/DEF + netlist intake contract
-        - Rule pack ingestion (YAML/JSON)
-        - Power-domain import (CSV first, UPF abstraction later)
-        - Current/activity import (CSV first)
-        - Existing report/waiver import
-        - Preflight validation and dependency diagnostics
-        - Drag-and-drop project folder ingestion
-        - Headless CLI import/run/report commands
-        - Local job execution pipeline with progress and cancellation
-        - Distributed execution design for future host/worker mode
-      exit_criteria:
-        - "A customer-style project package can be imported from desktop UI or CLI"
-        - "Required vs optional inputs are validated with actionable diagnostics"
-        - "Imported data is normalized into a reusable internal project model"
-        - "Floating-net, power-domain, and current-limit workflows run end-to-end on imported datasets"
-        - "Progress, cancellation, and result export work in local execution mode"
-        - "Distributed execution follow-on design is documented against the import/job model"
-
-    - id: P7
-      name: "Phase 7 — UI Functional Hardening"
-      goal: "Ensure every shipped desktop UI surface is functional, testable, and free of placeholder-only interactions."
-      deliverables:
-        - Functional Help/About/documentation actions
-        - Real session activity log panel
-        - Bundled sample browser and load workflow polish
-        - Real Run Checks command path
-        - QAction enablement and keyboard/focus consistency
-        - Workspace UI-state persistence
-        - Trace workflow hardening
-        - Graph explorer empty-state and navigation polish
-        - Report preview snapshot and interaction polish
-        - Unified UI empty/error/loading states
-        - Notification routing across status surfaces
-        - Comprehensive headless UI regression suite
-      exit_criteria:
-        - "No major menu, toolbar, dock, or panel action remains placeholder-only"
-        - "Sample loading, check execution, trace, filtering, graph exploration, and preview flows are test-covered"
-        - "Workspace state restores predictable UI-owned settings without test leakage"
-        - "Status, warning, and error messaging is consistent across status bar and docked UI surfaces"
-        - "Headless UI regression coverage guards all critical user workflows"
-
-    - id: P13
-      name: "Phase 13 — Post-Import Design Activation"
-      goal: "Turn a successfully imported customer package into a commercial-grade interactive design workspace with visible 2D design context, searchable objects, provenance, cross-probing, and analysis-ready state transitions."
-      deliverables:
-        - Unified imported-design session model
-        - Full imported LEF/DEF-backed 2D design scene realization
-        - Hierarchy and object browser for instances, nets, ports, and layers
-        - Rich imported object properties and provenance inspection
-        - Cross-probing across canvas, diagnostics, graph, trace, and violations
-        - Imported-design viewport presets and large-scene navigation controls
-        - Layer semantics, route coloring, and physical visibility presets
-        - Import completeness and unsupported-content coverage surfaces
-        - Reusable imported-session persistence and reopen acceleration
-        - Asynchronous post-import realization pipeline with partial-ready UI states
-        - Imported-design smoke corpus and regression coverage
-        - Guided path from import success to first actionable review
-      exit_criteria:
-        - "A successful import results in a visible, navigable 2D design workspace rather than package metadata alone"
-        - "Imported objects can be searched, selected, inspected, and cross-probed across major UI surfaces"
-        - "Users can distinguish fully rendered content, partially supported content, and unsupported content with explicit diagnostics"
-        - "Post-import realization remains responsive and communicates imported, realized, and analysis-ready states clearly"
-        - "Regression coverage proves imported-package workflows are usable beyond bundled sample/demo paths"
+        - "A baseline can be created and committed for a project deterministically."
+        - "A subsequent run can produce a diff (new/removed/changed) and gate on 'no new errors'."
+        - "Waived findings are suppressed from active lists but remain auditable in exports."
+        - "Headless test coverage exists for identity, waiver application, and diff semantics."
+        - "UI surfaces reflect waived vs active and baseline/diff summaries without duplicating core logic."
 
   dependencies:
-    - P2 depends_on: [P1]
-    - P3 depends_on: [P1, P2]
-    - P5 depends_on: [P1, P2, P3]
-    - P6 depends_on: [P1, P2, P3, P5]
-    - P7 depends_on: [P1, P2, P3]
-    - P13 depends_on: [P6, P7]
+    - "S1 depends on stable violation identity semantics and deterministic serialization."
+

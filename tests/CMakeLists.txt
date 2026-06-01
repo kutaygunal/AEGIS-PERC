@@ -59,6 +59,7 @@ add_executable(aegis_unit_tests
     unit/ui/test_canvas_performance.cpp
     unit/ui/test_ui_workflow.cpp
     unit/ui/test_realization_pipeline.cpp
+    unit/ui/test_smoke_corpus.cpp
     unit/data/test_sample_data.cpp
     unit/graph/test_graph_minimal.cpp
     unit/graph/test_connectivity_graph.cpp
@@ -74,10 +75,15 @@ add_executable(aegis_unit_tests
     unit/parsing/test_power_intent.cpp
     unit/parsing/test_current_activity.cpp
     unit/reporting/test_reporting_minimal.cpp
+    unit/reporting/test_baseline_io.cpp
+    unit/reporting/test_regression_diff.cpp
+    unit/reporting/test_signoff_exports.cpp
     unit/rules/test_rules_minimal.cpp
     unit/rules/test_rule_engine.cpp
     unit/rules/test_electrical_rules.cpp
     unit/rules/test_violation_model.cpp
+    unit/rules/test_waivers.cpp
+    unit/rules/test_waiver_application.cpp
     unit/rules/test_rule_pack.cpp
     unit/scripting/test_scripting_minimal.cpp
     unit/scripting/test_batch_cli.cpp

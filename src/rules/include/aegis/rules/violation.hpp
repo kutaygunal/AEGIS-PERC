@@ -52,6 +52,11 @@ struct Violation {
     ViolationLocation location;
     aegis::graph::PropertyMap metadata;
 
+    // Stable identity key for waivers and regression diffs.
+    // Versioned and deterministic; see docs/design/signoff_workflow.md.
+    static constexpr int identity_schema_version = 1;
+    [[nodiscard]] std::string identity_key() const;
+
     Violation() = default;
 
     // Convenience: message only (no location)

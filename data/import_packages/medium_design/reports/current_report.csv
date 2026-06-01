@@ -1,0 +1,7 @@
+net_name,current_mA,voltage_domain,layer
+out,12.5,CORE_1V0,M2
+mid3,8.2,CORE_1V0,M1
+clk,0.8,CORE_1V0,M1
+rst,0.3,CORE_1V0,M1
+a,0.1,CORE_1V0,M1
+b,0.1,CORE_1V0,M1

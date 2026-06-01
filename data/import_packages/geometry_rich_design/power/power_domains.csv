@@ -1,0 +1,12 @@
+instance,domain,voltage
+dff_0,CORE_0V8,0.8
+dff_1,CORE_0V8,0.8
+dff_2,CORE_0V8,0.8
+dff_3,CORE_0V8,0.8
+and_0,CORE_0V8,0.8
+and_1,CORE_0V8,0.8
+or_0,CORE_0V8,0.8
+mux_0,CORE_0V8,0.8
+mux_1,CORE_0V8,0.8
+buf_0,CORE_0V8,0.8
+buf_1,CORE_0V8,0.8

@@ -14,12 +14,14 @@ enum class CliExitCode {
     SuccessNoViolations = 0,
     ImportFailure = 2,
     SuccessWithViolations = 3,
+    SuccessWithRegressions = 5,
     ExecutionError = 4,
     UsageError = 64
 };
 
 struct CliProjectInput {
     std::optional<std::filesystem::path> manifest_path;
+    std::optional<std::filesystem::path> baseline_path;
     std::string project_name;
     std::vector<std::filesystem::path> lef_paths;
     std::optional<std::filesystem::path> def_path;
@@ -46,6 +48,8 @@ public:
     CliWorkflowResult import_project(const CliProjectInput& input) const;
     CliWorkflowResult run_project(const CliProjectInput& input) const;
     CliWorkflowResult report_project(const CliProjectInput& input) const;
+    CliWorkflowResult baseline_project(const CliProjectInput& input) const;
+    CliWorkflowResult diff_project(const CliProjectInput& input) const;
 
 private:
     aegis::storage::ProjectPackage build_package(const CliProjectInput& input) const;

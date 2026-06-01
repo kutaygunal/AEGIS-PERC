@@ -1,0 +1,6 @@
+instance,domain,voltage
+ff1,CORE_1V0,1.0
+ff2,CORE_1V0,1.0
+and1,CORE_1V0,1.0
+or1,CORE_1V0,1.0
+buf1,CORE_1V0,1.0

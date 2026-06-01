@@ -1,0 +1,28 @@
+manifest_version: 1
+project:
+  name: GeometryRichDesign
+  description: Geometry-rich handcrafted import package for smoke testing. Contains 12 components, 14 nets, 5 metal layers, and dense routing on a 300x300 um die.
+  customer: AEGIS Smoke Corpus
+  design_stage: place_route
+
+artifacts:
+  technology:
+    - path: layout/technology.lef
+      role: lef
+  layout:
+    - path: layout/top.def
+      role: def
+  netlist:
+    - path: netlist/top.v
+      role: verilog
+  rules:
+    - path: rules/aegis_rules.yaml
+      role: aegis_rule_pack
+  power:
+    - path: power/power_domains.csv
+      role: power_domains_csv
+      optional: true
+  current:
+    - path: reports/current_report.csv
+      role: current_csv
+      optional: true

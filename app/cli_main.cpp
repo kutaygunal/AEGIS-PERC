@@ -32,6 +32,8 @@ void print_usage()
         << "  aegis-perc-cli import --project NAME --lef FILE [--lef FILE ...] --def FILE --netlist FILE --rules FILE [--power FILE] [--current FILE] [--output FILE]\n"
         << "  aegis-perc-cli import --manifest FILE [--project NAME] [--output FILE]\n"
         << "  aegis-perc-cli run    (--manifest FILE | explicit file args) [--output FILE]\n"
+        << "  aegis-perc-cli baseline (--manifest FILE | explicit file args) [--output FILE]\n"
+        << "  aegis-perc-cli diff --baseline FILE (--manifest FILE | explicit file args) [--output FILE]\n"
         << "  aegis-perc-cli report (--manifest FILE | explicit file args) [--output FILE]\n";
 }
 
@@ -68,6 +70,8 @@ CliProjectInput parse_project_input(int argc, char** argv, std::filesystem::path
             input.waiver_paths.emplace_back(require_value(arg));
         } else if (arg == "--external-report") {
             input.external_report_paths.emplace_back(require_value(arg));
+        } else if (arg == "--baseline") {
+            input.baseline_path = require_value(arg);
         } else if (arg == "--output") {
             output_path = require_value(arg);
         } else {
@@ -115,6 +119,12 @@ int main(int argc, char** argv)
         }
         if (command == "run") {
             return finish(workflow.run_project(input), output_path);
+        }
+        if (command == "baseline") {
+            return finish(workflow.baseline_project(input), output_path);
+        }
+        if (command == "diff") {
+            return finish(workflow.diff_project(input), output_path);
         }
         if (command == "report") {
             return finish(workflow.report_project(input), output_path);

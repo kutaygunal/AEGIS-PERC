@@ -25,6 +25,11 @@ AEGIS-PERC is a Qt6/C++20 commercial-grade AI-assisted semiconductor verificatio
 - Mark successful autonomous work as `review`, not `done`.
 - Only the user can mark tasks `done`.
 
+## Commercial Value Focus
+- The single biggest missing product loop is the **signoff workflow**:
+  - Run checks → apply waivers (suppress known issues with audit trail) → diff vs baseline → gate regressions → export audit-ready reports.
+- Sprint 1 task registry has been reset to prioritize waivers, baselines, and regression diff/gating as a cohesive headless + UI workflow.
+
 ## Known Risks
 - Context-window loss can cause duplicated work.
 - Later tasks in tasks.yaml may need refinement.

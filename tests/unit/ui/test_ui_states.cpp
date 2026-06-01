@@ -170,3 +170,53 @@ TEST_CASE("UiStates reports empty connectivity graph and retains preview guidanc
     REQUIRE(window.canvas_empty_state_text() == "Load a design to inspect layout geometry.");
     REQUIRE(window.report_preview_summary_text().contains("Load a design to preview report content."));
 }
+
+TEST_CASE("UiStates shows post-import guidance after imported design scene loads", "[ui][P13-012][UiStates]")
+{
+    QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+
+    REQUIRE_FALSE(window.post_import_guidance_visible());
+
+    const auto ir = make_ir();
+    auto graph = make_graph(ir);
+    window.set_scene(aegis::ui::build_ui_scene(ir));
+    window.set_connectivity_graph(&graph);
+
+    REQUIRE_FALSE(window.post_import_guidance_visible());
+}
+
+TEST_CASE("UiStates workspace summary distinguishes imported design readiness states", "[ui][P13-012][UiStates]")
+{
+    QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
+    aegis::ui::MainWindow window;
+
+    REQUIRE(window.workspace_summary_text().contains("empty workspace"));
+
+    const auto ir = make_ir();
+    auto graph = make_graph(ir);
+    window.set_scene(aegis::ui::build_ui_scene(ir));
+    window.set_connectivity_graph(&graph);
+
+    const QString summary = window.workspace_summary_text();
+    REQUIRE(summary.contains("manual/custom scene"));
+}
+
+TEST_CASE("UiStates post-import guidance dismissal persists across restart", "[ui][P13-012][UiStates]")
+{
+    QtAppGuard guard;
+    SettingsCleanupGuard settings_guard;
+
+    {
+        aegis::ui::MainWindow window;
+        REQUIRE_FALSE(window.post_import_guidance_visible());
+        window.dismiss_post_import_guidance();
+    }
+
+    {
+        aegis::ui::MainWindow restored;
+        REQUIRE_FALSE(restored.post_import_guidance_visible());
+    }
+}

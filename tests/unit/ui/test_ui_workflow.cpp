@@ -311,9 +311,23 @@ TEST_CASE("UiWorkflow workspace summary updates after import load and run comple
 
     REQUIRE(window.trigger_workspace_action("run_checks"));
     REQUIRE(wait_until([&window]() {
-        return window.last_status_message().contains("Run Checks completed", Qt::CaseInsensitive);
-    }, 5000));
+         return window.last_status_message().contains("Run Checks completed", Qt::CaseInsensitive);
+     }, 5000));
     REQUIRE(window.workspace_summary_text().contains("Violations: 1", Qt::CaseInsensitive));
+
+    // Baseline/diff summary: point at an empty baseline (new findings expected).
+    const fs::path baseline_path = root / "reports" / "baseline.json";
+    {
+        write_file(baseline_path,
+                   "{\n"
+                   "  \"baseline_schema_version\": 1,\n"
+                   "  \"project_name\": \"FalconCPU\",\n"
+                   "  \"records\": []\n"
+                   "}\n");
+    }
+    window.set_signoff_baseline_path_for_tests(QString::fromStdString(baseline_path.string()));
+    REQUIRE(window.workspace_summary_text().contains("Baseline diff:", Qt::CaseInsensitive));
+    REQUIRE(window.workspace_summary_text().contains("new 1", Qt::CaseInsensitive));
 
     remove_tree(root);
 }

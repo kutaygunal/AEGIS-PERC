@@ -137,11 +137,58 @@ TEST_CASE("Violation serializes to JSON",
     v.metadata = v.metadata.with("line", 42);
 
     nlohmann::json j = v;
+    CHECK(j.contains("identity_key"));
     CHECK(j["rule_id"] == "ELEC-001");
     CHECK(j["severity"] == "error");
     CHECK(j["message"] == "floating net");
     CHECK(j["location"]["net_name"] == "n1");
     CHECK(j["metadata"]["line"] == 42);
+}
+
+TEST_CASE("ViolationIdentity key is stable across message/id changes",
+          "[ViolationIdentity][S1-001][fast]")
+{
+    ViolationLocation loc;
+    loc.layer = "M1";
+    loc.net_name = "vdd";
+    loc.point = aegis::graph::Point{1.234, 5.678};
+
+    Violation a{"R1", Severity::Error, "original message", loc};
+    a.id = "cluster:1";
+    Violation b{"R1", Severity::Error, "edited message", loc};
+    b.id = "cluster:2";
+
+    CHECK(a.identity_key() == b.identity_key());
+}
+
+TEST_CASE("ViolationIdentity key changes when rule or location changes",
+          "[ViolationIdentity][S1-001][fast]")
+{
+    ViolationLocation loc;
+    loc.net_name = "n1";
+    Violation base{"R1", Severity::Error, "msg", loc};
+
+    Violation rule_changed = base;
+    rule_changed.rule_id = "R2";
+    CHECK(base.identity_key() != rule_changed.identity_key());
+
+    Violation net_changed = base;
+    net_changed.location.net_name = "n2";
+    CHECK(base.identity_key() != net_changed.identity_key());
+}
+
+TEST_CASE("ViolationIdentity point quantization tolerates insignificant noise",
+          "[ViolationIdentity][S1-001][fast]")
+{
+    ViolationLocation a_loc;
+    a_loc.point = aegis::graph::Point{10.0000, 20.0000};
+
+    ViolationLocation b_loc = a_loc;
+    b_loc.point = aegis::graph::Point{10.0004, 19.9996}; // within 1e-3 after rounding
+
+    Violation a{"R", Severity::Error, "msg", a_loc};
+    Violation b{"R", Severity::Error, "msg", b_loc};
+    CHECK(a.identity_key() == b.identity_key());
 }
 
 TEST_CASE("Violation deserializes from JSON",

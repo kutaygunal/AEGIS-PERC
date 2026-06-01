@@ -34,6 +34,7 @@ class QComboBox;
 class QDialog;
 class QDockWidget;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QMenu;
 class QMenuBar;
@@ -130,8 +131,11 @@ struct MainWindow::Impl {
     TracePanel* trace_panel = nullptr;
     ActivityLogPanel* activity_log = nullptr;
     QLabel* workspace_summary_label = nullptr;
+    QLineEdit* signoff_baseline_path_edit = nullptr;
     QWidget* onboarding_panel = nullptr;
     QLabel* onboarding_label = nullptr;
+    QWidget* post_import_guidance_panel = nullptr;
+    QLabel* post_import_guidance_label = nullptr;
     QComboBox* diagnostics_severity_filter = nullptr;
     QTableWidget* diagnostics_table = nullptr;
     QPlainTextEdit* diagnostics_details = nullptr;
@@ -185,6 +189,7 @@ struct MainWindow::Impl {
     QString last_workspace_summary_text;
     std::optional<DesignCoverageSummary> last_coverage_summary;
     std::vector<aegis::rules::Violation> latest_violations;
+    QString signoff_baseline_path;
     std::vector<DiagnosticEntry> diagnostics_entries;
     QStringList recent_project_paths;
     bool reopen_last_session_enabled = false;
@@ -194,6 +199,7 @@ struct MainWindow::Impl {
     QString last_job_retry_reason;
     QString last_status_message;
     bool onboarding_dismissed = false;
+    bool post_import_guidance_dismissed = false;
     std::vector<SavedFilterPreset> filter_presets;
     std::vector<SavedWorkspaceView> workspace_views;
     std::vector<SavedViewportPreset> viewport_presets;
@@ -205,6 +211,7 @@ struct MainWindow::Impl {
         return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
     };
     std::function<QString(const QString&)> report_export_path_picker;
+    std::function<QString(QWidget*)> signoff_baseline_picker;
 };
 
 inline std::filesystem::path resolve_import_artifact_path(const std::filesystem::path& base_path,

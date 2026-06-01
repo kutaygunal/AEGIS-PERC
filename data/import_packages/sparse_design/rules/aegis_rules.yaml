@@ -1,0 +1,6 @@
+version: 1
+rules:
+  - id: FLOATING_NET
+    type: floating_net
+    severity: high
+    description: Detect nets with no valid driver or power source.

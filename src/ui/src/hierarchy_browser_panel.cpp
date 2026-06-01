@@ -1,47 +1,49 @@
 #include "aegis/ui/hierarchy_browser_panel.hpp"
+#include "aegis/ui/hierarchy_browser_model.hpp"
 #include "aegis/ui/ui_state_text.hpp"
 
+#include <QAbstractItemModel>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
+#include <QRegularExpression>
+#include <QSortFilterProxyModel>
+#include <QTreeView>
 #include <QVBoxLayout>
-
-#include <algorithm>
 
 namespace aegis::ui {
 namespace {
 
-QString kind_label(aegis::storage::ImportedDesignObjectKind kind)
-{
-    using aegis::storage::ImportedDesignObjectKind;
-    switch (kind) {
-    case ImportedDesignObjectKind::Instance: return "Instances";
-    case ImportedDesignObjectKind::Net: return "Nets";
-    case ImportedDesignObjectKind::Port: return "Ports";
-    case ImportedDesignObjectKind::Layer: return "Layers";
-    case ImportedDesignObjectKind::TechnologyMacro: return "Technology Macros";
-    case ImportedDesignObjectKind::Device: return "Devices";
-    }
-    return "Unknown";
-}
+class HierarchyBrowserFilterProxyModel final : public QSortFilterProxyModel {
+public:
+    using QSortFilterProxyModel::QSortFilterProxyModel;
 
-int kind_sort_order(aegis::storage::ImportedDesignObjectKind kind)
-{
-    using aegis::storage::ImportedDesignObjectKind;
-    switch (kind) {
-    case ImportedDesignObjectKind::Layer: return 0;
-    case ImportedDesignObjectKind::TechnologyMacro: return 1;
-    case ImportedDesignObjectKind::Instance: return 2;
-    case ImportedDesignObjectKind::Device: return 3;
-    case ImportedDesignObjectKind::Net: return 4;
-    case ImportedDesignObjectKind::Port: return 5;
+protected:
+    bool filterAcceptsRow(int source_row, const QModelIndex& source_parent) const override
+    {
+        if (!source_parent.isValid()) {
+            // Parent row = kind group. Keep it if filter is empty OR any child matches.
+            if (filterRegularExpression().pattern().isEmpty()) {
+                return true;
+            }
+            const QModelIndex group_idx = sourceModel()->index(source_row, 0, source_parent);
+            if (!group_idx.isValid()) {
+                return false;
+            }
+            const int child_count = sourceModel()->rowCount(group_idx);
+            for (int r = 0; r < child_count; ++r) {
+                if (QSortFilterProxyModel::filterAcceptsRow(r, group_idx)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        return QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent);
     }
-    return 99;
-}
+};
 
 } // namespace
 
@@ -64,9 +66,16 @@ HierarchyBrowserPanel::HierarchyBrowserPanel(QWidget* parent)
     m_status->setWordWrap(true);
     root->addWidget(m_status);
 
-    m_tree = new QTreeWidget(this);
-    m_tree->setColumnCount(2);
-    m_tree->setHeaderLabels({"Object", "Kind"});
+    m_model = new HierarchyBrowserModel(this);
+    m_proxy = new HierarchyBrowserFilterProxyModel(this);
+    m_proxy->setSourceModel(m_model);
+    m_proxy->setFilterKeyColumn(0);
+    m_proxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_proxy->setRecursiveFilteringEnabled(true);
+
+    m_tree = new QTreeView(this);
+    m_tree->setModel(m_proxy);
+    m_tree->setHeaderHidden(false);
     m_tree->header()->setStretchLastSection(false);
     m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -81,38 +90,56 @@ HierarchyBrowserPanel::HierarchyBrowserPanel(QWidget* parent)
         Q_UNUSED(search_and_select(m_search->text()));
     });
     connect(m_search, &QLineEdit::textChanged, this, [this]() {
-        apply_search_filter();
+        apply_filter();
+        update_status();
     });
-    connect(m_tree, &QTreeWidget::currentItemChanged, this,
-            [this](QTreeWidgetItem* current, QTreeWidgetItem*) {
-                m_selected_stable_id = current != nullptr ? current->data(0, Qt::UserRole).toString() : QString{};
-                if (current == nullptr) {
-                    return;
-                }
-                const QString stable_id = current->data(0, Qt::UserRole).toString();
-                if (!stable_id.isEmpty()) {
-                    emit object_selected(stable_id);
-                }
-            });
-    connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
-            [this](QTreeWidgetItem* item, int) {
-                if (item == nullptr) {
-                    return;
-                }
-                const QString stable_id = item->data(0, Qt::UserRole).toString();
-                if (!stable_id.isEmpty()) {
-                    emit object_double_clicked(stable_id);
-                    emit cross_probe_requested(stable_id, "hierarchy");
+    connect(m_tree->selectionModel(), &QItemSelectionModel::currentChanged,
+            this, [this](const QModelIndex& current, const QModelIndex&) {
+                m_selected_stable_id.clear();
+                if (current.isValid()) {
+                    const QVariant stable_id_data = m_proxy->data(current, Qt::UserRole);
+                    if (!stable_id_data.isNull()) {
+                        m_selected_stable_id = stable_id_data.toString();
+                        emit object_selected(m_selected_stable_id);
+                    }
                 }
             });
 
     update_status();
 }
 
+HierarchyBrowserPanel::~HierarchyBrowserPanel()
+{
+    // Be defensive about ownership/destruction ordering: the session is not a QObject and may already be freed.
+    if (m_model != nullptr) {
+        m_model->set_session(nullptr);
+    }
+    m_session = nullptr;
+}
+
+
 void HierarchyBrowserPanel::set_session(const aegis::storage::ImportedDesignSession* session)
 {
     m_session = session;
-    rebuild_tree();
+    m_model->set_session(session);
+    m_selected_stable_id.clear();
+
+    apply_filter();
+    update_status();
+
+    if (m_tree == nullptr) {
+        return;
+    }
+
+    // Preserve the "expanded categories" feel for small sessions, but avoid expanding huge trees.
+    const int total = (m_session != nullptr) ? static_cast<int>(m_session->objects().size()) : 0;
+    if (total > 0 && total <= 50000) {
+        for (int row = 0; row < m_proxy->rowCount(); ++row) {
+            m_tree->expand(m_proxy->index(row, 0));
+        }
+    } else {
+        m_tree->collapseAll();
+    }
 }
 
 const aegis::storage::ImportedDesignSession* HierarchyBrowserPanel::session() const noexcept
@@ -122,25 +149,31 @@ const aegis::storage::ImportedDesignSession* HierarchyBrowserPanel::session() co
 
 int HierarchyBrowserPanel::visible_item_count() const noexcept
 {
+    if (m_proxy == nullptr || m_tree == nullptr) {
+        return 0;
+    }
     int count = 0;
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
-        auto* group = m_tree->topLevelItem(i);
-        if (group == nullptr) {
-            continue;
-        }
-        for (int j = 0; j < group->childCount(); ++j) {
-            if (!group->child(j)->isHidden()) {
-                ++count;
-            }
-        }
+    for (int group_row = 0; group_row < m_proxy->rowCount(); ++group_row) {
+        const QModelIndex group_idx = m_proxy->index(group_row, 0);
+        if (!group_idx.isValid()) continue;
+        if (!m_tree->isExpanded(group_idx)) continue;
+        count += m_proxy->rowCount(group_idx);
     }
     return count;
 }
 
 QString HierarchyBrowserPanel::current_stable_id() const
 {
-    const auto* current = m_tree->currentItem();
-    return current != nullptr ? current->data(0, Qt::UserRole).toString() : QString{};
+    const auto* sel = m_tree->selectionModel();
+    if (sel == nullptr) {
+        return {};
+    }
+    const QModelIndex current = sel->currentIndex();
+    if (!current.isValid()) {
+        return {};
+    }
+    const QVariant stable_id_data = m_proxy->data(current, Qt::UserRole);
+    return stable_id_data.isNull() ? QString{} : stable_id_data.toString();
 }
 
 QString HierarchyBrowserPanel::status_text() const
@@ -151,145 +184,76 @@ QString HierarchyBrowserPanel::status_text() const
 bool HierarchyBrowserPanel::search_and_select(const QString& text)
 {
     const QString trimmed = text.trimmed();
+    m_search->setText(trimmed);
+    apply_filter();
+
     if (trimmed.isEmpty()) {
-        m_status->setText(state_text::hierarchy_enter_search());
-        return false;
-    }
-    if (m_session == nullptr) {
-        m_status->setText(state_text::hierarchy_no_session());
-        return false;
-    }
-    if (m_session->objects().empty()) {
-        m_status->setText(state_text::hierarchy_empty());
-        return false;
+        update_status();
+        return true;
     }
 
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
-        auto* group = m_tree->topLevelItem(i);
-        for (int j = 0; j < group->childCount(); ++j) {
-            auto* child = group->child(j);
-            if (child->isHidden()) {
-                continue;
-            }
-            if (child->text(0).compare(trimmed, Qt::CaseInsensitive) == 0) {
-                m_tree->setCurrentItem(child);
-                m_tree->scrollToItem(child);
-                update_status();
-                return true;
-            }
-        }
-    }
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
-        auto* group = m_tree->topLevelItem(i);
-        for (int j = 0; j < group->childCount(); ++j) {
-            auto* child = group->child(j);
-            if (child->isHidden()) {
-                continue;
-            }
-            if (child->text(0).contains(trimmed, Qt::CaseInsensitive)) {
-                m_tree->setCurrentItem(child);
-                m_tree->scrollToItem(child);
-                update_status();
-                return true;
-            }
-        }
+    // After filtering, the first visible leaf is the first matching object.
+    for (int group_row = 0; group_row < m_proxy->rowCount(); ++group_row) {
+        const QModelIndex group_idx = m_proxy->index(group_row, 0);
+        if (!group_idx.isValid()) continue;
+        const int children = m_proxy->rowCount(group_idx);
+        if (children <= 0) continue;
+        const QModelIndex first = m_proxy->index(0, 0, group_idx);
+        if (!first.isValid()) continue;
+        m_tree->expand(group_idx);
+        m_tree->setCurrentIndex(first);
+        m_tree->scrollTo(first);
+        update_status();
+        return true;
     }
 
-    const int total = static_cast<int>(m_session->objects().size());
+    const int total = m_session != nullptr ? static_cast<int>(m_session->objects().size()) : 0;
     m_status->setText(QString("No object found for '%1' (%2 total)").arg(trimmed).arg(total));
     return false;
 }
 
 void HierarchyBrowserPanel::select_by_stable_id(const QString& stable_id)
 {
-    if (auto* item = find_item_by_stable_id(stable_id)) {
-        m_tree->setCurrentItem(item);
-        m_tree->scrollToItem(item);
-        m_selected_stable_id = stable_id;
+    if (m_model == nullptr || m_proxy == nullptr) {
+        return;
     }
+    const QModelIndex src = m_model->find_by_stable_id(stable_id);
+    if (!src.isValid()) {
+        return;
+    }
+    const QModelIndex dst = m_proxy->mapFromSource(src);
+    if (!dst.isValid()) {
+        return;
+    }
+    if (dst.parent().isValid()) {
+        m_tree->expand(dst.parent());
+    }
+    m_tree->setCurrentIndex(dst);
+    m_tree->scrollTo(dst);
+    m_selected_stable_id = stable_id;
 }
 
 void HierarchyBrowserPanel::clear_selection()
 {
     m_tree->clearSelection();
-    m_tree->setCurrentItem(nullptr);
+    if (m_tree->selectionModel() != nullptr) {
+        m_tree->selectionModel()->clearCurrentIndex();
+    }
     m_selected_stable_id.clear();
 }
 
-void HierarchyBrowserPanel::rebuild_tree()
+void HierarchyBrowserPanel::apply_filter()
 {
-    const QString desired_selection = m_selected_stable_id;
-    m_tree->clear();
-    m_selected_stable_id.clear();
-
-    if (m_session == nullptr) {
-        update_status();
+    if (m_proxy == nullptr) {
         return;
     }
-
-    std::map<int, QTreeWidgetItem*> groups;
-    const auto& objects = m_session->objects();
-
-    // Build groups first
-    for (const auto& object : objects) {
-        const int order = kind_sort_order(object.kind);
-        if (groups.find(order) == groups.end()) {
-            const QString label = kind_label(object.kind);
-            auto* group = new QTreeWidgetItem(m_tree, {label, ""});
-            group->setFlags(group->flags() & ~Qt::ItemIsSelectable);
-            group->setExpanded(true);
-            groups.emplace(order, group);
-        }
-    }
-
-    // Populate items
-    for (const auto& object : objects) {
-        const int order = kind_sort_order(object.kind);
-        auto* group = groups.at(order);
-        const QString display = QString::fromStdString(object.display_name.empty() ? object.name : object.display_name);
-        const QString kind = QString::fromStdString(aegis::storage::to_string(object.kind));
-        add_object_item(group, display, QString::fromStdString(object.stable_id), kind);
-    }
-
-    // Sort each group by display name
-    for (auto& [order, group] : groups) {
-        group->sortChildren(0, Qt::AscendingOrder);
-    }
-
-    if (!desired_selection.isEmpty()) {
-        if (auto* item = find_item_by_stable_id(desired_selection)) {
-            m_tree->setCurrentItem(item);
-            m_selected_stable_id = desired_selection;
-        }
-    }
-
-    apply_search_filter();
-    update_status();
-}
-
-void HierarchyBrowserPanel::apply_search_filter()
-{
     const QString filter = m_search->text().trimmed();
-
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
-        auto* group = m_tree->topLevelItem(i);
-        if (group == nullptr) {
-            continue;
-        }
-        bool any_visible = false;
-        for (int j = 0; j < group->childCount(); ++j) {
-            auto* child = group->child(j);
-            if (child == nullptr) {
-                continue;
-            }
-            const bool matches = filter.isEmpty() || child->text(0).contains(filter, Qt::CaseInsensitive);
-            child->setHidden(!matches);
-            if (matches) {
-                any_visible = true;
-            }
-        }
-        group->setHidden(!filter.isEmpty() && !any_visible);
+    if (filter.isEmpty()) {
+        m_proxy->setFilterRegularExpression(QRegularExpression{});
+        return;
     }
+    const QRegularExpression re(QRegularExpression::escape(filter), QRegularExpression::CaseInsensitiveOption);
+    m_proxy->setFilterRegularExpression(re);
 }
 
 void HierarchyBrowserPanel::update_status()
@@ -308,37 +272,9 @@ void HierarchyBrowserPanel::update_status()
     const int visible = visible_item_count();
     QString status = QString("%1 / %2 objects visible").arg(visible).arg(total);
     if (!m_selected_stable_id.isEmpty()) {
-        status.append(QString(" — selected: %1").arg(m_selected_stable_id));
+        status.append(QString(" -- selected: %1").arg(m_selected_stable_id));
     }
     m_status->setText(status);
-}
-
-QTreeWidgetItem* HierarchyBrowserPanel::find_item_by_stable_id(const QString& stable_id) const
-{
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
-        auto* group = m_tree->topLevelItem(i);
-        if (group == nullptr) {
-            continue;
-        }
-        for (int j = 0; j < group->childCount(); ++j) {
-            auto* child = group->child(j);
-            if (child != nullptr && child->data(0, Qt::UserRole).toString() == stable_id) {
-                return child;
-            }
-        }
-    }
-    return nullptr;
-}
-
-void HierarchyBrowserPanel::add_object_item(QTreeWidgetItem* parent,
-                                             const QString& label,
-                                             const QString& stable_id,
-                                             const QString& kind)
-{
-    auto* item = parent != nullptr
-        ? new QTreeWidgetItem(parent, {label, kind})
-        : new QTreeWidgetItem(m_tree, {label, kind});
-    item->setData(0, Qt::UserRole, stable_id);
 }
 
 } // namespace aegis::ui

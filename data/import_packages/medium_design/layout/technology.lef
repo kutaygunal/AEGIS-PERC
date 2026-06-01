@@ -1,0 +1,79 @@
+VERSION 5.7 ;
+  NOWIREEXTENSIONATPIN ON ;
+  DIVIDERCHAR "/" ;
+  BUSBITCHARS "[]" ;
+MACRO medium_top
+  CLASS BLOCK ;
+  FOREIGN medium_top ;
+  ORIGIN 0.000 0.000 ;
+  SIZE 200.000 BY 200.000 ;
+  PIN clk
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 0.000 90.000 4.000 110.000 ;
+    END
+  END clk
+  PIN rst
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 90.000 0.000 110.000 4.000 ;
+    END
+  END rst
+  PIN a
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 0.000 140.000 4.000 160.000 ;
+    END
+  END a
+  PIN b
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 140.000 0.000 160.000 4.000 ;
+    END
+  END b
+  PIN out
+    DIRECTION OUTPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER met1 ;
+        RECT 196.000 90.000 200.000 110.000 ;
+    END
+  END out
+  PIN vdd
+    DIRECTION INOUT ;
+    USE POWER ;
+    PORT
+      LAYER met4 ;
+        RECT 20.000 20.000 180.000 30.000 ;
+    END
+    PORT
+      LAYER met4 ;
+        RECT 20.000 170.000 180.000 180.000 ;
+    END
+  END vdd
+  PIN vss
+    DIRECTION INOUT ;
+    USE GROUND ;
+    PORT
+      LAYER met4 ;
+        RECT 20.000 95.000 180.000 105.000 ;
+    END
+  END vss
+  OBS
+      LAYER met1 ;
+        RECT 30.000 30.000 170.000 170.000 ;
+      LAYER met2 ;
+        RECT 30.000 30.000 170.000 170.000 ;
+      LAYER met3 ;
+        RECT 30.000 30.000 170.000 170.000 ;
+  END
+END medium_top
+END LIBRARY

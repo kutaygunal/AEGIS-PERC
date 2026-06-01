@@ -10,7 +10,13 @@
 #include "aegis/parsing/verilog_parser.hpp"
 #include "aegis/rules/rule_engine.hpp"
 #include "aegis/rules/rule_pack.hpp"
+#include "aegis/rules/violation.hpp"
+#include "aegis/rules/waivers.hpp"
 #include "aegis/storage/import_validation.hpp"
+
+#include "aegis/reporting/baseline.hpp"
+#include "aegis/reporting/regression_diff.hpp"
+#include "aegis/reporting/signoff_exports.hpp"
 
 #include <map>
 #include <stdexcept>
@@ -428,6 +434,13 @@ json build_run_report(const ProjectPackage& package,
         ++severity_counts[aegis::rules::severity_to_string(violation.severity)];
     }
 
+    std::size_t waived_count = 0;
+    for (const auto& violation : violations) {
+        if (violation.metadata.get<bool>("waived").value_or(false)) {
+            ++waived_count;
+        }
+    }
+
     json artifacts = json::array();
     for (const auto& artifact : package.artifacts()) {
         artifacts.push_back(artifact_to_json(artifact));
@@ -456,10 +469,12 @@ json build_run_report(const ProjectPackage& package,
             {"artifacts", artifacts}
         }},
         {"summary", {
-            {"artifact_count", package.artifacts().size()},
-            {"violation_count", violations.size()},
-            {"severity_counts", summary_severities}
-        }},
+             {"artifact_count", package.artifacts().size()},
+             {"violation_count", violations.size()},
+             {"active_violation_count", violations.size() - waived_count},
+             {"waived_violation_count", waived_count},
+             {"severity_counts", summary_severities}
+         }},
         {"import_diagnostics", import_diagnostics},
         {"runtime_diagnostics", runtime_diagnostics},
         {"violations", violations}
@@ -499,6 +514,42 @@ CliWorkflowResult CliWorkflow::run_project(const CliProjectInput& input) const
         PreparedExecution prepared = prepare_execution(result.package, input);
         const RuleContext ctx{prepared.graph, aegis::graph::PropertyMap{}, result.package.project().name};
         result.violations = prepared.engine.run_all(ctx);
+
+        // Apply waivers (if any) and keep an audit trail in violation metadata.
+        std::vector<aegis::rules::WaiverEntry> waivers;
+        for (const auto& waiver_id : result.package.normalized().waiver_artifact_ids) {
+            const auto* artifact = result.package.find_artifact_by_id(waiver_id);
+            if (artifact == nullptr) {
+                continue;
+            }
+            const auto resolved = resolve_artifact_path(input, *artifact);
+
+            aegis::rules::WaiverParseResult parsed;
+            switch (artifact->role) {
+            case ArtifactRole::WaiverCsv:
+                parsed = aegis::rules::parse_waivers_csv_file(resolved);
+                break;
+            case ArtifactRole::WaiverJson:
+                parsed = aegis::rules::parse_waivers_json_file(resolved);
+                break;
+            case ArtifactRole::WaiverYaml:
+                parsed = aegis::rules::parse_waivers_yaml_file(resolved);
+                break;
+            default:
+                continue;
+            }
+            waivers.insert(waivers.end(),
+                           std::make_move_iterator(parsed.waivers.begin()),
+                           std::make_move_iterator(parsed.waivers.end()));
+        }
+        if (!waivers.empty()) {
+            (void)aegis::rules::apply_waivers_in_place(result.violations, waivers);
+        } else {
+            for (auto& v : result.violations) {
+                v.metadata = v.metadata.with("waived", false);
+            }
+        }
+
         result.output_json = build_run_report(result.package, result.violations, prepared.runtime_diagnostics).dump(2);
         result.exit_code = result.violations.empty()
             ? CliExitCode::SuccessNoViolations
@@ -608,6 +659,7 @@ std::string cli_exit_code_name(CliExitCode code)
     case CliExitCode::SuccessNoViolations: return "success_no_violations";
     case CliExitCode::ImportFailure: return "import_failure";
     case CliExitCode::SuccessWithViolations: return "success_with_violations";
+    case CliExitCode::SuccessWithRegressions: return "success_with_regressions";
     case CliExitCode::ExecutionError: return "execution_error";
     case CliExitCode::UsageError: return "usage_error";
     }
@@ -617,6 +669,89 @@ std::string cli_exit_code_name(CliExitCode code)
 int cli_exit_code_value(CliExitCode code) noexcept
 {
     return static_cast<int>(code);
+}
+
+CliWorkflowResult CliWorkflow::baseline_project(const CliProjectInput& input) const
+{
+    CliWorkflowResult result;
+    try {
+        // Reuse run path to build package, execute rules, and apply waivers/audit tagging.
+        result = run_project(input);
+        if (result.exit_code == CliExitCode::ImportFailure || result.exit_code == CliExitCode::ExecutionError) {
+            return result;
+        }
+
+        const auto baseline = aegis::reporting::build_baseline(result.violations, result.package.project().name);
+        aegis::reporting::RunMetadata meta;
+        meta.tool_version = "dev";
+        meta.project_name = result.package.project().name;
+        if (!result.package.normalized().rule_artifact_ids.empty()) {
+            meta.rule_pack_id = result.package.normalized().rule_artifact_ids.front();
+        }
+        result.output_json = aegis::reporting::export_baseline_json(baseline, meta);
+
+        // Baseline creation should not fail the pipeline just because findings exist.
+        result.exit_code = CliExitCode::SuccessNoViolations;
+    } catch (const std::exception& ex) {
+        result.exit_code = CliExitCode::ExecutionError;
+        result.error_message = ex.what();
+    }
+    return result;
+}
+
+CliWorkflowResult CliWorkflow::diff_project(const CliProjectInput& input) const
+{
+    CliWorkflowResult result;
+    try {
+        if (!input.baseline_path.has_value()) {
+            result.exit_code = CliExitCode::UsageError;
+            result.error_message = "Missing required --baseline for diff command";
+            return result;
+        }
+
+        // Run current project.
+        result = run_project(input);
+        if (result.exit_code == CliExitCode::ImportFailure || result.exit_code == CliExitCode::ExecutionError) {
+            return result;
+        }
+
+        const auto baseline = aegis::reporting::read_baseline_json_file(*input.baseline_path);
+        const auto diff = aegis::reporting::diff_baseline_against_violations(baseline,
+                                                                              result.violations,
+                                                                              result.package.project().name);
+
+        aegis::reporting::RunMetadata meta;
+        meta.tool_version = "dev";
+        meta.project_name = result.package.project().name;
+        if (!result.package.normalized().rule_artifact_ids.empty()) {
+            meta.rule_pack_id = result.package.normalized().rule_artifact_ids.front();
+        }
+        result.output_json = aegis::reporting::export_regression_diff_json(diff, meta);
+
+        // Regressions: any newly introduced or severity changes to a worse severity.
+        bool has_regressions = diff.summary.new_count > 0;
+        for (const auto& c : diff.changed_severity) {
+            auto rank = [](aegis::rules::Severity s) {
+                using S = aegis::rules::Severity;
+                switch (s) {
+                case S::Fatal: return 0;
+                case S::Error: return 1;
+                case S::Warning: return 2;
+                case S::Info: return 3;
+                }
+                return 99;
+            };
+            if (rank(c.to) < rank(c.from)) {
+                has_regressions = true;
+                break;
+            }
+        }
+        result.exit_code = has_regressions ? CliExitCode::SuccessWithRegressions : CliExitCode::SuccessNoViolations;
+    } catch (const std::exception& ex) {
+        result.exit_code = CliExitCode::ExecutionError;
+        result.error_message = ex.what();
+    }
+    return result;
 }
 
 } // namespace aegis::scripting

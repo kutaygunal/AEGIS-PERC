@@ -3,844 +3,254 @@
 # A task can be marked 'ready' only if all dependencies are 'done'.
 
 tasks:
-  # ─────────────────────────────────────────────────────────
-  # Sprint 5 — Automation & Extensibility (P5) — early tasks
-  # ─────────────────────────────────────────────────────────
+  # =================================================================================================
+  # Sprint 1 — Signoff Workflow (Waivers + Baselines + Regression Diff)
+  # Big idea: make AEGIS-PERC usable in real verification loops:
+  #   run checks → suppress known issues → review new/changed → gate automation → export diff reports
+  # =================================================================================================
 
-  - id: P5-001
-    phase: P5
-    title: "Batch analysis CLI"
+  - id: S1-001
+    sprint: S1
+    title: "Define violation identity + normalization contract"
     priority: high
-    area: scripting
-    risk: medium
-    depends_on: []
-    acceptance:
-      - A headless CLI executable loads a layout and runs rule checks.
-      - Output is a JSON report to stdout or file.
-      - Exit codes distinguish success, violations found, and fatal errors.
-      - No Qt Widgets dependency; QtCore is acceptable for event loop if needed.
-      - Unit tests verify CLI behavior with synthetic samples.
-    implementation_rules:
-      - Reuse core services; do not duplicate rule logic.
-      - Keep the CLI thin; it is a host for the core workflow.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "aegis-perc-cli --input samples/inverter.json --report out.json"
-      - "ctest --test-dir build --output-on-failure --R BatchCLI"
-    status: todo
-
-  # ─────────────────────────────────────────────────────────
-  # Sprint 8 — Workflow UX Completion (P8)
-  # Focus: close the gap between implemented backend/workflow pieces
-  # and fully user-drivable desktop functionality.
-  # ─────────────────────────────────────────────────────────
-
-  - id: P8-001
-    phase: P8
-    title: "Replace import placeholder with native file and folder picker"
-    priority: high
-    area: ui
-    risk: low
-    depends_on: []
-    acceptance:
-      - "Triggering `Import Design Package...` opens a real Qt file/folder selection flow."
-      - Users can choose either a project folder or multiple files without relying on drag-and-drop.
-      - Canceling the picker leaves workspace state unchanged and logs a non-error status message.
-      - Headless tests can bypass dialogs through injectable/testable picker seams.
-    implementation_rules:
-      - Keep drag-and-drop support intact.
-      - Do not hardcode absolute paths.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R ImportWizard"
-    status: done
-
-  - id: P8-002
-    phase: P8
-    title: "Upgrade import review dialog into interactive artifact table"
-    priority: high
-    area: ui
-    risk: medium
-    depends_on: [P8-001]
-    acceptance:
-      - Import review shows artifacts in a structured table instead of read-only plain text only.
-      - Each artifact row displays path, detected role, category, optional/required state, and validation status.
-      - Users can override ambiguous roles from the UI.
-      - Diagnostics remain visible alongside the table.
-    implementation_rules:
-      - Preserve the existing textual summary for logs/tests if useful.
-      - "Role override choices must map to `ArtifactRole` safely."
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R ImportWizard"
-    status: done
-
-  - id: P8-003
-    phase: P8
-    title: "Add import apply/load action that commits validated packages into the workspace"
-    priority: high
-    area: ui
-    risk: high
-    depends_on: [P8-002]
-    acceptance:
-      - "Import dialog includes an explicit `Load Project` or equivalent confirmation action."
-      - Successful import populates the workspace with project/package context instead of stopping at review.
-      - Blocking diagnostics disable the final load action until resolved or acknowledged by policy.
-      - Status bar and activity log reflect the committed import result.
-    implementation_rules:
-      - "Reuse `ProjectPackage` normalized state; do not create a second import model."
-      - Keep behavior deterministic for tests.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R ImportWizard"
-    status: done
-
-  - id: P8-004
-    phase: P8
-    title: "Wire imported rule packs and optional enrichments into desktop Run Checks"
-    priority: high
-    area: ui
-    risk: high
-    depends_on: [P8-003]
-    acceptance:
-      - "`Run Checks` uses the currently imported rule pack when available instead of only hardcoded built-in rules."
-      - Optional power-domain and current/activity CSV enrichments influence graph/rule execution in desktop mode.
-      - UI clearly reports whether execution used built-in defaults or imported package content.
-      - Failures surface actionable diagnostics to the user.
-    implementation_rules:
-      - Reuse rule-pack loading and parser logic from scripting/orchestration paths.
-      - Avoid duplicating execution logic between CLI and desktop.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R RunChecks"
-      - "ctest --test-dir build --output-on-failure -R RulePack"
-    status: done
-
-  - id: P8-005
-    phase: P8
-    title: "Execute desktop import/run/report operations through LocalJobPipeline"
-    priority: high
-    area: orchestration
-    risk: high
-    depends_on: [P8-003, P8-004]
-    acceptance:
-      - "Desktop-triggered long-running operations use `LocalJobPipeline` rather than blocking the UI thread."
-      - Progress stages are surfaced in the workspace.
-      - Completion and failure payloads feed existing preview/log panels.
-      - Synchronous sample/demo workflows remain supported for tests where needed.
-    implementation_rules:
-      - Keep UI responsive throughout pipeline execution.
-      - Define a minimal adapter layer between UI and orchestration.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R JobPipeline"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: done
-
-  - id: P8-006
-    phase: P8
-    title: "Add visible progress, cancel, and retry controls for desktop jobs"
-    priority: high
-    area: ui
-    risk: medium
-    depends_on: [P8-005]
-    acceptance:
-      - Users can see active stage, completed stage count, and current operation message.
-      - Users can cancel a running import/run/report job from the UI.
-      - Failed jobs expose a retry path when inputs are still valid.
-      - Cancellation and retry outcomes are logged clearly.
-    implementation_rules:
-      - Reflect actual pipeline state; do not simulate progress.
-      - Prevent duplicate concurrent submissions of the same action unless explicitly allowed.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R JobPipeline"
-      - "ctest --test-dir build --output-on-failure -R UiNotifications"
-    status: done
-
-  - id: P8-007
-    phase: P8
-    title: "Create job monitor/history dock for recent workflow runs"
-    priority: medium
-    area: ui
-    risk: medium
-    depends_on: [P8-006]
-    acceptance:
-      - A dock lists recent import/run/report jobs with state, timestamps, and summary results.
-      - Selecting a job reveals its progress history and final diagnostics.
-      - Completed jobs can reopen generated report outputs when present.
-      - History is bounded to avoid unbounded memory growth.
-    implementation_rules:
-      - Reuse activity-log patterns where practical.
-      - Keep the dock useful in both success and failure scenarios.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: done
-
-  - id: P8-008
-    phase: P8
-    title: "Add export actions to Report Preview for HTML and JSON outputs"
-    priority: high
-    area: reporting
-    risk: medium
-    depends_on: [P8-005]
-    acceptance:
-      - "Report Preview no longer ends with `Export is reserved for P5.` for implemented export paths."
-      - Users can export current results as HTML and JSON from the desktop UI.
-      - Exported output includes project summary, violations, and import/runtime diagnostics when available.
-      - UI reports export path and success/failure feedback.
-    implementation_rules:
-      - Reuse report-generation code where possible.
-      - Preserve copy-summary and copy-snapshot workflows.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R ReportPreview"
-      - "ctest --test-dir build --output-on-failure -R Reporting"
-    status: done
-
-  - id: P8-009
-    phase: P8
-    title: "Add workspace summary panel for loaded project, rules, and analysis readiness"
-    priority: medium
-    area: ui
-    risk: low
-    depends_on: [P8-003]
-    acceptance:
-      - Users can see current project name, loaded artifact counts, selected rule source, and readiness state at a glance.
-      - The panel distinguishes sample mode from imported-customer-project mode.
-      - Missing required inputs are surfaced before run-time failure.
-      - Summary updates automatically after import, sample load, and run completion.
-    implementation_rules:
-      - Keep summary read-only and fast to update.
-      - Reuse normalized package metadata.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: done
-
-  - id: P8-010
-    phase: P8
-    title: "Support recent projects and reopen-last-session workflows"
-    priority: medium
-    area: ui
-    risk: medium
-    depends_on: [P8-003]
-    acceptance:
-      - Recently imported projects are listed in a reopen menu or launcher surface.
-      - Users can reopen the last successful project/package on startup if enabled.
-      - Missing files are detected gracefully and removed or marked stale.
-      - Persisted entries avoid storing sensitive transient paths beyond intended scope.
-    implementation_rules:
-      - "Build on existing `QSettings` persistence."
-      - Keep persistence schema versioned.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R WorkspacePersistence"
-    status: done
-
-  - id: P8-011
-    phase: P8
-    title: "Add actionable diagnostics panel with filtering and quick navigation"
-    priority: medium
-    area: ui
-    risk: medium
-    depends_on: [P8-002]
-    acceptance:
-      - Import and run diagnostics are shown in a dedicated list/table instead of summary text only.
-      - Users can filter by severity and jump from a diagnostic to the related artifact or violation context.
-      - Blocking diagnostics are visually distinct from warnings.
-      - Empty-state guidance explains how to clear blockers.
-    implementation_rules:
-      - Keep terminology consistent with existing activity-log and empty-state text.
-      - Do not lose full diagnostic message fidelity.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R UiStates"
-      - "ctest --test-dir build --output-on-failure -R ImportWizard"
-    status: done
-
-  - id: P8-012
-    phase: P8
-    title: "Add violation bulk actions and context menus"
-    priority: medium
-    area: ui
-    risk: low
-    depends_on: [P8-004]
-    acceptance:
-      - Violation explorer supports bulk copy/export of selected rows.
-      - Context-menu actions allow trace-from-violation, center-on-canvas, and copy ID/details.
-      - Actions enable or disable correctly for empty and multi-selection states.
-      - Activity log records user-triggered bulk actions without spam.
-    implementation_rules:
-      - Reuse existing selection and trace entry points.
-      - Keep action labels consistent with toolbar/menu naming.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R ViolationExplorer"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: done
-
-  - id: P8-013
-    phase: P8
-    title: "Persist named filter presets and saved workspace views"
-    priority: medium
-    area: ui
-    risk: medium
-    depends_on: [P8-009]
-    acceptance:
-      - Users can save and restore named violation filter presets.
-      - Users can save at least one workspace view snapshot covering dock layout and key toggles.
-      - Presets survive app restart.
-      - Deleting or renaming presets updates persisted state correctly.
-    implementation_rules:
-      - Extend existing filter/state persistence rather than creating parallel storage.
-      - Keep preset serialization human-inspectable where practical.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R WorkspaceState"
-      - "ctest --test-dir build --output-on-failure -R ViolationFilter"
-    status: review
-
-  - id: P8-014
-    phase: P8
-    title: "Add first-run onboarding and guided empty-state actions"
-    priority: medium
-    area: ui
-    risk: low
-    depends_on: []
-    acceptance:
-      - Fresh users are guided toward sample loading, import, and run-check workflows from the empty workspace.
-      - Key empty states offer direct actions, not only instructional text.
-      - Help/documentation links are reachable from onboarding surfaces.
-      - Onboarding can be dismissed and remembered.
-    implementation_rules:
-      - Reuse current empty-state language where possible.
-      - Keep onboarding non-modal after first dismissal.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R UiStates"
-      - "ctest --test-dir build --output-on-failure -R SampleWorkflow"
-    status: review
-
-  - id: P8-015
-    phase: P8
-    title: "Add cross-probing between import artifacts, graph nodes, and violations"
-    priority: medium
-    area: ui
-    risk: medium
-    depends_on: [P8-004, P8-011]
-    acceptance:
-      - Users can navigate from a diagnostic or artifact to impacted violations when relationships exist.
-      - Users can navigate from a violation back to relevant net/device/import metadata.
-      - Cross-probing preserves current filters and selection context where practical.
-      - Unresolved links degrade gracefully with explicit feedback.
-    implementation_rules:
-      - Use stable IDs/metadata, not ad-hoc string matching where avoidable.
-      - Keep navigation one-click from visible panels.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-    status: review
-
-  - id: P8-016
-    phase: P8
-    title: "Polish accessibility and productivity basics across the desktop shell"
-    priority: medium
-    area: ui
-    risk: low
-    depends_on: []
-    acceptance:
-      - Major actions and panels expose sensible keyboard focus order and shortcuts.
-      - Primary controls have accessible names/tooltips suitable for assistive tooling and tests.
-      - High-value context menus are added where keyboard-only workflows currently stall.
-      - No regressions in existing shared action-state logic.
-    implementation_rules:
-      - Keep naming consistent with current action registry.
-      - Favor small reusable helper utilities over per-widget duplication.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R WorkspaceActions"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: review
-
-  # ─────────────────────────────────────────────────────────
-  # Sprint 11 — Platform, Performance, and Extensibility (P11)
-  # Focus: replace remaining platform placeholders across rendering,
-  # storage, scripting, deployment, distributed execution, and plugins.
-  # ─────────────────────────────────────────────────────────
-
-  - id: P11-001
-    phase: P11
-    title: "Upgrade the layout canvas from QPainter raster to OpenGL/Vulkan-backed rendering"
-    priority: high
-    area: ui
-    risk: high
-    depends_on: []
-    acceptance:
-      - The desktop renderer uses a GPU-backed path for layout geometry, overlays, and view transforms instead of QWidget/QPainter raster only.
-      - Existing workspace interactions (zoom, pan, selection, overlays, heatmap, trace focus) remain functionally equivalent.
-      - Rendering architecture preserves a fallback path or clear degradation behavior on unsupported systems.
-      - Performance regression coverage includes large imported scenes beyond synthetic samples.
-    implementation_rules:
-      - Preserve the existing `UiScene` boundary so rendering backend swaps do not leak into parsing/rules code.
-      - Introduce backend abstraction incrementally; avoid a flag day rewrite.
-      - Keep headless tests viable through backend seams or fallback mode.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Canvas"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: ready
-
-  - id: P11-003
-    phase: P11
-    title: "Replace the PythonApi stub with a real pybind11 automation surface"
-    priority: high
-    area: scripting
-    risk: medium
-    depends_on: []
-    acceptance:
-      - A real Python module exposes session/project loading, analysis execution, and report export APIs.
-      - Bindings are built and packaged through the project build system rather than represented by a boolean stub.
-      - Python automation reuses the same core workflow paths as CLI and desktop execution.
-      - Automated tests cover import, run, and report flows from Python.
-    implementation_rules:
-      - Keep binding classes thin over core services.
-      - Version the Python API surface deliberately and document compatibility expectations.
-      - Avoid duplicating business logic in Python wrapper code.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Scripting"
-      - "python -c \"import aegis\""
-    status: ready
-
-  - id: P11-004
-    phase: P11
-    title: "Implement real storage backends for SQLite and analytical exports"
-    priority: high
-    area: storage
-    risk: high
-    depends_on: []
-    acceptance:
-      - `StorageEngine` moves beyond a boolean stub and supports at least one local durable backend plus an enterprise-oriented backend path.
-      - Analysis sessions, violations, and run metadata can be persisted and queried.
-      - Analytical export paths support a clearly documented contract for downstream processing.
-      - Storage configuration, migrations, and failure diagnostics are documented and tested.
-    implementation_rules:
-      - Separate persistence contracts from concrete database drivers.
-      - Keep local single-user workflows simple by default.
-      - Version schemas and surface migration failures clearly.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Storage"
-      - "ctest --test-dir build --output-on-failure -R Reporting"
-    status: ready
-
-  - id: P11-005
-    phase: P11
-    title: "Harden developer packaging with Docker and optional Conan/vcpkg integration"
-    priority: medium
-    area: build
-    risk: medium
-    depends_on: []
-    acceptance:
-      - The repository includes reproducible containerized build/test flows for CI and local developer onboarding.
-      - Optional dependency-management integration is documented and usable instead of being README-only.
-      - Container/build recipes cover headless CLI/test workflows and clearly describe UI/runtime caveats.
-      - CI documentation reflects the supported package/dependency paths.
-    implementation_rules:
-      - Keep the default native CMake path working; containers are additive.
-      - Avoid introducing mutually inconsistent dependency stories.
-      - Prefer minimal, auditable build images.
-    test_commands:
-      - "docker build -t aegis-perc ."
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure"
-    status: ready
-
-  - id: P11-006
-    phase: P11
-    title: "Implement the documented distributed execution stack with host/worker transport and durable queueing"
-    priority: high
-    area: orchestration
-    risk: high
-    depends_on: [P8-005, P11-004]
-    acceptance:
-      - The host/worker model documented in `docs/design/distributed.md` is backed by real transport, progress, and durable job-state plumbing.
-      - A localhost multi-process deployment works end-to-end for submit, progress, cancel, retry, and result collection.
-      - Queue/transport choices are explicit in code/build/docs rather than architecture notes only.
-      - Failure-path tests cover worker crash, lost lease, cancellation, and artifact-resolution errors.
-    implementation_rules:
-      - Preserve `ProjectPackage` and `LocalJobPipeline` semantics as the compatibility anchor.
-      - Introduce transport/queue boundaries under orchestration, not UI modules.
-      - Keep single-machine mode first; scale-out can layer on top.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R JobPipeline"
-      - "ctest --test-dir build --output-on-failure -R Orchestration"
-    status: ready
-
-  - id: P11-007
-    phase: P11
-    title: "Replace the static rule registry story with a dynamic plugin SDK"
-    priority: medium
     area: rules
     risk: high
-    depends_on: [P11-003]
+    depends_on: []
     acceptance:
-      - Third-party rule modules can be discovered, loaded, and registered dynamically at runtime.
-      - Plugin packaging, version compatibility, and failure isolation are documented and testable.
-      - Built-in rules continue to work through the same engine contracts.
-      - Rule-pack configuration can target both built-in and plugin-provided rule types.
+      - Violation results expose a stable, deterministic "identity key" suitable for waivers and regression diffing.
+      - Identity construction is documented and unit-tested (seeded inputs produce identical keys).
+      - Identity remains stable across minor formatting changes (e.g., message text tweaks) but changes when the underlying issue meaningfully changes.
     implementation_rules:
-      - Keep ABI/API boundaries explicit and narrow.
-      - Do not let plugin loading failures break unrelated rule execution.
-      - Separate plugin discovery from plugin trust/policy decisions.
+      - Keep identity generation in core/rules (no UI dependency).
+      - Prefer explicit fields (rule_id, object stable_id, location) over free-text hashing.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R RulePack"
-      - "ctest --test-dir build --output-on-failure -R Rules"
-    status: ready
+      - "ctest --test-dir build -C Release --output-on-failure -R ViolationIdentity"
+    status: review
 
-  - id: P11-008
-    phase: P11
-    title: "Turn report generation into a real templated HTML/JSON reporting engine"
+  - id: S1-002
+    sprint: S1
+    title: "Implement waiver model + parser (CSV/YAML/JSON)"
+    priority: high
+    area: rules
+    risk: medium
+    depends_on: [S1-001]
+    acceptance:
+      - Waiver artifacts are parsed into a typed waiver model (rule scope, identity matchers, optional expiry/owner/comment fields).
+      - Parser diagnostics are deterministic and include line/row provenance when available.
+      - Invalid waivers never crash analysis; they produce actionable diagnostics.
+    implementation_rules:
+      - Do not add UI-specific fields; keep the waiver model domain-focused.
+      - Treat unknown columns/fields as warnings, not fatal errors.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R Waivers"
+    status: review
+
+  - id: S1-003
+    sprint: S1
+    title: "Apply waivers during rule results assembly"
+    priority: high
+    area: rules
+    risk: high
+    depends_on: [S1-002]
+    acceptance:
+      - Waived violations are marked/suppressed deterministically (and remain available for audit/export).
+      - Report output includes counts for total vs active vs waived findings.
+      - Headless tests verify waiver matching on synthetic and imported-design fixtures.
+    implementation_rules:
+      - Waiver application must happen in core/rules or orchestration, not in UI.
+      - Never drop waived findings silently; keep an audit trail.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R WaiverApplication"
+    status: review
+
+  - id: S1-004
+    sprint: S1
+    title: "Baseline format (JSON) + schema versioning"
+    priority: high
+    area: reporting
+    risk: medium
+    depends_on: [S1-001]
+    acceptance:
+      - A versioned baseline file can be written and read deterministically.
+      - Baseline includes identity keys, severity, rule id, and minimal stable context needed for diffing.
+      - Loading mismatched versions fails safely with actionable diagnostics.
+    implementation_rules:
+      - Keep baseline format compact and stable; avoid embedding huge payloads.
+      - "Add explicit `baseline_schema_version`."
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R BaselineIO"
+    status: review
+
+  - id: S1-005
+    sprint: S1
+    title: "Regression diff engine (new/removed/changed) + metrics"
+    priority: high
+    area: reporting
+    risk: high
+    depends_on: [S1-004, S1-003]
+    acceptance:
+      - Diff engine computes deterministic sets: new, removed, unchanged, and changed-severity findings.
+      - Diff summarizes by rule id and severity with totals suitable for gating.
+      - Unit tests cover deterministic ordering and edge cases (duplicate identities, missing keys).
+    implementation_rules:
+      - No UI dependency; expose a pure data model usable by CLI/UI.
+      - Keep sorting stable for snapshot tests.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R RegressionDiff"
+    status: review
+
+  - id: S1-006
+    sprint: S1
+    title: "CLI: add `baseline` subcommand (write) and `diff` subcommand"
+    priority: high
+    area: scripting
+    risk: medium
+    depends_on: [S1-004, S1-005]
+    acceptance:
+      - "`aegis-perc-cli baseline ... --output baseline.json` writes a baseline after running checks."
+      - "`aegis-perc-cli diff --baseline baseline.json ... --output diff.json` emits diff and exits with meaningful codes."
+      - CLI is deterministic and test-covered.
+    implementation_rules:
+      - Reuse existing CLI workflow plumbing; do not fork a second analysis path.
+      - Exit codes must distinguish "new violations" vs fatal error.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R \"aegis-perc-cli\""
+    status: review
+
+  - id: S1-007
+    sprint: S1
+    title: "Report generator: add baseline + diff JSON export"
     priority: medium
     area: reporting
     risk: medium
-    depends_on: [P11-004]
+    depends_on: [S1-004, S1-005]
     acceptance:
-      - `ReportGenerator` produces structured HTML and JSON outputs instead of being a stub, and desktop/CLI exports reuse it.
-      - Template-driven report variants support executive, engineering, and machine-readable output modes.
-      - Reports can include deterministic checks, run diagnostics, and analysis metadata.
-      - Regression tests compare stable report structure on seeded inputs.
+      - Reporting exports baseline and diff JSON with stable field ordering.
+      - Export includes run metadata (timestamp, tool version, project name, rule pack id when available).
+      - Snapshot tests verify stable outputs on seeded fixtures.
     implementation_rules:
-      - Keep presentation templates separate from report data assembly.
-      - Do not duplicate HTML generation logic across CLI and UI.
-      - Preserve deterministic outputs for tests.
+      - Keep data assembly separate from serialization.
+      - Prefer explicit structs over ad-hoc JSON construction.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Reporting"
-      - "ctest --test-dir build --output-on-failure -R ReportPreview"
-    status: ready
-
-  - id: P11-009
-    phase: P11
-    title: "Add a CSR-oriented graph backend and benchmark it against the current adjacency-list engine"
-    priority: medium
-    area: graph
-    risk: high
-    depends_on: []
-    acceptance:
-      - A CSR-oriented graph representation exists for large static connectivity workloads and is benchmarked against the current adjacency-list implementation.
-      - The graph API either abstracts backend choice cleanly or documents where CSR-specific paths are used.
-      - Benchmarks cover memory footprint and traversal performance on representative imported designs.
-      - No regressions in rule-engine correctness occur when switching supported workloads to the new backend.
-    implementation_rules:
-      - Keep the existing adjacency-list engine available during migration.
-      - Avoid premature backend exposure in UI-layer code.
-      - Prefer data-driven backend selection over hardcoded replacement.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Graph"
-      - "ctest --test-dir build --output-on-failure -R Rules"
-    status: ready
-
-  # ─────────────────────────────────────────────────────────
-  # Sprint 13 — Post-Import Design Activation (P13)
-  # Focus: turn a successfully imported customer package into a
-  # commercial-grade interactive design workspace rather than only
-  # a validated package plus runnable checks.
-  # ─────────────────────────────────────────────────────────
-
-  - id: P13-001
-    phase: P13
-    title: "Build a unified imported-design session model from physical, logical, and policy artifacts"
-    priority: high
-    area: core
-    risk: high
-    depends_on: []
-    acceptance:
-      - After import commit, the workspace owns a single normalized session object representing the active imported design.
-      - The session model links LEF technology/library data, DEF physical placement/routing context, netlist connectivity, rule-pack metadata, and optional power/current enrichments.
-      - The session model exposes stable IDs for layers, instances, ports, nets, devices, and provenance records so UI surfaces can cross-probe without ad-hoc string matching.
-      - Failed or partial enrichment data remains representable with explicit diagnostics rather than silently disappearing.
-      - Unit tests verify deterministic session construction from the shipped customer import package.
-    implementation_rules:
-      - Reuse existing `ProjectPackage`, parser outputs, and graph models rather than creating duplicate ownership trees.
-      - Keep the session object UI-consumable but UI-agnostic.
-      - Preserve provenance for imported objects wherever possible.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R Import"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-    status: done
-
-  - id: P13-002
-    phase: P13
-    title: "Materialize imported DEF/LEF content into a full interactive 2D design scene"
-    priority: high
-    area: ui
-    risk: high
-    depends_on: [P13-001]
-    acceptance:
-      - Successfully imported customer projects render as a real top-down 2D design scene rather than summary-only workspace state.
-      - Scene generation includes die/core bounds, rows/tracks when available, instances/macros, pins/ports, routed segments, vias, blockages, and annotations derived from imported artifacts.
-      - Missing or unsupported geometry categories degrade gracefully with visible diagnostics and partial rendering instead of blank scenes.
-      - Stable scene IDs map back to imported design objects for properties, diagnostics, and violations.
-      - Headless tests verify non-empty imported scenes for the shipped package and deterministic scene object counts.
-    implementation_rules:
-      - Keep rendering 2D-first; do not introduce 3D-only concepts.
-      - Reuse `UiScene` and scene-adapter boundaries rather than pushing parser structures directly into widgets.
-      - Keep unresolved geometry visible in diagnostics even when not drawable.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R SceneAdapter"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-    status: done
-
-  - id: P13-003
-    phase: P13
-    title: "Add imported-design hierarchy and object browser for instances, nets, ports, and layers"
-    priority: high
-    area: ui
-    risk: medium
-    depends_on: [P13-001, P13-002]
-    acceptance:
-      - A docked browser lists imported design objects grouped by hierarchy or logical categories such as instances, nets, ports, and layers.
-      - Users can search, filter, and select objects from the browser and have selection synchronize with canvas, properties, and graph views.
-      - Large object lists support incremental population or level-of-detail behavior so the browser remains responsive on realistic imports.
-      - Empty, partial, and unresolved hierarchy states provide explicit guidance rather than appearing broken.
-    implementation_rules:
-      - Favor model/view data sources over direct widget-owned copies of imported objects.
-      - Keep browser terminology aligned with semiconductor user expectations.
-      - Preserve stable object IDs through reloads when the underlying imported package is unchanged.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R GraphExplorer"
-      - "ctest --test-dir build --output-on-failure -R Ui"
-    status: done
-
-  - id: P13-FOLLOW-001
-    phase: P13
-    title: "Migrate HierarchyBrowser to QAbstractItemModel + QTreeView for million-object scalability"
-    priority: medium
-    area: ui
-    risk: medium
-    depends_on: [P13-003]
-    acceptance:
-      - Hierarchy browser remains responsive with 1M+ imported design objects without blocking the UI thread.
-      - Items are loaded incrementally or lazily through a custom QAbstractItemModel backed by ImportedDesignSession::objects().
-      - Search/filter is backed by the model proxy rather than iterating all child QTreeWidgetItems.
-      - Selection, sort order, and category grouping remain equivalent to the current QTreeWidget behavior.
-      - Headless regression tests cover incremental/lazy load semantics and stress fixtures.
-    implementation_rules:
-      - Keep the same MainWindow integration API (set_session, current_stable_id, search_and_select, select_by_stable_id, clear_selection).
-      - Do not leak model internals into MainWindow or headless test code.
-      - Prefer standard Qt patterns (QSortFilterProxyModel, custom QAbstractItemModel) rather than custom widget rendering.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R HierarchyBrowser"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-    status: ready
-
-  - id: P13-004
-    phase: P13
-    title: "Expose commercial-grade imported object properties and provenance inspection"
-    priority: high
-    area: ui
-    risk: medium
-    depends_on: [P13-001, P13-002]
-    acceptance:
-      - Selecting an imported instance, net, port, route segment, or diagnostic-backed object shows structured properties rather than generic placeholder metadata.
-      - Property views include source artifact path, parser/import origin, and relevant line/row references when available.
-      - Users can distinguish physical, logical, policy, power, and stress metadata in the same inspection surface.
-      - Property formatting remains readable for both sparse and dense imported metadata.
-    implementation_rules:
-      - Keep provenance display read-only and deterministic.
-      - Reuse existing properties-panel infrastructure before adding new bespoke widgets.
-      - Avoid leaking raw parser internals directly into user-facing labels.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R PropertiesPanel"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-      - "ctest --test-dir build --output-on-failure -R CanvasSelection"
-    status: done
-
-  - id: P13-005
-    phase: P13
-    title: "Implement imported-design cross-probing across canvas, diagnostics, graph, trace, and violations"
-    priority: high
-    area: ui
-    risk: high
-    depends_on: [P13-001, P13-002, P13-003, P13-004]
-    acceptance:
-      - Users can navigate from an imported artifact or object to related nets, devices, graph nodes, diagnostics, and violations in one or two actions.
-      - Cross-probing preserves current filters and reports explicit feedback when a link is unavailable or unsupported.
-      - Selecting an object from any major panel centers or reveals it in the primary 2D view when a physical location exists.
-      - Cross-probing works for imported-package workflows without requiring bundled sample mode.
-    implementation_rules:
-      - Use stable IDs and provenance mappings, not best-effort text matching, wherever possible.
-      - Keep navigation additive; avoid surprising selection clears.
-      - Log unresolved cross-probe requests once with actionable wording.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-      - "ctest --test-dir build --output-on-failure -R UiNotifications"
-    status: done
-
-  - id: P13-006
-    phase: P13
-    title: "Add imported-design viewport presets, fit modes, and large-scene navigation controls"
-    priority: medium
-    area: ui
-    risk: medium
-    depends_on: [P13-002]
-    acceptance:
-      - Users can switch between fit-whole-design, fit-selection, fit-violation, and bookmarked viewport presets on imported designs.
-      - Navigation remains usable for full-chip-style scenes through minimap-style overview, coordinates, and predictable zoom anchors.
-      - Workspace persistence restores the last meaningful imported-design viewport without trapping the user in an empty or invalid region.
-      - Performance instrumentation reflects imported-scene navigation costs separately from synthetic sample scenes.
-    implementation_rules:
-      - Extend existing viewport logic rather than introducing a separate navigation model.
-      - Keep controls keyboard-accessible and testable in headless mode where practical.
-      - Avoid storing view state that depends on unstable transient scene IDs.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R CanvasViewport"
-      - "ctest --test-dir build --output-on-failure -R WorkspacePersistence"
-    status: todo
-
-  - id: P13-007
-    phase: P13
-    title: "Introduce imported-design layer semantics, route coloring, and physical visibility presets"
-    priority: medium
-    area: ui
-    risk: medium
-    depends_on: [P13-001, P13-002]
-    acceptance:
-      - Layer controls distinguish technology, routing, cut/via, pin, blockage, and annotation classes when that information is available from imported data.
-      - The canvas can apply useful preset visibility modes such as routing-only, macros-only, pins-and-ports, power-focused, and violation-review views.
-      - Route and object coloring can reflect layer, object type, domain, or rule/violation context without corrupting the underlying imported data.
-      - Unsupported layer semantics degrade into sensible generic categories with visible diagnostics.
-    implementation_rules:
-      - Keep presets reversible and non-destructive.
-      - Reuse current layer-panel ownership patterns.
-      - Avoid hardcoding one foundry or one LEF naming convention.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R LayerPanel"
-      - "ctest --test-dir build --output-on-failure -R Ui"
+      - "ctest --test-dir build -C Release --output-on-failure -R Reporting"
     status: review
 
-  - id: P13-008
-    phase: P13
-    title: "Show import completeness and unsupported-content coverage directly in the active design workspace"
-    priority: high
-    area: ui
-    risk: medium
-    depends_on: [P13-001, P13-002, P13-004]
-    acceptance:
-      - Users can see what portion of the imported package is fully visualized, partially normalized, unsupported, or excluded from the active design view.
-      - Coverage messaging links directly to diagnostics and affected artifacts or object classes.
-      - The design workspace makes clear whether a blank or sparse region is due to actual design content, import limits, or disabled visibility filters.
-      - Coverage summaries are available before and after running checks.
-    implementation_rules:
-      - Keep coverage language actionable and non-marketing.
-      - Base summaries on tracked normalization/render results, not guesswork.
-      - Avoid flooding the activity log with repeated coverage notices.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R ImportWizard"
-      - "ctest --test-dir build --output-on-failure -R UiStates"
-    status: review
-
-  - id: P13-009
-    phase: P13
-    title: "Persist imported-design sessions as reusable workspace artifacts"
-    priority: high
-    area: storage
-    risk: high
-    depends_on: [P13-001, P13-002, P13-003]
-    acceptance:
-      - Users can reopen a previously imported project into the same logical design workspace without redoing every normalization step from scratch.
-      - Persisted session data includes imported package identity, normalized object IDs, workspace mappings, and enough cached scene metadata to accelerate reopen flows.
-      - Cache invalidation or refresh occurs when source artifacts change or parser/session schema versions change.
-      - Failed cache loads degrade safely back to fresh import/session reconstruction.
-    implementation_rules:
-      - Keep cached session artifacts versioned and disposable.
-      - Do not conflate lightweight workspace persistence with future full database backends.
-      - Preserve deterministic rebuild paths for tests.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R WorkspacePersistence"
-      - "ctest --test-dir build --output-on-failure -R Storage"
-    status: review
-
-  - id: P13-010
-    phase: P13
-    title: "Add asynchronous imported-design realization pipeline with partial-ready UI states"
-    priority: high
-    area: orchestration
-    risk: high
-    depends_on: [P13-001, P13-002, P13-003]
-    acceptance:
-      - After import succeeds, design realization stages such as normalization, scene build, browser indexing, and graph/object linking can run asynchronously without freezing the desktop shell.
-      - The UI can present partial-ready states so users understand whether the project is imported, visually loaded, indexed, and analysis-ready.
-      - Failures in later realization stages do not discard a previously valid imported package unless corruption is detected.
-      - Progress and cancellation semantics align with the existing job-monitor model.
-    implementation_rules:
-      - Reuse `LocalJobPipeline` or a compatible staged adapter rather than inventing an unrelated background-execution model.
-      - Keep state transitions explicit and testable.
-      - Avoid exposing half-built mutable models directly to widgets.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R JobPipeline"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-    status: todo
-
-  - id: P13-011
-    phase: P13
-    title: "Create imported-design commercial smoke corpus and regression coverage"
-    priority: high
-    area: testing
-    risk: medium
-    depends_on: [P13-002, P13-003, P13-005, P13-010]
-    acceptance:
-      - The repository includes a small but representative corpus of customer-style import packages covering sparse, medium, and geometry-rich designs.
-      - Regression tests verify that imported designs become visible, selectable, navigable, and cross-probeable after import succeeds.
-      - Test baselines distinguish parser success from workspace-realization success so failures localize cleanly.
-      - Corpus assets and expected limitations are documented.
-    implementation_rules:
-      - Keep corpus sizes CI-friendly.
-      - Prefer deterministic handcrafted fixtures over opaque giant binaries.
-      - Document known unsupported constructs per sample.
-    test_commands:
-      - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
-      - "ctest --test-dir build --output-on-failure -R Import"
-    status: todo
-
-  - id: P13-012
-    phase: P13
-    title: "Harden post-import user workflow from import success to first actionable review in under five guided steps"
+  - id: S1-008
+    sprint: S1
+    title: "UI: show waiver + baseline/diff summary in Workspace Summary"
     priority: medium
     area: ui
     risk: low
-    depends_on: [P13-002, P13-003, P13-005, P13-008, P13-010]
+    depends_on: [S1-003, S1-005]
     acceptance:
-      - A newly imported project guides the user from successful import to visible design, searchable objects, first checks, and first issue review with minimal friction.
-      - The workspace clearly distinguishes imported-but-not-yet-realized, realized-but-not-yet-analyzed, and analyzed states.
-      - First-use hints, summary surfaces, and context actions focus on imported-design workflows instead of sample/demo assumptions.
-      - Manual checklist coverage exists for the post-import activation journey.
+      - Workspace Summary distinguishes active vs waived findings and highlights new vs regressed findings when a baseline is present.
+      - UI uses the diff data model; it does not re-run diff logic itself.
+      - Headless UI workflow tests cover the summary text/state transitions.
     implementation_rules:
-      - Keep guidance dismissible and non-modal after the first successful import.
-      - Reuse existing onboarding and workspace-summary infrastructure where practical.
-      - Avoid duplicate status messages across status bar, notifications, and activity log.
+      - Reuse existing workspace-summary panel infrastructure.
+      - Keep UI logic presentation-only; no core state mutation.
     test_commands:
       - "cmake --build build --config Release"
-      - "ctest --test-dir build --output-on-failure -R UiStates"
-      - "ctest --test-dir build --output-on-failure -R UiWorkflow"
+      - "ctest --test-dir build -C Release --output-on-failure -R UiWorkflow"
+    status: review
+
+  - id: S1-009
+    sprint: S1
+    title: "UI: violation explorer supports 'Active vs Waived' filter pill"
+    priority: medium
+    area: ui
+    risk: medium
+    depends_on: [S1-003]
+    acceptance:
+      - Users can toggle between active and waived findings without losing selection context.
+      - Filtering does not change deterministic export/reporting results.
+      - Regression tests cover filter toggle and selection persistence.
+    implementation_rules:
+      - Use model/proxy filtering patterns; avoid per-item widget mutation.
+      - Keep cross-probing semantics unchanged.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R UiWorkflow"
     status: todo
 
-  # ─────────────────────────────────────────────────────────
+  - id: S1-010
+    sprint: S1
+    title: "CI gating: add 'no new errors' mode for diff"
+    priority: medium
+    area: orchestration
+    risk: medium
+    depends_on: [S1-006]
+    acceptance:
+      - A documented CI command fails when new Error-severity findings are introduced vs a baseline.
+      - Output clearly lists the top regressions and summary counts.
+      - A local reproduction path is documented.
+    implementation_rules:
+      - Do not require UI; must run headless.
+      - Keep output deterministic for CI logs.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R BatchCLI"
+    status: todo
+
+  - id: S1-011
+    sprint: S1
+    title: "Waiver authoring helper: export waiver candidates from selected findings"
+    priority: low
+    area: ui
+    risk: low
+    depends_on: [S1-003]
+    acceptance:
+      - UI can export a waiver template (CSV/YAML) for currently selected findings.
+      - Export includes identity keys and minimal context for human review.
+      - Tests validate deterministic ordering and content on seeded fixtures.
+    implementation_rules:
+      - Export uses core identity keys; do not invent UI-only identifiers.
+      - Provide explicit confirmation before writing files in interactive UI.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R UiWorkflow"
+    status: todo
+
+  - id: S1-012
+    sprint: S1
+    title: "Documentation: signoff workflow guide (baseline, diff, waivers)"
+    priority: medium
+    area: docs
+    risk: low
+    depends_on: [S1-006, S1-007]
+    acceptance:
+      - Docs include step-by-step commands for creating a baseline and running a diff gate.
+      - Docs specify the baseline schema version and compatibility expectations.
+      - Docs explain waiver audit semantics (active vs waived).
+    implementation_rules:
+      - Keep examples runnable against repo fixtures.
+      - Do not document unimplemented distributed features.
+    test_commands:
+      - "cmake --build build --config Release"
+    status: todo
+
+  - id: S1-013
+    sprint: S1
+    title: "Stress fixtures: generate large violation sets and validate diff/waiver performance"
+    priority: medium
+    area: testing
+    risk: medium
+    depends_on: [S1-005]
+    acceptance:
+      - Tests generate large synthetic violation sets (>= 1M identities) without OOM on CI-friendly configs.
+      - Diff and waiver-application paths complete within a reasonable budget (documented threshold).
+      - Tests are deterministic and do not depend on wall-clock timing.
+    implementation_rules:
+      - Prefer generated fixtures; do not add huge binary artifacts.
+      - Keep stress tests opt-in by label if necessary.
+    test_commands:
+      - "cmake --build build --config Release"
+      - "ctest --test-dir build -C Release --output-on-failure -R SignoffStress"
+    status: todo

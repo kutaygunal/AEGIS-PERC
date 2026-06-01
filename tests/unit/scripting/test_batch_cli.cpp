@@ -219,3 +219,102 @@ TEST_CASE("aegis-perc-cli run uses parsed Verilog connectivity for gate-level ne
 
     remove_tree(root);
 }
+
+TEST_CASE("aegis-perc-cli baseline writes a baseline JSON snapshot and diff detects regressions", "[scripting][S1][S1-006][BatchCLI]")
+{
+    const fs::path root = make_temp_dir();
+    const fs::path out_baseline = root / "out" / "baseline.json";
+    const fs::path out_diff = root / "out" / "diff.json";
+
+    write_file(root / "layout/tech.lef", "VERSION 5.8 ;\nLAYER M1\n  TYPE ROUTING ;\n  WIDTH 0.10 ;\n  PITCH 0.20 ;\n  DIRECTION HORIZONTAL ;\nEND M1\nEND LIBRARY\n");
+    write_file(root / "layout/top.def", "VERSION 5.8 ;\nDESIGN top ;\n");
+    write_file(root / "netlist/top.v",
+               "module top(input A, output Y);\n"
+               "  wire dangling;\n"
+               "  BUFX1 u0 (.A(A), .Y(Y));\n"
+               "endmodule\n");
+    write_file(root / "rules/rules.yaml",
+               "rules:\n"
+               "  - id: FLOATING_NET\n"
+               "    type: floating_net\n"
+               "    severity: high\n");
+
+    write_file(root / "manifest.json",
+               "{\n"
+               "  \"manifest_version\": 1,\n"
+               "  \"project\": {\n"
+               "    \"name\": \"FalconCPU\"\n"
+               "  },\n"
+               "  \"artifacts\": {\n"
+               "    \"technology\": [{\"id\": \"tech-1\", \"path\": \"layout/tech.lef\", \"role\": \"lef\"}],\n"
+               "    \"layout\": [{\"id\": \"layout-1\", \"path\": \"layout/top.def\", \"role\": \"def\"}],\n"
+               "    \"netlist\": [{\"id\": \"netlist-1\", \"path\": \"netlist/top.v\", \"role\": \"verilog\"}],\n"
+               "    \"rules\": [{\"id\": \"rules-1\", \"path\": \"rules/rules.yaml\", \"role\": \"aegis_rule_pack\"}],\n"
+               "    \"power\": [],\n"
+               "    \"current\": [],\n"
+               "    \"waivers\": [],\n"
+               "    \"external_reports\": []\n"
+               "  }\n"
+               "}\n");
+
+    const std::string baseline_cmd = shell_wrap(
+        quote(cli_path()) +
+        " baseline --manifest " + quote(root / "manifest.json") +
+        " --output " + quote(out_baseline));
+
+    const int baseline_exit = std::system(baseline_cmd.c_str())
+#ifndef _WIN32
+                              >> 8
+#endif
+                              ;
+    REQUIRE(baseline_exit == 0);
+    REQUIRE(fs::exists(out_baseline));
+
+    const std::string baseline = read_file(out_baseline);
+    REQUIRE(baseline.find("\"baseline_schema_version\": 1") != std::string::npos);
+    REQUIRE(baseline.find("\"records\"") != std::string::npos);
+    REQUIRE(baseline.find("\"identity_key\"") != std::string::npos);
+
+    // No regressions when diffing against the same inputs.
+    const std::string diff_same_cmd = shell_wrap(
+        quote(cli_path()) +
+        " diff --baseline " + quote(out_baseline) +
+        " --manifest " + quote(root / "manifest.json") +
+        " --output " + quote(out_diff));
+
+    const int diff_same_exit = std::system(diff_same_cmd.c_str())
+#ifndef _WIN32
+                               >> 8
+#endif
+                               ;
+    REQUIRE(diff_same_exit == 0);
+    REQUIRE(fs::exists(out_diff));
+    const std::string diff_same = read_file(out_diff);
+    REQUIRE(diff_same.find("\"new_count\": 0") != std::string::npos);
+
+    // Introduce a new floating net regression.
+    write_file(root / "netlist/top.v",
+               "module top(input A, output Y);\n"
+               "  wire dangling;\n"
+               "  wire dangling2;\n"
+               "  BUFX1 u0 (.A(A), .Y(Y));\n"
+               "endmodule\n");
+
+    const std::string diff_reg_cmd = shell_wrap(
+        quote(cli_path()) +
+        " diff --baseline " + quote(out_baseline) +
+        " --manifest " + quote(root / "manifest.json") +
+        " --output " + quote(out_diff));
+
+    const int diff_reg_exit = std::system(diff_reg_cmd.c_str())
+#ifndef _WIN32
+                              >> 8
+#endif
+                              ;
+    REQUIRE(diff_reg_exit == 5);
+
+    const std::string diff_reg = read_file(out_diff);
+    REQUIRE(diff_reg.find("\"new_count\": 1") != std::string::npos);
+
+    remove_tree(root);
+}

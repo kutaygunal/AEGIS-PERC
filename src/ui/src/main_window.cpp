@@ -1126,6 +1126,28 @@ void MainWindow::dismiss_onboarding()
     publish_ui_notification("Dismissed onboarding guidance for future sessions", ActivityLogSeverity::Info, 3000);
 }
 
+bool MainWindow::post_import_guidance_visible() const
+{
+    return m_impl->post_import_guidance_label != nullptr && m_impl->post_import_guidance_panel != nullptr
+           && m_impl->post_import_guidance_panel->isVisible();
+}
+
+QString MainWindow::post_import_guidance_text() const
+{
+    return m_impl->post_import_guidance_label != nullptr ? m_impl->post_import_guidance_label->text() : QString{};
+}
+
+void MainWindow::dismiss_post_import_guidance()
+{
+    if (m_impl->post_import_guidance_dismissed) {
+        return;
+    }
+    m_impl->post_import_guidance_dismissed = true;
+    refresh_onboarding_panel();
+    save_window_state();
+    publish_ui_notification("Dismissed post-import guidance for future sessions", ActivityLogSeverity::Info, 3000);
+}
+
 bool MainWindow::is_sample_browser_visible() const
 {
     return m_impl->sample_browser_dialog != nullptr && m_impl->sample_browser_dialog->isVisible();
@@ -1275,6 +1297,16 @@ void MainWindow::set_report_opener_for_tests(std::function<bool(const QString&)>
 void MainWindow::set_report_export_path_picker_for_tests(std::function<QString(const QString&)> picker)
 {
     m_impl->report_export_path_picker = std::move(picker);
+}
+
+void MainWindow::set_signoff_baseline_path_for_tests(const QString& path)
+{
+    m_impl->signoff_baseline_path = path;
+    if (m_impl->signoff_baseline_path_edit != nullptr) {
+        m_impl->signoff_baseline_path_edit->setText(path);
+    }
+    save_window_state();
+    refresh_workspace_summary();
 }
 
 bool MainWindow::is_import_dialog_visible() const

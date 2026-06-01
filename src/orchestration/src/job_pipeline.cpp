@@ -9,6 +9,7 @@
 #include "aegis/parsing/verilog_parser.hpp"
 #include "aegis/rules/rule_engine.hpp"
 #include "aegis/rules/rule_pack.hpp"
+#include "aegis/rules/waivers.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -170,6 +171,13 @@ json build_json_report(const ProjectPackage& package,
         ++severity_counts[aegis::rules::severity_to_string(violation.severity)];
     }
 
+    std::size_t waived_count = 0;
+    for (const auto& violation : violations) {
+        if (violation.metadata.get<bool>("waived").value_or(false)) {
+            ++waived_count;
+        }
+    }
+
     json artifacts = json::array();
     for (const auto& artifact : package.artifacts()) {
         artifacts.push_back(artifact_to_json(artifact));
@@ -198,10 +206,12 @@ json build_json_report(const ProjectPackage& package,
             {"artifacts", artifacts}
         }},
         {"summary", {
-            {"artifact_count", package.artifacts().size()},
-            {"violation_count", violations.size()},
-            {"severity_counts", summary_severities}
-        }},
+             {"artifact_count", package.artifacts().size()},
+             {"violation_count", violations.size()},
+             {"active_violation_count", violations.size() - waived_count},
+             {"waived_violation_count", waived_count},
+             {"severity_counts", summary_severities}
+         }},
         {"import_diagnostics", import_diagnostics},
         {"runtime_diagnostics", runtime_diagnostics},
         {"violations", violations}
@@ -440,6 +450,40 @@ struct LocalJobPipeline::Impl {
             if (should_cancel(*job)) {
                 complete(*job, JobState::Cancelled, "Job cancelled during rule-execution stage");
                 return;
+            }
+
+            // Apply waivers (if any) and keep an audit trail in violation metadata.
+            std::vector<aegis::rules::WaiverEntry> waivers;
+            for (const auto& waiver_id : job->request.package.normalized().waiver_artifact_ids) {
+                const auto* artifact = job->request.package.find_artifact_by_id(waiver_id);
+                if (artifact == nullptr) {
+                    continue;
+                }
+                const auto resolved = resolve_artifact_path(job->request.base_path, *artifact);
+                aegis::rules::WaiverParseResult parsed;
+                switch (artifact->role) {
+                case aegis::storage::ArtifactRole::WaiverCsv:
+                    parsed = aegis::rules::parse_waivers_csv_file(resolved);
+                    break;
+                case aegis::storage::ArtifactRole::WaiverJson:
+                    parsed = aegis::rules::parse_waivers_json_file(resolved);
+                    break;
+                case aegis::storage::ArtifactRole::WaiverYaml:
+                    parsed = aegis::rules::parse_waivers_yaml_file(resolved);
+                    break;
+                default:
+                    continue;
+                }
+                waivers.insert(waivers.end(),
+                               std::make_move_iterator(parsed.waivers.begin()),
+                               std::make_move_iterator(parsed.waivers.end()));
+            }
+            if (!waivers.empty()) {
+                (void)aegis::rules::apply_waivers_in_place(violations, waivers);
+            } else {
+                for (auto& v : violations) {
+                    v.metadata = v.metadata.with("waived", false);
+                }
             }
 
             update_stage(*job, JobStage::ReportExport, 4, "Exporting reports");

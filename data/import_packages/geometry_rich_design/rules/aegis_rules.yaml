@@ -1,0 +1,16 @@
+version: 1
+rules:
+  - id: FLOATING_NET
+    type: floating_net
+    severity: high
+    description: Detect nets with no valid driver or power source.
+  - id: EM_CURRENT_LIMIT
+    type: em_current_limit
+    severity: medium
+    description: Flag current entries exceeding per-layer thresholds.
+    parameters:
+      M1_max_mA: 10
+      M2_max_mA: 15
+      M3_max_mA: 20
+      M4_max_mA: 30
+      M5_max_mA: 50
