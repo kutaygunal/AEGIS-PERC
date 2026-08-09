@@ -1,29 +1,117 @@
-# AEGIS-PERC
+<div align="center">
 
-**Electrical Rule Verification & Signoff Platform**
+# ⚡ AEGIS-PERC — Electrical Rule Verification & Signoff Platform
 
-> A commercial-grade desktop platform for semiconductor electrical reliability verification and signoff workflow automation, built on production-quality C++20 / Qt 6 with a cohesive run → waive → diff → gate loop.
+A commercial-grade desktop platform for semiconductor electrical reliability verification and signoff workflow automation, built on production-quality C++20 / Qt 6 with a cohesive run → waive → diff → gate loop.
+
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)](https://isocpp.org/)
+[![Qt 6](https://img.shields.io/badge/Qt-6-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://www.qt.io/)
+[![CMake](https://img.shields.io/badge/CMake-3.25-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+
+**📦 Repository:** [github.com/kutaygunal/AEGIS-PERC](https://github.com/kutaygunal/AEGIS-PERC)
+
+</div>
 
 ---
 
-## Product Vision
-
-AEGIS-PERC is being developed as a commercial-grade EDA verification platform for semiconductor electrical reliability analysis. The focus is on production-quality architecture, deterministic verification workflows, and a real signoff loop (run checks → apply waivers → diff vs baseline → gate regressions → export audit-ready reports) for production design environments.
-
----
-
-## Elevator Pitch
+## 📖 Overview
 
 AEGIS-PERC analyzes semiconductor layout and connectivity data, detects electrical reliability violations (floating nets, electromigration risks, power domain mismatches), and presents results through an interactive Qt 6 desktop visualization environment with a headless CLI workflow for CI integration.
 
-The system is built for:
+**What it does:**
+1. Imports layout & netlist data (LEF, DEF, Verilog, SPICE/CDL, JSON)
+2. Builds a typed connectivity graph and runs rule-based electrical checks
+3. Applies waivers, diffs against a committed baseline, and gates regressions
+4. Exports audit-ready signoff reports for production design environments
+
+**Built for:**
 - **Chip designers** who need rapid feedback on rule violations
 - **Verification leads** who manage regression runs against a committed baseline
 - **Methodology teams** who automate checks via the headless CLI workflow
 
 ---
 
-## Implemented Features
+## 🏗️ System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DESKTOP FRONTEND (Qt 6)                       │
+│  ┌──────────────┐ ┌──────────────┐ ┌────────────────────────┐  │
+│  │ Layout       │ │ Graph        │ │ Hierarchy / Properties  │  │
+│  │ Canvas       │ │ Explorer     │ │ / Violation / Report    │  │
+│  │ (QPainter)   │ │              │ │ Preview / Activity Log  │  │
+│  └──────────────┘ └──────────────┘ └────────────────────────┘  │
+│  Dockable workspace · QSettings persistence · drag-and-drop     │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ C++20 core libraries
+┌────────────────────▼────────────────────────────────────────────┐
+│                      CORE ENGINE                                 │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐                  │
+│  │ Parsing    │ │ Graph      │ │ Rules      │                  │
+│  │ (LEF/DEF/  │ │ Engine     │ │ Engine     │                  │
+│  │  Verilog/  │ │ (adjacency │ │ (IRule +   │                  │
+│  │  SPICE +   │ │  list,     │ │  Waivers + │                  │
+│  │  IR)       │ │  DFS/BFS/  │ │  Rule Pack │                  │
+│  │            │ │  Topo)     │ │  Loader)   │                  │
+│  └────────────┘ └────────────┘ └────────────┘                  │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐                  │
+│  │ Reporting  │ │ Storage    │ │ Orchestr.  │                  │
+│  │ (Baseline, │ │ (Project   │ │ (Local Job │                  │
+│  │  Diff,     │ │  Package,  │ │  Pipeline, │                  │
+│  │  Signoff   │ │  Session,  │ │  Realiz.)  │                  │
+│  │  Exports)  │ │  Cache)    │ │            │                  │
+│  └────────────┘ └────────────┘ └────────────┘                  │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐                  │
+│  │ Core       │ │ Scripting  │ │ ML         │                  │
+│  │ (Registry, │ │ (CLI       │ │ (Feature   │                  │
+│  │  Logger,   │ │  Workflow, │ │  Extract   │                  │
+│  │  Config)   │ │  PythonApi │ │  stub)     │                  │
+│  └────────────┘ └────────────┘ └────────────┘                  │
+│                                                                  │
+│  • Event-driven architecture    • Async task scheduling         │
+│  • Service registry / DI        • Thread-pool-style staging     │
+│  • Versioned manifest + preflight  • Cancellation tokens        │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ stdio / file I/O
+┌────────────────────▼────────────────────────────────────────────┐
+│                      CLI WORKFLOW (aegis-perc-cli)                │
+│   import · run · report · baseline · diff                       │
+│   Exit codes: 0 no violations, 3 with violations,                │
+│               5 with regressions, 4 execution error,             │
+│               2 import failure, 64 usage error                   │
+└─────────────────────────────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────────┐
+│                      DATA / ARTIFACTS                            │
+│  Versioned project manifests (JSON/YAML)                         │
+│  Source artifacts (LEF/DEF/Verilog/SPICE/CDL/CSV/YAML)            │
+│  JSON-based session cache (.aegis/session_cache.json)             │
+│  JSON / HTML reports and baseline / diff exports                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | Qt 6 (Core, Widgets, Test), C++20, QPainter 2D canvas, QSettings |
+| **Core Engine** | C++20, stdlib STL, thread-pool-style staged execution |
+| **Graph Engine** | Custom adjacency-list engine (pure C++20 STL) |
+| **Logging / IO** | spdlog (rotating file + console), nlohmann_json, miniz / zip (bundle export) |
+| **Reporting** | nlohmann_json (signoff exports), basic HTML shell |
+| **Scripting** | C++ headless CLI workflow (aegis-perc-cli); Python API placeholder |
+| **Build** | CMake 3.25+ with `cmake-presets`, FetchContent for first-party deps, CPack |
+| **Testing** | Catch2 v3 (per-module `catch_discover_tests`), Qt Test |
+| **CI** | GitHub Actions (`ci-windows-release`, `ci-linux-release`) |
+
+> The project intentionally has no Boost, no OpenGL/Vulkan, no gRPC/ZeroMQ/Redis, no SQLite/PostgreSQL/Arrow/Parquet, no pybind11, and no Docker / vcpkg / Conan dependency at this time. All first-party dependencies are pulled via CMake `FetchContent`.
+
+---
+
+## ✨ Implemented Features
 
 ### 1. Layout & Netlist Import Engine
 - **Formats:** Native LEF (5.x grammar, see `docs/design/lef-coverage.md`), DEF (line-oriented subset with physical normalization), Verilog gate-level netlists (`.v`/`.sv`), hardened SPICE/CDL netlists (`.sp`/`.spi`/`.cdl`), JSON intermediate representation (`LayoutIR`), power-intent CSV, current/activity CSV
@@ -110,86 +198,7 @@ The system is built for:
 
 ---
 
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    DESKTOP FRONTEND (Qt 6)                       │
-│  ┌──────────────┐ ┌──────────────┐ ┌────────────────────────┐  │
-│  │ Layout       │ │ Graph        │ │ Hierarchy / Properties  │  │
-│  │ Canvas       │ │ Explorer     │ │ / Violation / Report    │  │
-│  │ (QPainter)   │ │              │ │ Preview / Activity Log  │  │
-│  └──────────────┘ └──────────────┘ └────────────────────────┘  │
-│  Dockable workspace · QSettings persistence · drag-and-drop     │
-└────────────────────┬────────────────────────────────────────────┘
-                     │ C++20 core libraries
-┌────────────────────▼────────────────────────────────────────────┐
-│                      CORE ENGINE                                 │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐                  │
-│  │ Parsing    │ │ Graph      │ │ Rules      │                  │
-│  │ (LEF/DEF/  │ │ Engine     │ │ Engine     │                  │
-│  │  Verilog/  │ │ (adjacency │ │ (IRule +   │                  │
-│  │  SPICE +   │ │  list,     │ │  Waivers + │                  │
-│  │  IR)       │ │  DFS/BFS/  │ │  Rule Pack │                  │
-│  │            │ │  Topo)     │ │  Loader)   │                  │
-│  └────────────┘ └────────────┘ └────────────┘                  │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐                  │
-│  │ Reporting  │ │ Storage    │ │ Orchestr.  │                  │
-│  │ (Baseline, │ │ (Project   │ │ (Local Job │                  │
-│  │  Diff,     │ │  Package,  │ │  Pipeline, │                  │
-│  │  Signoff   │ │  Session,  │ │  Realiz.)  │                  │
-│  │  Exports)  │ │  Cache)    │ │            │                  │
-│  └────────────┘ └────────────┘ └────────────┘                  │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐                  │
-│  │ Core       │ │ Scripting  │ │ ML         │                  │
-│  │ (Registry, │ │ (CLI       │ │ (Feature   │                  │
-│  │  Logger,   │ │  Workflow, │ │  Extract   │                  │
-│  │  Config)   │ │  PythonApi │ │  stub)     │                  │
-│  └────────────┘ └────────────┘ └────────────┘                  │
-│                                                                  │
-│  • Event-driven architecture    • Async task scheduling         │
-│  • Service registry / DI        • Thread-pool-style staging     │
-│  • Versioned manifest + preflight  • Cancellation tokens        │
-└────────────────────┬────────────────────────────────────────────┘
-                     │ stdio / file I/O
-┌────────────────────▼────────────────────────────────────────────┐
-│                      CLI WORKFLOW (aegis-perc-cli)                │
-│   import · run · report · baseline · diff                       │
-│   Exit codes: 0 no violations, 3 with violations,                │
-│               5 with regressions, 4 execution error,             │
-│               2 import failure, 64 usage error                   │
-└─────────────────────────────────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────────────┐
-│                      DATA / ARTIFACTS                            │
-│  Versioned project manifests (JSON/YAML)                         │
-│  Source artifacts (LEF/DEF/Verilog/SPICE/CDL/CSV/YAML)            │
-│  JSON-based session cache (.aegis/session_cache.json)             │
-│  JSON / HTML reports and baseline / diff exports                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Technology Stack
-
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | Qt 6 (Core, Widgets, Test), C++20, QPainter 2D canvas, QSettings |
-| **Core Engine** | C++20, stdlib STL, thread-pool-style staged execution |
-| **Graph Engine** | Custom adjacency-list engine (pure C++20 STL) |
-| **Logging / IO** | spdlog (rotating file + console), nlohmann_json, miniz / zip (bundle export) |
-| **Reporting** | nlohmann_json (signoff exports), basic HTML shell |
-| **Scripting** | C++ headless CLI workflow (aegis-perc-cli); Python API placeholder |
-| **Build** | CMake 3.25+ with `cmake-presets`, FetchContent for first-party deps, CPack |
-| **Testing** | Catch2 v3 (per-module `catch_discover_tests`), Qt Test |
-| **CI** | GitHub Actions (`ci-windows-release`, `ci-linux-release`) |
-
-> The project intentionally has no Boost, no OpenGL/Vulkan, no gRPC/ZeroMQ/Redis, no SQLite/PostgreSQL/Arrow/Parquet, no pybind11, and no Docker / vcpkg / Conan dependency at this time. All first-party dependencies are pulled via CMake `FetchContent`.
-
----
-
-## Repository Structure
+## 🗂️ Repository Structure
 
 ```
 AEGIS-PERC/
@@ -255,7 +264,7 @@ AEGIS-PERC/
 
 ---
 
-## Development Setup
+## 🚀 Development Setup
 
 ### Prerequisites
 - C++20 compiler (MSVC 2022 / GCC 12 / Clang 15+)
@@ -325,7 +334,7 @@ cpack -C Release   # NSIS / ZIP (Windows), DragNDrop / TGZ (macOS), TGZ / DEB (L
 
 ---
 
-## Why This Project Matters
+## 🎯 Why This Project Matters
 
 | Capability | Demonstrated Here |
 |------------|-------------------|
@@ -345,7 +354,7 @@ cpack -C Release   # NSIS / ZIP (Windows), DragNDrop / TGZ (macOS), TGZ / DEB (L
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
 ### Implemented (current source)
 
@@ -367,10 +376,12 @@ cpack -C Release   # NSIS / ZIP (Windows), DragNDrop / TGZ (macOS), TGZ / DEB (L
 
 ---
 
-## License
+## 📄 License
 
 MIT License.
 
 ---
 
-**AEGIS-PERC is intended to evolve into a commercial-grade platform for electrical rule verification, signoff workflow automation, and CI-gated regression control.**
+<div align="center">
+  AEGIS-PERC is intended to evolve into a commercial-grade platform for electrical rule verification, signoff workflow automation, and CI-gated regression control.
+</div>
