@@ -1531,6 +1531,13 @@ void MainWindow::setup_dock_panels()
         // (e.g. from set_workspace_state) are guarded by
         // `applying_workspace_state` so they don't pollute user intent.
         connect(dock, &QDockWidget::visibilityChanged, this, [this, title](bool visible) {
+            // m_impl is destroyed before this dock is (Qt-owned children are
+            // torn down by the base-class destructor, which runs after this
+            // class's own members) - a visibilityChanged fired as part of
+            // that teardown must not dereference a null m_impl.
+            if (!m_impl) {
+                return;
+            }
             if (m_impl->applying_workspace_state) {
                 return;
             }
