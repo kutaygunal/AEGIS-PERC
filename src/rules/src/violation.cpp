@@ -22,14 +22,14 @@ std::string normalize_token(std::string value)
     std::string out;
     out.reserve(value.size());
     bool prev_space = false;
-    for (unsigned char c : value) {
-        if (is_space(c)) {
+    for (char c : value) {
+        if (is_space(static_cast<unsigned char>(c))) {
             if (!prev_space) out.push_back(' ');
             prev_space = true;
             continue;
         }
         prev_space = false;
-        out.push_back(static_cast<char>(c));
+        out.push_back(c);
     }
     return out;
 }
@@ -52,13 +52,14 @@ std::string percent_encode(std::string_view s)
 
     std::string out;
     out.reserve(s.size());
-    for (unsigned char c : s) {
-        if (is_safe(c)) {
-            out.push_back(static_cast<char>(c));
+    for (char c : s) {
+        const auto uc = static_cast<unsigned char>(c);
+        if (is_safe(uc)) {
+            out.push_back(c);
             continue;
         }
         char buf[4] = {};
-        std::snprintf(buf, sizeof(buf), "%%%02X", static_cast<unsigned int>(c));
+        std::snprintf(buf, sizeof(buf), "%%%02X", static_cast<unsigned int>(uc));
         out.append(buf);
     }
     return out;

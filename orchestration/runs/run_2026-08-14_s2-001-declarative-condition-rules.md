@@ -62,6 +62,14 @@ ctest --test-dir build/windows-release -C Release --output-on-failure   (full su
 - **Scope boundary**: this is deliberately *not* a rule DSL. No OR/NOT combinators, no cross-node predicates (e.g. "net driven by >1 output pin" stays a purpose-built rule), no geometry-based predicates (blocked on GDSII/OASIS ingestion — a separate, larger gap). See docs/design/declarative_rules.md "Non-goals".
 - **Existing sample rule packs unchanged**: `data/import_packages/*/rules/aegis_rules.yaml` were not modified — this is a new capability, not a requirement on existing packages.
 
+## Post-PR CI Fixups (2026-08-14, same day)
+PR #1's `linux-release` / `linux-coverage` / `linux-sanitizers` checks failed. Root-caused as **two pre-existing bugs already on `main`** (confirmed by checking the last several CI runs on `main`, all failing the same way since at least 2026-05-21) — neither introduced by S2-001, but fixed here since they blocked the PR:
+
+1. **`-Wsign-conversion` on `for (unsigned char x : some_string)`** in `src/rules/src/waivers.cpp` and `src/rules/src/violation.cpp` (3 call sites). GCC flags the implicit `char`→`unsigned char` conversion in the range-for element declaration itself. Fixed by iterating `char` and casting explicitly (`static_cast<unsigned char>(...)`) only at the point of use (`std::isspace`, `std::isalnum`, `%02X` formatting) — matches how `rule_pack.cpp`'s existing `to_lower`/`trim` already do it via lambda parameters.
+2. **`gmtime_s` unconditionally used** in `src/storage/src/session_cache.cpp:147` — an MSVC-only "secure CRT" function, not available under glibc (Linux). Fixed by adding the same `#ifdef _WIN32 ... gmtime_s ... #else ... gmtime_r ... #endif` guard already used correctly in `src/core/src/diagnostic_bundle.cpp`.
+
+**Verification:** since Qt6 isn't installed in this environment and CI needed the *exact* `linux-release` preset flags (`-Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Woverloaded-virtual -Wconversion -Wsign-conversion -Werror`), verification used WSL Ubuntu (GCC 13.3.0, matching CI's Ubuntu runner exactly) with portable `cmake`/`ninja` binaries (no `sudo`/apt access available) against a scratch copy of the repo with only the Qt-dependent `ui` subdirectory and the `aegis-perc` GUI target excluded. Result: **every non-UI module (core, parsing, graph, rules, ml, scripting, reporting, storage, orchestration) plus `aegis-perc-cli` builds clean** with zero errors/warnings under the real CI compiler and flags. `ui` itself could not be verified this way (no Qt6 available without `sudo apt`); a repo-wide grep confirmed no further occurrences of either bug pattern anywhere under `src/` or `app/`, including `ui`. Windows build + full `rules`/`storage` test suites (51 tests) re-verified green after the fix.
+
 ## Acceptance Criteria Verification
 | Criterion | Status |
 |---|---|
