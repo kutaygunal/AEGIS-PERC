@@ -139,6 +139,7 @@ AEGIS-PERC analyzes semiconductor layout and connectivity data, detects electric
 - **Stable violation identity keys** (schema-versioned) for waivers and regression diffs
 - **Waivers:** parse CSV / JSON / YAML; apply in place with audit trail (`metadata.waived`, `waiver_comment`, `waiver_owner`, `waiver_expires_on`)
 - **Customer-configurable rule packs** loaded from JSON / YAML with typed parameters
+- **Declarative condition rules** (`type: condition`, Sprint 2): field/operator/value checks over device/net/pin nodes defined entirely in a rule pack, no new C++ class required — see `docs/design/declarative_rules.md`
 
 ### 4. Signoff Workflow (Sprint 1)
 - **Baseline IO:** versioned `BaselineFile` JSON format (`baseline_schema_version`); deterministic record ordering; safe schema mismatch handling
