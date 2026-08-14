@@ -96,7 +96,27 @@ MainWindow::MainWindow(QWidget* parent)
     restore_window_state();
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    // hierarchy_browser and properties_panel are Qt-owned children (parented
+    // widgets), torn down by the QWidget/QObject base-class destructor,
+    // which runs *after* this class's own members are destroyed. m_impl —
+    // and with it loaded_import_session — is one of those members, so by
+    // the time base-class teardown reaches those panels, the session they
+    // point at (via a raw, non-owning pointer) would already be freed. A
+    // deferred Qt event during close (e.g. a tree view layout/paint pass)
+    // can still call back into their models at that point, so clear the
+    // session pointer explicitly here, first, while everything is still
+    // alive.
+    if (m_impl) {
+        if (m_impl->hierarchy_browser) {
+            m_impl->hierarchy_browser->set_session(nullptr);
+        }
+        if (m_impl->properties_panel) {
+            m_impl->properties_panel->set_session(nullptr);
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // UI Setup

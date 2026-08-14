@@ -20,6 +20,11 @@ No implementation task in progress.
 - None recorded.
 
 ## Important Notes
+- **CI was red on every run since at least 2026-05-21** (checked via `gh run list`). PR #1 (S2-001) surfaced and fixed several pre-existing, unrelated build/test bugs blocking Linux and Windows CI — see the "Post-PR CI Fixups" sections in `orchestration/runs/run_2026-08-14_s2-001-declarative-condition-rules.md` for full detail. Summary:
+  - Fixed: GCC `-Wsign-conversion` bugs in `waivers.cpp`, `violation.cpp`, `hierarchy_browser_model.cpp`, `layout_canvas.cpp` (Linux-only, MSVC didn't flag these).
+  - Fixed: `gmtime_s` used unconditionally in `session_cache.cpp` (MSVC-only, doesn't exist on Linux/glibc).
+  - Fixed: a real use-after-free on `MainWindow` teardown (`HierarchyBrowserModel`/`PropertiesPanel` holding a dangling session pointer after `m_impl` destructs before Qt's child-widget teardown) — this was the root cause of `WorkspacePersistence` test #156's "pre-existing segfault" previously attributed (S1-014 run log) to an unspecified async import-restore race. Full local Windows suite now passes **498/498** — first fully green run found in this repo's history.
+  - **Still open**: `WorkspacePersistence` test #158 has a *second*, separate crash — timing-sensitive, reproduces standalone (~70-90%) but not under a debugger, not fixed. See the run log for full characterization. Worth checking whether `linux-sanitizers` CI (ASan/UBSan) catches it now that CI can run to completion.
 - README source-code synchronization (2026-05-23) is still valid for everything except the new S2-001 capability below (README has not been re-synced for it yet — next task should add a short "declarative rule packs" bullet to the Verification Core feature list).
 - S2-001 implementation:
   - New rule pack `type: condition`: data-defined checks (field/operator/value predicates, ANDed) over device/net/pin nodes — no new C++ class or recompile needed. Full schema in `docs/design/declarative_rules.md`.

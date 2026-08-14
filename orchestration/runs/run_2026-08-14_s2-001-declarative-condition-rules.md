@@ -70,6 +70,28 @@ PR #1's `linux-release` / `linux-coverage` / `linux-sanitizers` checks failed. R
 
 **Verification:** since Qt6 isn't installed in this environment and CI needed the *exact* `linux-release` preset flags (`-Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Woverloaded-virtual -Wconversion -Wsign-conversion -Werror`), verification used WSL Ubuntu (GCC 13.3.0, matching CI's Ubuntu runner exactly) with portable `cmake`/`ninja` binaries (no `sudo`/apt access available) against a scratch copy of the repo with only the Qt-dependent `ui` subdirectory and the `aegis-perc` GUI target excluded. Result: **every non-UI module (core, parsing, graph, rules, ml, scripting, reporting, storage, orchestration) plus `aegis-perc-cli` builds clean** with zero errors/warnings under the real CI compiler and flags. `ui` itself could not be verified this way (no Qt6 available without `sudo apt`); a repo-wide grep confirmed no further occurrences of either bug pattern anywhere under `src/` or `app/`, including `ui`. Windows build + full `rules`/`storage` test suites (51 tests) re-verified green after the fix.
 
+## Post-PR CI Fixups, part 2: the "pre-existing WorkspacePersistence segfault" was two bugs, not one
+Windows CI kept failing on `WorkspacePersistence` tests #156/#158, previously documented (S1-014 run log, HANDOFF.md) as one pre-existing, unrelated flaky segfault. Investigating properly (Windows Debugging Tools `cdb.exe`, a Debug build with real PDB symbols) showed this is actually **two distinct bugs**:
+
+### Bug A — fixed here: use-after-free on `MainWindow` teardown (test #156, and the deterministic part of #158)
+Root cause: `MainWindow`'s only direct member is `std::unique_ptr<Impl> m_impl` (PIMPL). C++ destroys a derived class's own members *before* running base-class destructors, so `m_impl` — and with it `Impl::loaded_import_session` — was destroyed *before* `QMainWindow`'s base-class destructor tears down child widgets. `HierarchyBrowserPanel`/`PropertiesPanel` (Qt-owned children, torn down later) hold a raw, non-owning `const ImportedDesignSession*` into that session. A deferred Qt event during window close (a `QTreeView` layout/paint pass observed in the crash stack: `QWidget::~QWidget → QWindow::close → … → QHeaderView::resizeSections → QStyledItemDelegate::sizeHint → QAbstractItemModel::multiData → QSortFilterProxyModel::data → HierarchyBrowserModel::object_at`) then dereferenced the dangling pointer — confirmed via a `0xFEEEFEEE`-patterned (MSVC debug-heap "freed") value at the fault address.
+
+**Fix** (`src/ui/src/main_window.cpp`): gave `MainWindow::~MainWindow()` an explicit body that calls `hierarchy_browser->set_session(nullptr)` / `properties_panel->set_session(nullptr)` *first*, before `m_impl` (and thus the session) is destroyed. `HierarchyBrowserModel::set_session(nullptr)` already does a proper `beginResetModel()/endResetModel()`, so this safely invalidates any in-flight model state.
+
+**Verification:** reproduced under `cdb.exe` with a symbolized Debug build (exact stack trace above), confirmed fixed (10/10 clean runs across Debug), then the full local Windows suite went **498/498 passing** — the first fully green run of this repo's test suite across every historical CI run checked (back to 2026-05-21).
+
+### Bug B — found, not fixed: a second, timing-sensitive crash in test #158 only
+While hunting Bug A, `WorkspacePersistence persists named filter presets and workspace views across restart` (test #158) kept crashing intermittently *even after Bug A's fix*, including on a run with **no import/session data involved at all** — so it cannot be the same root cause.
+
+Characterized as thoroughly as available tooling allowed:
+- **Debug build**: 0/15 crashes across two batches (Debug + Debug-under-`cdb`).
+- **Release build, standalone (no debugger)**: ~7/8 crashes.
+- **RelWithDebInfo, standalone**: ~4/6 crashes.
+- **RelWithDebInfo, *under* `cdb`**: 0/15 crashes — the debugger's presence itself suppresses the bug (classic heisenbug: timing- or memory-layout-sensitive undefined behavior, e.g. an uninitialized read or a race, where the debugger's overhead changes the outcome).
+- AddressSanitizer (`windows-asan-debug` preset) was attempted but did not actually instrument the binary on this toolchain (`/fsanitize=address` was silently dropped by the linker — `LNK4044`); Application Verifier page-heap (`gflags.exe`) was attempted but requires admin rights not available in this environment, so it was not force-escalated.
+
+**Not fixed.** I could not get a debugger-confirmed stack trace for this one, so I'm not willing to guess at a fix. Given `linux-sanitizers` is a real CI job (ASan/UBSan on Linux) that this PR's other fixes should now let run to completion for the first time, that CI job may catch this with a clean, precise report — worth checking before spending more local time on it. Recorded here rather than silently left as "still flaky" so the next session doesn't have to rediscover this from scratch.
+
 ## Acceptance Criteria Verification
 | Criterion | Status |
 |---|---|
