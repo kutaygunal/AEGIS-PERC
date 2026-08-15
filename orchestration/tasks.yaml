@@ -312,3 +312,99 @@ tasks:
       - "cmake --build build/windows-release --config Release --target aegis_unit_tests"
       - "ctest --test-dir build/windows-release -C Release --output-on-failure -L rules"
     status: review
+
+  # =================================================================================================
+  # Sprint 3 — Gap Analysis Follow-ons
+  # Big idea: address the larger, previously-unscheduled gaps named in the 2026-08-14 commercial
+  # gap analysis (GDSII/OASIS ingestion, physical/reliability checks, distributed execution) as
+  # scoped first increments, plus the near-term quick wins from the companion product-lens gap
+  # analysis. Delivered by four parallel agents in isolated worktrees; merged via an integration
+  # branch (integration/sprint3-gap-analysis) with a clean combined build/test pass.
+  # Source: docs-external commercial gap analysis (2026-08-14, engineering lens) +
+  #         product gap analysis (2026-08-14, "AEGIS-PERC as a product, not a codebase").
+  # =================================================================================================
+
+  - id: S3-001
+    sprint: S3
+    title: "Parsing: native GDSII binary parser (first increment); OASIS deferred"
+    priority: medium
+    area: parsing
+    risk: medium
+    depends_on: []
+    acceptance:
+      - "A GdsiiParser conforming to IParser reads a subset of GDSII binary stream records (HEADER, BGNLIB, LIBNAME, UNITS, BGNSTR, STRNAME, BOUNDARY, LAYER, DATATYPE, XY, ENDEL, ENDSTR, ENDLIB) into LayoutIR."
+      - "Malformed record length and unsupported record types produce diagnostics, not crashes or fatal errors; unsupported records are skipped with deduplicated warnings."
+      - "Cancellation tokens stop parsing mid-stream, matching the existing LEF/DEF parser contract."
+      - "OASIS ingestion and GDSII PATH/SREF/AREF/TEXT/BOX records are explicitly out of scope and documented as such in docs/design/gdsii_oasis_ingestion.md."
+    implementation_rules:
+      - Keep this additive: new files only (gdsii_parser.hpp/.cpp); do not modify existing LEF/DEF parser behavior.
+      - No dependency on rules engine, ML, or Qt Widgets (parsing module boundary, AGENTS.md).
+      - Reuse the existing LayoutIR geometry representation; do not introduce a parallel geometry type.
+    test_commands:
+      - "cmake --build build --config Release --target aegis_unit_tests"
+      - "ctest --test-dir build -C Release --output-on-failure -L Gdsii"
+    status: review
+
+  - id: S3-002
+    sprint: S3
+    title: "Rules: antenna-ratio physical/reliability check (first increment)"
+    priority: medium
+    area: rules
+    risk: medium
+    depends_on: []
+    acceptance:
+      - "A new type: antenna_ratio built-in rule flags a net when accumulated connected metal area exceeds a configurable multiple of the total gate area of MOSFETs connected to it via their gate terminal."
+      - "Threshold is parameterizable from a rule pack, following the existing em_current_limit pattern."
+      - "Missing/unparsable geometry data does not crash; the node is not flagged, matching the em_current_limit convention for unparsable data."
+      - "Existing built-in and declarative-condition rule types are unaffected — full existing rules test suite still passes."
+      - "Known gap documented rather than papered over: LayoutIR::geometries (routing polygons) is not yet linked to ConnectivityGraph nets, so true per-net metal-area accumulation from raw LEF/DEF/GDSII geometry is not yet computable; the rule currently consumes a metal_area_um2 net property, ready to fire once a future enrichment stage populates it."
+    implementation_rules:
+      - Keep this additive: new physical_rules.hpp/.cpp; do not modify electrical_rules.* directly.
+      - No dependency on ML or Qt Widgets (rules module boundary, AGENTS.md).
+    test_commands:
+      - "cmake --build build --config Release --target aegis_unit_tests"
+      - "ctest --test-dir build -C Release --output-on-failure -R PhysicalRules"
+    status: review
+
+  - id: S3-003
+    sprint: S3
+    title: "Orchestration: distributed execution Phase 2 (localhost host/worker split)"
+    priority: medium
+    area: orchestration
+    risk: high
+    depends_on: []
+    acceptance:
+      - "Phase 2 of docs/design/distributed.md's evolution path is implemented: host/worker process split, shared-filesystem artifact/job handoff, lease/heartbeat, durable job metadata — built on top of LocalJobPipeline, not replacing it."
+      - "No new external dependency introduced (filesystem + OS-level exclusive-create APIs only, per the existing 'no gRPC/ZeroMQ/Redis at this time' project constraint)."
+      - "Cancellation reaches a terminal Cancelled state, not Failed; worker crash/stale heartbeat triggers full-job retry (not partial-stage resume, an explicit non-goal) capped by max_retries; retried output is byte-identical given identical inputs."
+      - "aegis_orchestration remains headless (no Qt Widgets dependency)."
+      - "Phases 3 (blob-backed) and 4 (multi-node/remote) from docs/design/distributed.md are explicitly not started."
+    implementation_rules:
+      - Reuse LocalJobPipeline's staged parse/normalize/graph_build/rule_execution/report_export logic; do not reimplement it.
+      - Reuse ProjectPackage + ImportPreflightValidator for job submission; do not reinvent import/validation.
+      - Update docs/design/distributed.md's Status line only; do not otherwise rewrite the accepted design.
+    test_commands:
+      - "cmake --build build --config Release --target aegis_unit_tests"
+      - "ctest --test-dir build -C Release --output-on-failure -L s3-003"
+    status: review
+
+  - id: S3-004
+    sprint: S3
+    title: "Product: gap-analysis quick wins (trust statement, wedge, CONTRIBUTING, demo walkthrough)"
+    priority: medium
+    area: docs
+    risk: low
+    depends_on: []
+    acceptance:
+      - "README states a local-execution/data-handling claim only after verifying no outbound network calls exist in the core loop (grep-verified, with the one found caveat — storage's documented-but-unimplemented 'enterprise upload' responsibility — disclosed rather than omitted)."
+      - "README documents the run→waive→diff→gate CI-gate wedge explicitly, describing existing tested behavior, not new functionality."
+      - "CONTRIBUTING.md exists and links to AGENTS.md as the source of truth for module boundaries."
+      - "A reproducible demo walkthrough script exists (scripts/demo_walkthrough.sh/.ps1) using an existing CLI-ingestible fixture, with any substitution from the originally-named sample data disclosed."
+      - "Beachhead-segment and open-source-vs-open-core recommendations are recorded as a proposed (not accepted) DEC-009 for the repo owner to decide — not decided unilaterally by the task."
+    implementation_rules:
+      - Do not publish an unverified trust/data-handling claim as fact.
+      - Do not silently resolve the 'commercial-grade' README framing tension against DEC-009 — flag it, don't edit around it.
+      - Only orchestration file this task may write to is DECISIONS.md (one new proposed entry); tasks.yaml/roadmap.yaml/HANDOFF.md updated centrally instead.
+    test_commands:
+      - "N/A — documentation/scripts only; no build required for this task's own changes."
+    status: review

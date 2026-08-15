@@ -19,6 +19,8 @@ A commercial-grade desktop platform for semiconductor electrical reliability ver
 
 AEGIS-PERC analyzes semiconductor layout and connectivity data, detects electrical reliability violations (floating nets, electromigration risks, power domain mismatches), and presents results through an interactive Qt 6 desktop visualization environment with a headless CLI workflow for CI integration.
 
+> **🔒 Runs entirely on your machine.** AEGIS-PERC's verification loop (import → graph → rules → reporting → CLI) makes no outbound network calls today. Verified by grepping `src/` and `app/` (core, parsing, graph, rules, reporting, orchestration, storage, ui, ml, scripting) for socket/HTTP/telemetry/cloud-SDK usage — none found — and confirming Qt's networking module isn't even linked into the build. No design data leaves the process. (One caveat for precision: `AGENTS.md`'s module table lists "enterprise upload" as a future responsibility of the `storage` module — nothing implements that today, and this claim will need revisiting if/when it does.)
+
 **What it does:**
 1. Imports layout & netlist data (LEF, DEF, Verilog, SPICE/CDL, JSON)
 2. Builds a typed connectivity graph and runs rule-based electrical checks
@@ -29,6 +31,11 @@ AEGIS-PERC analyzes semiconductor layout and connectivity data, detects electric
 - **Chip designers** who need rapid feedback on rule violations
 - **Verification leads** who manage regression runs against a committed baseline
 - **Methodology teams** who automate checks via the headless CLI workflow
+- **Teams without an incumbent EDA signoff seat today** — e.g. fabless startups and university/research groups running early-stage electrical rule checks — who want a scriptable, CI-gated, self-hosted checker rather than nothing at all. (This is a candidate fit based on the tool's current shape — self-hosted, no license server, no cloud dependency, CLI-first — not a validated customer segment; see `orchestration/DECISIONS.md` DEC-009.)
+
+### The wedge: a CI gate, not a replacement
+
+AEGIS-PERC's run → waive → diff → gate loop (see "Signoff Workflow" below) is meant to be adopted narrowly at first: add it as a lightweight CI gate on new work — *"does this change introduce a new Error-severity finding versus the last committed baseline?"* — well before trusting it for full signoff coverage of an existing design. That's a materially smaller ask than replacing an established signoff flow outright. `scripts/demo_walkthrough.sh` / `.ps1` runs this exact loop end-to-end against an existing sample design (see "Validate sample designs" below).
 
 ---
 
@@ -208,6 +215,7 @@ AEGIS-PERC/
 ├── .clang-tidy                 # Static analysis rules
 ├── .github/workflows/ci.yml    # GitHub Actions CI
 ├── README.md
+├── CONTRIBUTING.md              # How to build, test, and propose changes
 ├── LICENSE                     # MIT
 ├── AGENTS.md                   # AI agent operating rules
 ├── docs/
@@ -249,7 +257,9 @@ AEGIS-PERC/
 │   ├── unit/                   # Catch2 v3 tests per module
 │   └── CMakeLists.txt          # catch_discover_tests auto-registration
 ├── scripts/
-│   └── validate_samples.py     # Synthetic data schema validator
+│   ├── validate_samples.py     # Synthetic data schema validator
+│   └── demo_walkthrough.sh /   # End-to-end signoff-loop demo against
+│       demo_walkthrough.ps1    # an existing sample design (CLI narration)
 ├── data/
 │   └── sample_designs/         # inverter, nand2, ring_oscillator
 ├── models/
@@ -327,6 +337,9 @@ aegis-perc-cli diff --baseline baseline.json --manifest aegis-project.yaml --out
 ```bash
 python scripts/validate_samples.py
 ```
+
+### Try the signoff loop end-to-end
+`scripts/demo_walkthrough.sh` (Bash) / `scripts/demo_walkthrough.ps1` (PowerShell) run the full `import → run → baseline → waive → diff` loop above against an existing repo sample design, narrating each step to stdout — useful for a first look at the tool without reading the CLI reference first.
 
 ### Packaging
 ```bash

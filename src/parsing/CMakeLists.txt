@@ -11,6 +11,8 @@ add_library(aegis_parsing STATIC
     src/verilog_parser.cpp
     include/aegis/parsing/lef_parser.hpp
     src/lef_parser.cpp
+    include/aegis/parsing/gdsii_parser.hpp
+    src/gdsii_parser.cpp
     include/aegis/parsing/power_intent.hpp
     src/power_intent.cpp
     include/aegis/parsing/current_activity.hpp

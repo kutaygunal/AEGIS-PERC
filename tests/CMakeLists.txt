@@ -72,6 +72,7 @@ add_executable(aegis_unit_tests
     unit/parsing/test_spice_parser.cpp
     unit/parsing/test_verilog_parser.cpp
     unit/parsing/test_lef_parser.cpp
+    unit/parsing/test_gdsii_parser.cpp
     unit/parsing/test_power_intent.cpp
     unit/parsing/test_current_activity.cpp
     unit/reporting/test_reporting_minimal.cpp
@@ -86,9 +87,11 @@ add_executable(aegis_unit_tests
     unit/rules/test_waiver_application.cpp
     unit/rules/test_rule_pack.cpp
     unit/rules/test_declarative_rules.cpp
+    unit/rules/test_physical_rules.cpp
     unit/scripting/test_scripting_minimal.cpp
     unit/scripting/test_batch_cli.cpp
     unit/orchestration/test_job_pipeline.cpp
+    unit/orchestration/test_distributed_job.cpp
     unit/storage/test_storage_minimal.cpp
     unit/storage/test_project_package.cpp
     unit/storage/test_import_validation.cpp
