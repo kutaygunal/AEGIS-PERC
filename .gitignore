@@ -35,3 +35,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Scratch output from scripts/demo_walkthrough.{sh,ps1}
+demo_output/
