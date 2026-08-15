@@ -91,6 +91,7 @@ add_executable(aegis_unit_tests
     unit/scripting/test_scripting_minimal.cpp
     unit/scripting/test_batch_cli.cpp
     unit/orchestration/test_job_pipeline.cpp
+    unit/orchestration/test_distributed_job.cpp
     unit/storage/test_storage_minimal.cpp
     unit/storage/test_project_package.cpp
     unit/storage/test_import_validation.cpp
