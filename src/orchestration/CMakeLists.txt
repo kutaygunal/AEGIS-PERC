@@ -1,6 +1,12 @@
 add_library(aegis_orchestration STATIC
     include/aegis/orchestration/job_pipeline.hpp
     src/job_pipeline.cpp
+    include/aegis/orchestration/distributed_job.hpp
+    src/distributed_job.cpp
+    include/aegis/orchestration/distributed_host.hpp
+    src/distributed_host.cpp
+    include/aegis/orchestration/distributed_worker.hpp
+    src/distributed_worker.cpp
 )
 
 target_include_directories(aegis_orchestration

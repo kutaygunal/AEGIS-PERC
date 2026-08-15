@@ -1,7 +1,9 @@
 # Distributed Execution Architecture Aligned to Import and Job Pipeline
 
 ## Status
-Draft
+Draft — Phase 2 in progress (localhost multi-process host/worker split implemented for the
+first increment; see orchestration/runs/run_2026-08-14_s3-003-distributed-phase2-localhost.md).
+Phases 3 and 4 are not started.
 
 ## Purpose
 Define a host/worker execution architecture for AEGIS-PERC that extends the Sprint 6 import model and the local job pipeline into a future distributed system.
