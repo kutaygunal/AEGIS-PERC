@@ -42,7 +42,23 @@ roadmap:
         - "Existing built-in rule types (floating_net, power_domain_mismatch, em_current_limit) are unaffected."
         - "Headless test coverage exists for parsing (JSON+YAML), validation, and execution semantics of the declarative rule type."
 
+    - id: S3
+      name: "Sprint 3 — Gap Analysis Follow-ons"
+      goal: "Deliver scoped first increments of the larger, previously-unscheduled gaps named in the 2026-08-14 commercial gap analysis (GDSII/OASIS ingestion, physical/reliability checks, distributed execution), plus the near-term quick wins from the companion product-lens gap analysis. Follows the same incremental-not-speculative philosophy as S2 (see DEC-008): each engineering item is a real, tested, narrowly-scoped slice with explicit non-goals, not a full implementation of the underlying gap."
+      source: "docs-external commercial gap analysis, 2026-08-14 — 'AEGIS-PERC vs commercial signoff tools'; product gap analysis, 2026-08-14 — 'AEGIS-PERC as a product, not a codebase'"
+      delivery_note: "Delivered by four parallel agents in isolated git worktrees, merged via integration/sprint3-gap-analysis with a clean combined build and 533/534 passing tests (the sole failure is the pre-existing, previously-documented WorkspacePersistence #158 heisenbug, independently reproduced by all four agents and unrelated to this work)."
+      deliverables:
+        - "S3-001: Native GDSII binary parser (subset of records) mapping boundary geometry into LayoutIR — see docs/design/gdsii_oasis_ingestion.md. OASIS explicitly deferred (compressed/delta cell-hierarchy encoding is a separate reader, not a small extension)."
+        - "S3-002: `type: antenna_ratio` physical/reliability rule check (first increment) — see docs/design/physical_reliability_checks.md. Confirms GDSII ingestion was not actually a prerequisite; LEF/DEF geometry already suffices. Documents a real remaining gap: LayoutIR::geometries is not yet linked to ConnectivityGraph nets."
+        - "S3-003: Distributed execution Phase 2 (localhost host/worker process split) per the existing docs/design/distributed.md draft — built on LocalJobPipeline, no new external dependency. Phases 3/4 (blob-backed, multi-node) not started."
+        - "S3-004: Product quick wins — verified local-execution trust statement, CI-gate wedge statement, CONTRIBUTING.md, reproducible demo-walkthrough script, and a proposed (not accepted) DEC-009 covering beachhead segment and open-source/open-core stance for the repo owner to decide."
+      exit_criteria:
+        - "Each engineering deliverable (S3-001..S3-003) has its own design-doc-or-existing-spec, passing tests, and a run log documenting what was deliberately left out of scope."
+        - "The combined Sprint 3 changeset builds clean and introduces zero new test regressions versus main."
+        - "DEC-009's business-model questions remain open pending an explicit human decision; nothing in S3 treats them as resolved."
+
   dependencies:
     - "S1 depends on stable violation identity semantics and deterministic serialization."
     - "S2 depends on the existing RuleEngine/RulePack architecture (src/rules); it does not touch S1 signoff-workflow code."
+    - "S3 items are mutually independent (parsing, rules, orchestration, docs modules respectively); none blocks the others. S3-002 does not depend on S3-001 despite the roadmap's original note suggesting otherwise — verified against existing LEF/DEF-sourced graph data."
 
