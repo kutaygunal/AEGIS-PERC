@@ -25,6 +25,11 @@ AEGIS-PERC is a Qt6/C++20 commercial-grade AI-assisted semiconductor verificatio
 - Mark successful autonomous work as `review`, not `done`.
 - Only the user can mark tasks `done`.
 
+## Rule Engine
+- Rule packs (JSON/YAML) support four `type`s: `floating_net`, `power_domain_mismatch`, `em_current_limit` (all built-in, C++-backed), and `condition` (declarative — added S2-001).
+- `type: condition` lets a rule pack define a new check (field/operator/value predicates over device/net/pin, ANDed) as pure data, without a new C++ `IRule` subclass. See docs/design/declarative_rules.md for schema, operators, and explicit non-goals (no OR/NOT, no cross-node predicates, no geometry predicates yet).
+- The YAML rule-pack loader (`src/rules/src/rule_pack.cpp`) is a small hand-rolled indentation parser, not a general YAML implementation — it only supports the shapes rule packs need (flat `parameters:` map, nested `conditions:` list of flat maps).
+
 ## Commercial Value Focus
 - The single biggest missing product loop is the **signoff workflow**:
   - Run checks → apply waivers (suppress known issues with audit trail) → diff vs baseline → gate regressions → export audit-ready reports.

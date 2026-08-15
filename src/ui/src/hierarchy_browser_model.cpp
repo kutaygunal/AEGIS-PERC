@@ -116,9 +116,9 @@ void HierarchyBrowserModel::rebuild_cache()
 
     // Build stable-id lookup for fast selection restoration.
     for (int group_row = 0; group_row < static_cast<int>(m_groups.size()); ++group_row) {
-        const auto& group = m_groups[group_row];
+        const auto& group = m_groups[static_cast<std::size_t>(group_row)];
         for (int row = 0; row < static_cast<int>(group.object_indices.size()); ++row) {
-            const auto& obj = objects[group.object_indices[row]];
+            const auto& obj = objects[group.object_indices[static_cast<std::size_t>(row)]];
             m_stable_id_index[obj.stable_id] = StableLocation{group_row, row};
         }
     }
@@ -146,7 +146,7 @@ QModelIndex HierarchyBrowserModel::index(int row, int column, const QModelIndex&
     if (group_row < 0 || group_row >= static_cast<int>(m_groups.size())) {
         return {};
     }
-    const auto& group = m_groups[group_row];
+    const auto& group = m_groups[static_cast<std::size_t>(group_row)];
     if (row < 0 || row >= static_cast<int>(group.object_indices.size())) {
         return {};
     }
@@ -184,7 +184,7 @@ int HierarchyBrowserModel::rowCount(const QModelIndex& parent) const
     if (is_group(parent)) {
         const int group_row = parent.row();
         if (group_row >= 0 && group_row < static_cast<int>(m_groups.size())) {
-            return static_cast<int>(m_groups[group_row].object_indices.size());
+            return static_cast<int>(m_groups[static_cast<std::size_t>(group_row)].object_indices.size());
         }
     }
     return 0;
@@ -265,7 +265,7 @@ QModelIndex HierarchyBrowserModel::find_by_stable_id(const QString& stable_id) c
     if (loc.group_row < 0 || loc.group_row >= static_cast<int>(m_groups.size())) {
         return {};
     }
-    return createIndex(loc.object_row, 0, quintptr(m_groups[loc.group_row].kind_order + 1));
+    return createIndex(loc.object_row, 0, quintptr(m_groups[static_cast<std::size_t>(loc.group_row)].kind_order + 1));
 }
 
 bool HierarchyBrowserModel::is_group(const QModelIndex& index) const
@@ -276,7 +276,7 @@ bool HierarchyBrowserModel::is_group(const QModelIndex& index) const
 const HierarchyBrowserModel::GroupEntry* HierarchyBrowserModel::group_at(int row) const
 {
     if (row >= 0 && row < static_cast<int>(m_groups.size())) {
-        return &m_groups[row];
+        return &m_groups[static_cast<std::size_t>(row)];
     }
     return nullptr;
 }
@@ -291,7 +291,7 @@ const aegis::storage::ImportedDesignObject* HierarchyBrowserModel::object_at(con
         if (group.kind_order == kind_order) {
             const int row = index.row();
             if (row >= 0 && row < static_cast<int>(group.object_indices.size())) {
-                return &m_session->objects()[group.object_indices[row]];
+                return &m_session->objects()[group.object_indices[static_cast<std::size_t>(row)]];
             }
             return nullptr;
         }

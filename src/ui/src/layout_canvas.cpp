@@ -1101,7 +1101,9 @@ void LayoutCanvas::push_viewport_state()
     const ViewportState state = current_viewport_state();
     // Remove any forward history after current index
     if (m_viewport_history_index < m_viewport_history.size()) {
-        m_viewport_history.erase(m_viewport_history.begin() + m_viewport_history_index, m_viewport_history.end());
+        m_viewport_history.erase(
+            m_viewport_history.begin() + static_cast<std::ptrdiff_t>(m_viewport_history_index),
+            m_viewport_history.end());
     }
     // Avoid pushing duplicate consecutive states
     if (!m_viewport_history.empty() && m_viewport_history.back() == state) {
@@ -1116,7 +1118,9 @@ void LayoutCanvas::prune_viewport_history()
 {
     if (m_viewport_history.size() > kMaxViewportHistory) {
         const std::size_t excess = m_viewport_history.size() - kMaxViewportHistory;
-        m_viewport_history.erase(m_viewport_history.begin(), m_viewport_history.begin() + excess);
+        m_viewport_history.erase(
+            m_viewport_history.begin(),
+            m_viewport_history.begin() + static_cast<std::ptrdiff_t>(excess));
         m_viewport_history_index = std::max(std::size_t{1}, m_viewport_history_index - excess);
     }
 }

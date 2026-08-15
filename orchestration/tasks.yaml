@@ -279,3 +279,36 @@ tasks:
       - "ctest --test-dir build/windows-release -C Release --output-on-failure -R WorkspaceActions"
       - "ctest --test-dir build/windows-release -C Release --output-on-failure -R WorkspacePersistence"
     status: review
+
+  # =================================================================================================
+  # Sprint 2 — Rule Engine Programmability
+  # Big idea: rule packs can currently only select/parameterize a fixed set of built-in C++ checks.
+  # Close the gap toward a genuinely programmable rule engine incrementally, starting with a
+  # declarative condition format rather than committing to a full rule DSL up front.
+  # Source: docs-external commercial gap analysis (2026-08-14), priority gap "no programmable rule language".
+  # =================================================================================================
+
+  - id: S2-001
+    sprint: S2
+    title: "Rules: declarative `type: condition` rule pack entries (field/operator/value checks)"
+    priority: high
+    area: rules
+    risk: medium
+    depends_on: []
+    acceptance:
+      - A rule pack (JSON or YAML) can define a `type: condition` entry with `target: device|net|pin` and a `conditions` list of `{field, operator, value}` predicates, without any new C++ rule class.
+      - Supported operators: equals, not_equals, greater_than, greater_or_equal, less_than, less_or_equal, contains, exists, not_exists.
+      - Multiple conditions in one rule are combined with AND; a node is flagged only if every condition holds.
+      - Field resolution covers device (name, device_type, arbitrary properties), net (name, arbitrary properties), and pin (name, direction, layer, x, y).
+      - `message` supports `{name}` / `{field}` template substitution; a reasonable default message is generated when `message` is omitted.
+      - RulePackLoader validation rejects: missing/invalid `target`, empty `conditions`, unsupported operator, and a comparison operator missing `value` (exists/not_exists are exempt).
+      - Existing built-in rule types (floating_net, power_domain_mismatch, em_current_limit) are unaffected — full existing rules test suite still passes.
+      - New behavior is documented in docs/design/declarative_rules.md.
+    implementation_rules:
+      - Keep this additive: extend RulePackRuleDefinition (target/conditions/message) and RulePackLoader; do not change the public shape of existing built-in rule types.
+      - No OR/NOT combinators and no cross-node predicates in this iteration — out of scope, documented as such.
+      - Reuse the existing PropertyValue scalar type for condition values instead of introducing a parallel value representation.
+    test_commands:
+      - "cmake --build build/windows-release --config Release --target aegis_unit_tests"
+      - "ctest --test-dir build/windows-release -C Release --output-on-failure -L rules"
+    status: review

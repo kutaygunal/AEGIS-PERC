@@ -21,6 +21,15 @@ struct BaselineRecord {
     std::optional<std::string> device_name;
     std::optional<aegis::graph::Point> point;
 
+    BaselineRecord() = default;
+
+    // Convenience: the three fields actually used for matching/diffing;
+    // the optional human-facing context defaults to empty. Avoids
+    // -Wmissing-field-initializers on the common 3-field construction
+    // (aggregate brace-init would otherwise require every field).
+    BaselineRecord(std::string identity_key_, std::string rule_id_, aegis::rules::Severity severity_)
+        : identity_key(std::move(identity_key_)), rule_id(std::move(rule_id_)), severity(severity_) {}
+
     bool operator==(const BaselineRecord& o) const noexcept = default;
 };
 

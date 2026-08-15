@@ -29,6 +29,20 @@ roadmap:
         - "Headless test coverage exists for identity, waiver application, and diff semantics."
         - "UI surfaces reflect waived vs active and baseline/diff summaries without duplicating core logic."
 
+    - id: S2
+      name: "Sprint 2 — Rule Engine Programmability"
+      goal: "Close the largest commercial gap identified against Calibre PERC-class tools: rule packs can only select/parameterize a fixed set of built-in C++ checks, not define new ones. Move incrementally toward programmability without committing to a full rule DSL up front."
+      source: "docs-external gap analysis, 2026-08-14 — 'AEGIS-PERC vs commercial signoff tools'"
+      deliverables:
+        - "S2-001: Declarative `type: condition` rule pack entries (field/operator/value predicates over device/net/pin, ANDed) — see docs/design/declarative_rules.md"
+        - "Follow-on (not yet scheduled): physical/reliability check types (antenna, guard-ring presence) once geometry data exists"
+        - "Follow-on (not yet scheduled): OR/NOT combinators if `condition` proves too limited in practice"
+      exit_criteria:
+        - "A rule pack author can define a new check (field comparison over device/net/pin properties) without writing or compiling C++."
+        - "Existing built-in rule types (floating_net, power_domain_mismatch, em_current_limit) are unaffected."
+        - "Headless test coverage exists for parsing (JSON+YAML), validation, and execution semantics of the declarative rule type."
+
   dependencies:
     - "S1 depends on stable violation identity semantics and deterministic serialization."
+    - "S2 depends on the existing RuleEngine/RulePack architecture (src/rules); it does not touch S1 signoff-workflow code."
 

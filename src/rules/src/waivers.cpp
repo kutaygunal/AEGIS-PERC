@@ -113,9 +113,9 @@ WaiverEntry parse_entry_object(const nlohmann::json& obj,
 
 bool starts_with_non_ws(const std::string& s, char c)
 {
-    for (unsigned char ch : s) {
-        if (std::isspace(ch) != 0) continue;
-        return static_cast<char>(ch) == c;
+    for (char ch : s) {
+        if (std::isspace(static_cast<unsigned char>(ch)) != 0) continue;
+        return ch == c;
     }
     return false;
 }

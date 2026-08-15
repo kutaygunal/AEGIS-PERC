@@ -144,7 +144,11 @@ std::string current_iso_timestamp()
 {
     const auto now = std::time(nullptr);
     std::tm tm_buf{};
+#ifdef _WIN32
     gmtime_s(&tm_buf, &now);
+#else
+    gmtime_r(&now, &tm_buf);
+#endif
     char buf[32];
     std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm_buf);
     return buf;

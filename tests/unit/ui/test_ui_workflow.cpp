@@ -303,7 +303,11 @@ TEST_CASE("UiWorkflow workspace summary updates after import load and run comple
     REQUIRE(window.import_project_paths({QString::fromStdString(root.string())}));
     QApplication::processEvents();
     REQUIRE(window.trigger_import_load_action());
-    QApplication::processEvents();
+    // Scene/graph realization runs asynchronously; a single processEvents()
+    // pump isn't guaranteed to see it finish (observed flaky on Linux CI).
+    REQUIRE(wait_until([&window]() {
+        return window.workspace_summary_text().contains("scene and graph loaded", Qt::CaseInsensitive);
+    }));
 
     REQUIRE(window.workspace_summary_text().contains("imported customer project", Qt::CaseInsensitive));
     REQUIRE(window.workspace_summary_text().contains("Artifacts: 5", Qt::CaseInsensitive));
