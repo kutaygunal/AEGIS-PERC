@@ -59,6 +59,9 @@ public:
  *   - "floating_net"           — wraps FloatingNetRule
  *   - "power_domain_mismatch"  — wraps DomainTaggingRule
  *   - "em_current_limit"       — built-in per-layer current threshold check
+ *   - "antenna_ratio"          — built-in physical/reliability check:
+ *     accumulated connected metal area vs. gate area, per net. See
+ *     AntennaRatioRule and docs/design/physical_reliability_checks.md.
  *   - "condition"              — declarative, data-defined check: flags any
  *     device/net/pin whose fields satisfy every entry in `conditions`,
  *     without requiring a new C++ rule class. See DeclarativeConditionRule.

@@ -2,6 +2,7 @@
 
 #include "aegis/graph/connectivity_graph.hpp"
 #include "aegis/rules/electrical_rules.hpp"
+#include "aegis/rules/physical_rules.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -188,6 +189,7 @@ std::string default_rule_type_for_id(const std::string& id)
     if (upper == "floating_net" || upper == "elec-001") return "floating_net";
     if (upper == "power_domain_mismatch" || upper == "domain-001") return "power_domain_mismatch";
     if (upper == "em_current_limit") return "em_current_limit";
+    if (upper == "antenna_ratio" || upper == "phys-001") return "antenna_ratio";
     return {};
 }
 
@@ -753,7 +755,7 @@ void validate_pack(const RulePack& pack)
 
         const std::string type = to_lower(rule.type);
         if (type != "floating_net" && type != "power_domain_mismatch" &&
-            type != "em_current_limit" && type != "condition") {
+            type != "em_current_limit" && type != "antenna_ratio" && type != "condition") {
             throw RulePackValidationException("Unsupported rule type: '" + rule.type + "'");
         }
 
@@ -768,6 +770,13 @@ void validate_pack(const RulePack& pack)
             }
             if (!has_threshold) {
                 throw RulePackValidationException("Rule '" + rule.id + "' requires at least one '*_max_mA' parameter");
+            }
+        }
+
+        if (type == "antenna_ratio") {
+            if (!rule.parameters.get<double>("max_ratio").has_value()) {
+                throw RulePackValidationException(
+                    "Rule '" + rule.id + "' (type 'antenna_ratio') requires a numeric 'max_ratio' parameter");
             }
         }
 
@@ -837,6 +846,8 @@ std::vector<std::unique_ptr<IRule>> RulePackLoader::instantiate_rules(const Rule
             rules.push_back(std::make_unique<ConfiguredRuleAdapter>(definition, std::make_unique<DomainTaggingRule>()));
         } else if (type == "em_current_limit") {
             rules.push_back(std::make_unique<CurrentLimitRule>(definition));
+        } else if (type == "antenna_ratio") {
+            rules.push_back(std::make_unique<AntennaRatioRule>(definition));
         } else if (type == "condition") {
             rules.push_back(std::make_unique<DeclarativeConditionRule>(definition));
         }
